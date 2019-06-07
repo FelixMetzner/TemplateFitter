@@ -13,7 +13,8 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 
 class ToyStudy:
-    """This class helps you to perform toy monte carlo studies
+    """
+    This class helps you to perform toy monte carlo studies
     using given templates and an implementation of a negative
     log likelihood function. This is useful to discover possible
     biases or a over/under estimation of errors for fit parameters.
@@ -26,12 +27,13 @@ class ToyStudy:
 
     def __init__(self, templates, minimizer_id):
         self._templates = templates
-        self._mimizer_id = minimizer_id
+        self._minimizer_id = minimizer_id
         self._toy_results = {"parameters": [], "uncertainties": []}
         self._is_fitted = False
 
     def do_experiments(self, n_exp=1000, max_tries=10):
-        """Performs fits using the given template and generated
+        """
+        Performs fits using the given template and generated
         toy monte carlo (following a poisson distribution) as data.
 
         Parameters
@@ -46,7 +48,7 @@ class ToyStudy:
 
         print(f"Performing toy study with {n_exp} experiments...")
         for _ in tqdm.tqdm(range(n_exp), desc="Experiments Progress"):
-                self._experiment(max_tries)
+            self._experiment(max_tries)
 
         self._is_fitted = True
 
@@ -60,7 +62,7 @@ class ToyStudy:
                 self._templates.add_data(**self._templates.generate_toy_dataset())
 
                 fitter = TemplateFitter(
-                    self._templates, minimizer_id=self._mimizer_id
+                    self._templates, minimizer_id=self._minimizer_id
                 )
                 result = fitter.do_fit(update_templates=False,
                                        verbose=False,
@@ -73,13 +75,14 @@ class ToyStudy:
                 return None
 
             except RuntimeError:
-                logging.debug("RuntimeError occured in toy experiment. Trying again")
+                logging.debug("RuntimeError occurred in toy experiment. Trying again")
                 continue
 
         raise RuntimeError("Experiment exceed max number of retries.")
 
     def do_linearity_test(self, process_id, limits, n_points=10, n_exp=200):
-        """Performs a linearity test for the yield parameter of
+        """
+        Performs a linearity test for the yield parameter of
         the specified template.
 
         Parameters
@@ -121,20 +124,23 @@ class ToyStudy:
 
     @property
     def result_parameters(self):
-        """np.ndarray: A 2D array of fit results for the parameters
+        """
+        np.ndarray: A 2D array of fit results for the parameters
         of the likelihood."""
         self._check_state()
         return np.array(self._toy_results["parameters"])
 
     @property
     def result_uncertainties(self):
-        """np.ndarray: A 2D array of uncertainties fo the fit
+        """
+        np.ndarray: A 2D array of uncertainties fo the fit
         results for the parameters of the likelihood."""
         self._check_state()
         return np.array(self._toy_results["uncertainties"])
 
     def get_toy_results(self, process_id):
-        """Returns results from the toy Monte Carlo study.
+        """
+        Returns results from the toy Monte Carlo study.
 
         Parameters
         ----------
@@ -158,7 +164,8 @@ class ToyStudy:
         return parameters, uncertainties
 
     def get_toy_result_pulls(self, process_id):
-        """Returns pulls of the results from the toy Monte Carlo
+        """
+        Returns pulls of the results from the toy Monte Carlo
         study. The pull is defined as
 
         :math:`p=\\frac{\\nu^{\mathrm{fit}} - \\nu^{\mathrm{exp}}}{\sigma_{\\nu^{\mathrm{exp}}}}`,
@@ -180,14 +187,15 @@ class ToyStudy:
         self._check_state()
         # process_id = self._templates.process_to_index(process_id)
         parameters, uncertainties = self.get_toy_results(process_id)
-        # this works only for template yield, for nuissance parameters
+        # this works only for template yield, for nuisance parameters
         # i have change this
         expected_yield = self._templates.get_yield(process_id)
 
         return (parameters - expected_yield) / uncertainties
 
     def _check_state(self):
-        """Checks the state of the class instance. If no toy
+        """
+        Checks the state of the class instance. If no toy
         experiments have been performed, a RuntimeError will
         be raised.
 

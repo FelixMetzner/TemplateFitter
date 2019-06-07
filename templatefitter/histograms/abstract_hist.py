@@ -1,5 +1,7 @@
-"""Defines the interface for all histogram classes.
 """
+Defines the interface for all histogram classes.
+"""
+
 import numpy as np
 from abc import ABC, abstractmethod
 
@@ -9,7 +11,8 @@ __all__ = [
 
 
 class AbstractHist(ABC):
-    """Abstract histogram class. Used as base class by all histogram
+    """
+    Abstract histogram class. Used as base class by all histogram
     implementations.
     """
 
@@ -73,6 +76,3 @@ class AbstractHist(ABC):
     @abstractmethod
     def bin_widths(self):
         pass
-
-
-

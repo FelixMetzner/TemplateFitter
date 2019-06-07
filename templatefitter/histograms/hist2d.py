@@ -1,5 +1,3 @@
-from functools import lru_cache
-
 import numpy as np
 
 from scipy.stats import binned_statistic_2d
@@ -11,7 +9,8 @@ __all__ = ["Hist2d"]
 
 
 class Hist2d(AbstractHist):
-    """A 2 dimensional histogram.
+    """
+    A 2 dimensional histogram.
     """
 
     def __init__(self, bins, range=None, data=None, weights=None):
@@ -59,7 +58,8 @@ class Hist2d(AbstractHist):
 
     @classmethod
     def from_binned_data(cls, bin_counts, bin_edges, bin_errors=None):
-        """Creates a `Hist2d` from a binned dataset.
+        """
+        Creates a `Hist2d` from a binned dataset.
 
         Parameters
         ----------

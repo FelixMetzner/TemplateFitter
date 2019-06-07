@@ -5,9 +5,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-from templatefitter.histograms import Hist1d, Hist2d
-from templatefitter.templates import Channel, Template1d, Template2d
-from templatefitter.utility import array_split_into
+from templatefitter.templates import Channel
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -25,7 +23,7 @@ class MultiChannelTemplate:
 
     @property
     def num_nui_params(self):
-        """int: Total number of nuissance parameters. """
+        """int: Total number of nuisance parameters."""
         return sum([channel.num_nui_params for channel in self.channels.values()])
 
     @property
@@ -72,7 +70,8 @@ class MultiChannelTemplate:
         return self._processes
 
     def define_channel(self, name, bins, range):
-        """Creates and stores `Channel` instances in the internal
+        """
+        Creates and stores `Channel` instances in the internal
         channel map.
 
         name : str
@@ -83,7 +82,6 @@ class MultiChannelTemplate:
 
     def define_process(self, name):
         """
-
         Parameters
         ----------
         name
@@ -99,7 +97,6 @@ class MultiChannelTemplate:
 
     def add_template(self, channel, process, template, efficiency=1.0):
         """
-
         Parameters
         ----------
         channel
@@ -152,11 +149,11 @@ class MultiChannelTemplate:
 
         """
         if process_id not in self.processes:
-            raise RuntimeError(f"Process '{process}' not defined!")
+            raise RuntimeError(f"Process '{process_id}' not defined!")
 
         for channel in self.channels.values():
             try:
-                channel[process_id].yield_param = value*channel.efficiencies[process_id]
+                channel[process_id].yield_param = value * channel.efficiencies[process_id]
             except KeyError:
                 continue
 
@@ -166,7 +163,6 @@ class MultiChannelTemplate:
         Parameters
         ----------
         process_id
-        value
 
         Returns
         -------
@@ -199,7 +195,7 @@ class MultiChannelTemplate:
 
         """
         yields = x[:self.num_processes]
-        nui_params = x[self.num_processes: self.num_nui_params+self.num_processes]
+        nui_params = x[self.num_processes: self.num_nui_params + self.num_processes]
 
         per_channel_yields = [yields[channel.process_indices(self.processes)]
                               for channel in self.channels.values()]
@@ -237,7 +233,8 @@ class MultiChannelTemplate:
         return NegLogLikelihood(self)
 
     def generate_toy_dataset(self):
-        """Generates a toy dataset from the given templates.
+        """
+        Generates a toy dataset from the given templates.
         This is a binned dataset where each bin is treated a
         random number following a poisson distribution with
         mean equal to the bin content of all templates.
@@ -277,12 +274,14 @@ class MultiChannelTemplate:
 
 
 class AbstractTemplateCostFunction(ABC):
-    """Abstract base class for all cost function to estimate
+    """
+    Abstract base class for all cost function to estimate
     yields using the template method.
     """
 
     def __init__(self):
         pass
+
     # -- abstract properties
 
     @property
@@ -338,9 +337,6 @@ class NegLogLikelihood(AbstractTemplateCostFunction):
         nll_value = 0
 
         for channel, yields, nui_params in zip(self._mct.channels.values(), ch_yields, ch_nui_params):
-
             nll_value += channel.nll_contribution(yields, nui_params)
 
         return nll_value
-
-

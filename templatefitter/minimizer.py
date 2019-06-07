@@ -9,7 +9,6 @@ from collections import namedtuple
 
 import numdifftools as ndt
 import numpy as np
-import pandas as pd
 from iminuit import Minuit
 from scipy.optimize import minimize
 import tabulate
@@ -28,7 +27,8 @@ __all__ = [
 
 
 class Parameters:
-    """Container for parameters used by the Minimizer class.
+    """
+    Container for parameters used by the Minimizer class.
     Maps parameters described as arrays to names and indices.
     Values for parameter values, errors, covariance and correlation
     matrices are only available after they've been set by the
@@ -58,7 +58,8 @@ class Parameters:
         return tabulate.tabulate(data, headers="keys")
 
     def get_param_value(self, param_id):
-        """Returns value of parameter specified by `param_id`.
+        """
+        Returns value of parameter specified by `param_id`.
 
         Parameters
         ----------
@@ -73,7 +74,8 @@ class Parameters:
         return self.values[param_index]
 
     def get_param_error(self, param_id):
-        """Returns error of parameter specified by `param_id`.
+        """
+        Returns error of parameter specified by `param_id`.
 
         Parameters
         ----------
@@ -88,7 +90,8 @@ class Parameters:
         return self.errors[param_index]
 
     def __getitem__(self, param_id):
-        """Gets the value and error of the specified parameter.
+        """
+        Gets the value and error of the specified parameter.
 
         Parameters
         ----------
@@ -106,7 +109,8 @@ class Parameters:
         return self.values[param_index], self.errors[param_index]
 
     def param_id_to_index(self, param_id):
-        """Returns the index of the parameter specified by `param_id`.
+        """
+        Returns the index of the parameter specified by `param_id`.
 
         Parameters
         ----------
@@ -215,7 +219,8 @@ class AbstractMinimizer(ABC):
         pass
 
     def set_param_bounds(self, param_id, bounds):
-        """Sets parameter boundaries which constrain the minimization.
+        """
+        Sets parameter boundaries which constrain the minimization.
 
         Parameters
         ----------
@@ -232,34 +237,39 @@ class AbstractMinimizer(ABC):
 
     @property
     def fcn_min_val(self):
-        """str: Value of the objective function at it's estimated minimum.
+        """
+        str: Value of the objective function at it's estimated minimum.
         """
         return self._fcn_min_val
 
     @property
     def params(self):
-        """Parameters: Instance of the Parameter class. Stores the parameter values,
+        """
+        Parameters: Instance of the Parameter class. Stores the parameter values,
         errors, covariance and correlation matrix.
         """
         return self._params
 
     @property
     def param_values(self):
-        """np.ndarray: Estimated parameter values at the minimum of fcn.
+        """
+        np.ndarray: Estimated parameter values at the minimum of fcn.
         Shape is (`num_params`).
         """
         return self._params.values
 
     @property
     def param_errors(self):
-        """np.ndarray: Estimated parameter values at the minimum of fcn.
+        """
+        np.ndarray: Estimated parameter values at the minimum of fcn.
         Shape is (`num_params`).
         """
         return self._params.errors
 
     @property
     def param_covariance(self):
-        """np.ndarray: Estimated covariance matrix of the parameters.
+        """
+        np.ndarray: Estimated covariance matrix of the parameters.
         Calculated from the inverse of the Hesse matrix of fcn evaluated
         at it's minimum. Shape is (`num_params`, `num_params`).
         """
@@ -267,9 +277,10 @@ class AbstractMinimizer(ABC):
 
     @property
     def param_correlation(self):
-        """np.ndarray: Estimated correlation matrix of the parameters.
-         Shape is (`num_params`, `num_params`).
-         """
+        """
+        np.ndarray: Estimated correlation matrix of the parameters.
+        Shape is (`num_params`, `num_params`).
+        """
         return self._params.correlation
 
 
@@ -279,7 +290,6 @@ class IMinuitMinimizer(AbstractMinimizer):
         self._fixed_params = [False for _ in self.params.names]
 
     def minimize(self, initial_params, verbose=False, errordef=0.5, **kwargs):
-
         m = Minuit.from_array_func(
             self._fcn,
             initial_params,
@@ -302,7 +312,7 @@ class IMinuitMinimizer(AbstractMinimizer):
         self._params.correlation = m.np_matrix(correlation=True)
 
         self._success = (
-            fmin["is_valid"] and fmin["has_valid_parameters"] and fmin["has_covariance"]
+                fmin["is_valid"] and fmin["has_valid_parameters"] and fmin["has_covariance"]
         )
 
         # if not self._success:
@@ -319,7 +329,8 @@ class IMinuitMinimizer(AbstractMinimizer):
 
 
 class ScipyMinimizer(AbstractMinimizer):
-    """General wrapper class around scipy.optimize.minimize
+    """
+    General wrapper class around scipy.optimize.minimize
     function. Allows mapping of parameter names to the array
     entries used by scipy's `minimize` function.
 
@@ -338,9 +349,10 @@ class ScipyMinimizer(AbstractMinimizer):
         super().__init__(fcn, param_names)
 
     def minimize(
-        self, initial_param_values, additional_args=(), get_hesse=True, verbose=False
+            self, initial_param_values, additional_args=(), get_hesse=True, verbose=False
     ):
-        """Performs minimization of given objective function.
+        """
+        Performs minimization of given objective function.
 
         Parameters
         ----------
@@ -400,7 +412,8 @@ class ScipyMinimizer(AbstractMinimizer):
         return result
 
     def set_param_fixed(self, param_id):
-        """Fixes specified parameter to it's initial value given in
+        """
+        Fixes specified parameter to it's initial value given in
         `initial_param_values`.
 
         Parameters
@@ -419,7 +432,8 @@ class ScipyMinimizer(AbstractMinimizer):
         self._fixed_params = list()
 
     def _create_constraints(self, initial_param_values):
-        """Creates the dictionary used by scipy's minimize function
+        """
+        Creates the dictionary used by scipy's minimize function
         to constrain parameters. The dictionary is used to fix
         parameters specified set in `fixed_param`.
 
@@ -449,7 +463,8 @@ class ScipyMinimizer(AbstractMinimizer):
     @staticmethod
     @functools.lru_cache(maxsize=128)
     def calculate_hesse_matrix(fcn, x, args):
-        """Calculates the Hesse matrix of callable `fcn` numerically.
+        """
+        Calculates the Hesse matrix of callable `fcn` numerically.
 
         Parameters
         ----------

@@ -1,4 +1,5 @@
-"""This module contains definitions for different likelihood
+"""
+This module contains definitions for different likelihood
 functions which are used as const function to be minimized in
 the fit.
 """
@@ -10,15 +11,17 @@ import numpy as np
 
 from scipy.linalg import block_diag
 
-import warnings
-
-__all__ = ["AbstractTemplateCostFunction", "StackedTemplateNegLogLikelihood"]
+__all__ = [
+    "AbstractTemplateCostFunction",
+    "StackedTemplateNegLogLikelihood"
+]
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 
 class AbstractTemplateCostFunction(ABC):
-    """Abstract base class for all cost function to estimate
+    """
+    Abstract base class for all cost function to estimate
     yields using the template method.
 
     Parameters
@@ -89,7 +92,7 @@ class StackedTemplateNegLogLikelihood(AbstractTemplateCostFunction):
     * :math:`\\nu_{ik}` - expected number of events in bin :math:`i` of template :math:`k`
     * :math:`f_{ik}` - fraction of template :math:`k` in bin :math:`i`.
 
-    :math:`f_{ik}` does depend on a nuissance parameter :math:`\\theta_{ik}`:
+    :math:`f_{ik}` does depend on a nuisance parameter :math:`\\theta_{ik}`:
 
     .. math::
 
@@ -134,7 +137,8 @@ class StackedTemplateNegLogLikelihood(AbstractTemplateCostFunction):
         return yields
 
     def __call__(self, x: np.ndarray) -> float:
-        """This function is called by the minimize method.
+        """
+        This function is called by the minimize method.
         `x` is an 1-D array with shape (`n`,). These are the parameters
         which are fitted.
 
@@ -144,23 +148,24 @@ class StackedTemplateNegLogLikelihood(AbstractTemplateCostFunction):
             The value of the negative log likelihood at `x`.
         """
         poi = x[:self._templates.num_templates]
-        nuiss_params = x[self._templates.num_templates:]
+        nuis_params = x[self._templates.num_templates:]
 
-        exp_evts_per_bin = poi @ self._templates.fractions(nuiss_params)
+        exp_evts_per_bin = poi @ self._templates.fractions(nuis_params)
 
         # this poisson term is taken from Blobel
         poisson_term = np.sum(exp_evts_per_bin - self._d -
                               xlogyx(self._d, exp_evts_per_bin))
 
         gauss_term = 0.5 * (
-            nuiss_params @ self._block_diag_inv_corr_mats @ nuiss_params)
+                nuis_params @ self._block_diag_inv_corr_mats @ nuis_params)
 
         return poisson_term + gauss_term
 
 
 def xlogyx(x, y):
-    """Compute :math:`x*log(y/x)`to a good precision when :math:`y~x`.
+    """
+    Compute :math:`x*log(y/x)`to a good precision when :math:`y~x`.
     The xlogyx function is taken from https://github.com/scikit-hep/probfit/blob/master/probfit/_libstat.pyx.
     """
-    result = np.where(x < y, x*np.log1p((y-x)/x), -x*np.log1p((x-y)/y))
+    result = np.where(x < y, x * np.log1p((y - x) / x), -x * np.log1p((x - y) / y))
     return np.nan_to_num(result)

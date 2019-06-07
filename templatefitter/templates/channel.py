@@ -7,7 +7,6 @@ import numpy as np
 
 from scipy.linalg import block_diag
 from scipy.stats import poisson
-from numba import jit
 
 from templatefitter.utility import xlogyx
 
@@ -49,7 +48,7 @@ class Channel:
     @property
     def num_bins(self):
         """int: Number of bins per template."""
-        return reduce(lambda x, y: x*y, self.bins)
+        return reduce(lambda x, y: x * y, self.bins)
 
     @property
     def bin_edges(self):
@@ -68,8 +67,8 @@ class Channel:
 
     @property
     def num_nui_params(self):
-        """int: Number of nuissance parameters in this channel."""
-        return self.num_templates*self.num_bins
+        """int: Number of nuisance parameters in this channel."""
+        return self.num_templates * self.num_bins
 
     @property
     def processes(self):
@@ -92,7 +91,8 @@ class Channel:
             template.reset()
 
     def add_template(self, process, template, efficiency=1.):
-        """Adds a template for a specified process to the template.
+        """
+        Adds a template for a specified process to the template.
 
         Parameters
         ----------
@@ -111,7 +111,8 @@ class Channel:
             raise RuntimeError("Trying to add a non compatible template with the Channel.")
 
     def add_data(self, hdata):
-        """Adds a binned dataset to this channel.
+        """
+        Adds a binned dataset to this channel.
 
         Parameters
         ----------
@@ -127,7 +128,8 @@ class Channel:
 
     @lru_cache()
     def process_indices(self, outer_process_list):
-        """Returns a list of indices for the processes in this
+        """
+        Returns a list of indices for the processes in this
         channel matching the `outer_process_list`.
         """
         return [outer_process_list.index(process) for process in self.processes]
@@ -136,7 +138,7 @@ class Channel:
         for template, eff, new_yield, new_nui_params in \
                 zip(self.templates.values(), self.efficiencies.values(),
                     np.split(yields, self.num_templates), np.split(nui_params, self.num_templates)):
-            template.yield_param = new_yield*eff
+            template.yield_param = new_yield * eff
             template.nui_params = new_nui_params
 
     def plot_stacked_on(self, ax, **kwargs):
@@ -223,7 +225,8 @@ class Channel:
                         ls="", marker=".", color="black", label="Data")
 
     def nll_contribution(self, process_yields, nui_params):
-        """Calculates the contribution to the binned negative log
+        """
+        Calculates the contribution to the binned negative log
         likelihood function of this channel.
 
         Parameters
@@ -276,7 +279,7 @@ class Channel:
 
     def _add_template(self, process, template, efficiency):
         if process in self.processes:
-            raise RuntimeError(f"Process {name} already defined.")
+            raise RuntimeError(f"Process {self._name} already defined.")
 
         if self._dim is None:
             self._dim = len(template.bins)
@@ -295,14 +298,15 @@ class Channel:
         self._efficiency_dict[process] = efficiency
 
     def _fractions(self, nui_params):
-        """Evaluates all `bin_fractions` methods of all templates in this
-        channel. Here, the bin fractions depend on so called nuissance
+        """
+        Evaluates all `bin_fractions` methods of all templates in this
+        channel. Here, the bin fractions depend on so called nuisance
         parameters which incorporate uncertainties on the template shape.
 
         Parameters
         ----------
         nui_params:  numpy.ndarray
-            Array of nuissance parameter values needed for the evaluation
+            Array of nuisance parameter values needed for the evaluation
             of the AdvancedTemplateModel `bin_fraction` method.
 
         Returns
@@ -323,14 +327,16 @@ class Channel:
 
     @lru_cache()
     def _get_efficiencies_as_array(self):
-        """Returns the efficiencies of the processes in this channel
+        """
+        Returns the efficiencies of the processes in this channel
         as `numpy.ndarray`.
         """
         return np.array([eff for eff in self._efficiency_dict.values()])
 
     def _expected_evts_per_bin(self, process_yields, nui_params):
-        """Calculates the expected number of events given the process
-        yields and nuissance parameters.
+        """
+        Calculates the expected number of events given the process
+        yields and nuisance parameters.
 
         Parameters
         ----------

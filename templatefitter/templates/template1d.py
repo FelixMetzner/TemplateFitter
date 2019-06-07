@@ -1,26 +1,26 @@
 import logging
 
-
 from templatefitter.histograms import Hist1d
 from templatefitter.templates import AbstractTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-
 __all__ = ["Template1d"]
 
 
 class Template1d(AbstractTemplate):
-    """A 1d template class.
     """
+    A 1d template class.
+    """
+
     def __init__(
-        self,
-        name,
-        variable,
-        hist1d,
-        color=None,
-        pretty_variable=None,
-        pretty_label=None,
+            self,
+            name,
+            variable,
+            hist1d,
+            color=None,
+            pretty_variable=None,
+            pretty_label=None,
     ):
         super(Template1d, self).__init__(name=name)
 
@@ -40,8 +40,10 @@ class Template1d(AbstractTemplate):
         self.pretty_label = pretty_label
 
     def add_variation(self, data, weights_up, weights_down):
-        """Add a new covariance matrix from a given systematic variation
-        of the underlying histogram to the template."""
+        """
+        Add a new covariance matrix from a given systematic variation
+        of the underlying histogram to the template.
+        """
         hup = Hist1d(
             bins=self._hist.num_bins, range=self._range, data=data, weights=weights_up
         )
@@ -52,7 +54,8 @@ class Template1d(AbstractTemplate):
         self._add_cov_mat(hup, hdown)
 
     def plot_on(self, ax):
-        """Plots the template on given axis.
+        """
+        Plots the template on given axis.
         """
         ax.hist(
             self._hist.bin_mids,

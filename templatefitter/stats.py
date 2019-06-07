@@ -2,14 +2,18 @@ import numpy as np
 from scipy.stats import chi2
 from scipy.integrate import quad
 
-__all__ = ["pearson_chi2_test", "cowan_binned_likelihood_gof"]
+__all__ = [
+    "pearson_chi2_test",
+    "cowan_binned_likelihood_gof"
+]
 
 
 # -- goodness of fit statistics --
 
 
 def pearson_chi2_test(data, expectation, dof):
-    """Performs a Pearson :math:`\chi^2`-test.
+    """
+    Performs a Pearson :math:`\chi^2`-test.
     This test reflects the level of agreement between observed
     and expected histograms.
     The test statistic is
@@ -50,7 +54,8 @@ def pearson_chi2_test(data, expectation, dof):
 
 
 def cowan_binned_likelihood_gof(data, expectation, dof):
-    """Performs a GOF-test using a test statistic based on a
+    """
+    Performs a GOF-test using a test statistic based on a
     binned likelihood function.
     The test statistic is the ratio :math:`\lambda(\\nu) = L(\\nu=\hat{\\nu})/L(\\theta=n)`,
     where :math:`\\nu` are the expected values in each bin. In the

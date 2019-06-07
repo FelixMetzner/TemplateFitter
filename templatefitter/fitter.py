@@ -1,10 +1,9 @@
 import logging
-
-from multiprocessing import Pool
-
-import numpy as np
 import tqdm
 
+import numpy as np
+
+from multiprocessing import Pool
 
 from templatefitter.minimizer import *
 
@@ -14,10 +13,12 @@ __all__ = [
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
+
 # TODO work on fixing parameters and stuff
 
 class TemplateFitter:
-    """This class performs the parameter estimation and calculation
+    """
+    This class performs the parameter estimation and calculation
     of a profile likelihood based on a constructed negative log
     likelihood function.
 
@@ -44,8 +45,9 @@ class TemplateFitter:
         pass
 
     def do_fit(self, update_templates=True, get_hesse=True, verbose=True, fix_nui_params=False):
-        """Performs maximum likelihood fit by minimizing the
-        provided negative log likelihoood function.
+        """
+        Performs maximum likelihood fit by minimizing the
+        provided negative log likelihood function.
 
         Parameters
         ----------
@@ -55,7 +57,7 @@ class TemplateFitter:
         verbose : bool, optional
             Whether to print fit information or not. Default is True
         fix_nui_params : bool, optional
-            Wheter to fix nuissance parameters in the fit or not.
+            Whether to fix nuisance parameters in the fit or not.
             Default is False.
         get_hesse : bool, optional
             Whether to calculate the Hesse matrix in the estimated
@@ -99,7 +101,8 @@ class TemplateFitter:
         return fit_result
 
     def set_parameter_fixed(self, param_id):
-        """Adds parameter to the fixed parameter list.
+        """
+        Adds parameter to the fixed parameter list.
 
         Parameters
         ----------
@@ -109,7 +112,8 @@ class TemplateFitter:
         self._fixed_parameters.append(param_id)
 
     def set_parameter_bounds(self, param_id, bounds):
-        """Adds parameter and its boundaries to the bound
+        """
+        Adds parameter and its boundaries to the bound
         parameter dictionary.
 
         Parameters
@@ -124,7 +128,8 @@ class TemplateFitter:
 
     @staticmethod
     def _get_hesse_approx(param_id, fit_result, profile_points):
-        """Calculates a gaussian approximation of the negative log
+        """
+        Calculates a gaussian approximation of the negative log
         likelihood function using the Hesse matrix.
 
         Parameters
@@ -150,14 +155,15 @@ class TemplateFitter:
         param_index = fit_result.params.param_id_to_index(param_id)
         hesse_error = fit_result.params.errors[param_index]
         hesse_approx = (
-            0.5 * (1 / hesse_error) ** 2 * (profile_points - result) ** 2
-            + fit_result.fcn_min_val
+                0.5 * (1 / hesse_error) ** 2 * (profile_points - result) ** 2
+                + fit_result.fcn_min_val
         )
 
         return hesse_approx
 
     def profile(self, param_id, num_cpu=4, num_points=100, sigma=2.0, subtract_min=True, fix_nui_params=False):
-        """Performs a profile scan of the negative log likelihood
+        """
+        Performs a profile scan of the negative log likelihood
         function for the specified parameter.
 
         Parameters
@@ -221,7 +227,8 @@ class TemplateFitter:
 
     @staticmethod
     def _profile_helper(args):
-        """Helper function for the calculation fo the profile nll.
+        """
+        Helper function for the calculation fo the profile nll.
 
         Parameters
         ----------
@@ -256,9 +263,10 @@ class TemplateFitter:
 
         return loop_result.fcn_min_val
 
-    #TODO this is not yet generic, depens on param name in the likelihood
+    # TODO this is not yet generic, depens on param name in the likelihood
     def get_significance(self, process_id, verbose=True, fix_nui_params=False):
-        """Calculate significance for yield parameter of template
+        """
+        Calculate significance for yield parameter of template
         specified by `tid` using the profile likelihood ratio.
 
         The significance is base on the profile likelihood ratio
@@ -288,7 +296,6 @@ class TemplateFitter:
         significance : float
             Fit significance for the yield parameter in gaussian
             standard deviations.
-
         """
 
         # perform the nominal minimization
@@ -339,5 +346,3 @@ class TemplateFitter:
         q0 = 2 * (profile_result.fcn_min_val - fit_result.fcn_min_val)
         logging.debug(f"q0: {q0}")
         return np.sqrt(q0)
-
-

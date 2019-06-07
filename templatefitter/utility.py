@@ -1,15 +1,21 @@
 from itertools import islice
 
 import numpy as np
-from numba import jit, vectorize, float64, float32
+from numba import vectorize, float64, float32
 
-
-__all__ = ["cov2corr", "corr2cov", "xlogyx", "get_systematic_cov_mat",
-           "array_split_into"]
+__all__ = [
+    "cov2corr",
+    "corr2cov",
+    "xlogyx",
+    "get_systematic_cov_mat",
+    "array_split_into",
+    "id_to_index"
+]
 
 
 def cov2corr(cov):
-    """Calculates the correlation matrix from a given
+    """
+    Calculates the correlation matrix from a given
     covariance matrix.
 
     Arguments
@@ -47,7 +53,8 @@ def corr2cov(corr, var):
 
 
 def id_to_index(names, param_id):
-    """Returns the index of the parameter specified by `param_id`.
+    """
+    Returns the index of the parameter specified by `param_id`.
     If `param_id` is a string value in the `names` list, the index
     of the value in the list is returned.
     If `param_id` is an integer value, the same value is returned
@@ -80,16 +87,17 @@ def id_to_index(names, param_id):
 @vectorize([float32(float32, float32),
             float64(float64, float64)])
 def xlogyx(x, y):
-    """Compute :math:`x*log(y/x)`to a good precision when :math:`y~x`.
+    """
+    Compute :math:`x*log(y/x)`to a good precision when :math:`y~x`.
     The xlogyx function is taken from https://github.com/scikit-hep/probfit/blob/master/probfit/_libstat.pyx.
     """
     # result = np.where(x < y, x * np.log1p((y - x) / x), -x * np.log1p((x - y) / y))
     if x < 1e-100:
         return 0.
-    elif x<y:
-        return x*np.log1p((y-x)/x)
+    elif x < y:
+        return x * np.log1p((y - x) / x)
     else:
-        return -x*np.log1p((x-y)/y)
+        return -x * np.log1p((x - y) / y)
     # result = np.zeros_like(x)
     #
     # for i in range(x.shape[0]):
@@ -102,7 +110,8 @@ def xlogyx(x, y):
 
 
 def get_systematic_cov_mat(hnom, hup, hdown):
-    """Calculates covariance matrix from systematic variations
+    """
+    Calculates covariance matrix from systematic variations
     for a histogram.
 
     Returns
@@ -123,7 +132,8 @@ def get_systematic_cov_mat(hnom, hup, hdown):
 
 
 def array_split_into(iterable, sizes):
-    """Yields a list of arrays of size `n` from array iterable
+    """
+    Yields a list of arrays of size `n` from array iterable
     for each `n` in `sizes`.
     """
 

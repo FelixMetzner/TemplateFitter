@@ -11,8 +11,10 @@ __all__ = [
 
 
 class Hist1d(AbstractHist):
-    """A 1 dimensional histogram.
     """
+    A 1 dimensional histogram.
+    """
+
     def __init__(self, bins, range=None, data=None, weights=None):
         super(Hist1d, self).__init__()
 
@@ -39,7 +41,8 @@ class Hist1d(AbstractHist):
             self._range = get_bin_range(self._bin_edges)
 
     def fill(self, data, weights):
-        """Fills the histogram with given data and weights.
+        """
+        Fills the histogram with given data and weights.
 
         Parameters
         ----------
@@ -74,7 +77,8 @@ class Hist1d(AbstractHist):
 
     @classmethod
     def from_binned_data(cls, bin_counts, bin_edges, bin_errors=None):
-        """Creates a `Hist1d` from a binned dataset.
+        """
+        Creates a `Hist1d` from a binned dataset.
 
         Parameters
         ----------
@@ -95,11 +99,10 @@ class Hist1d(AbstractHist):
         if bin_errors is None:
             bin_errors = np.sqrt(bin_counts)
 
-        instance._bin_errors_sq = bin_errors**2
+        instance._bin_errors_sq = bin_errors ** 2
         instance._is_empty = False
 
         return instance
-
 
     @property
     def bin_mids(self):
@@ -108,4 +111,3 @@ class Hist1d(AbstractHist):
     @property
     def bin_widths(self):
         return bin_widths(self.bin_edges)
-

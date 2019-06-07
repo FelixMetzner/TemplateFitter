@@ -1,4 +1,5 @@
-"""Histogram module.
+"""
+Histogram module.
 """
 from abc import ABC, abstractmethod
 from functools import lru_cache
@@ -13,7 +14,8 @@ __all__ = ["Histogram",
 
 
 class Histogram:
-    """Histogram container for data. Bins are of equal width.
+    """
+    Histogram container for data. Bins are of equal width.
 
     Parameters
     ----------
@@ -41,7 +43,8 @@ class Histogram:
             self.fill(data, weights)
 
     def fill(self, data, weights=None):
-        """Fills the histogram with given data. If no weights are
+        """
+        Fills the histogram with given data. If no weights are
         given, each data point is weighted with 1.0.
 
         Parameters
@@ -75,7 +78,8 @@ class Histogram:
         )[0]
 
     def scale(self, c):
-        """Multiplies the histogram by the constant c.
+        """
+        Multiplies the histogram by the constant c.
         This means that the bin_contents are set to c*bin_contents.
         The bin_errors_sq are recalculated to c**2*bin_errors_sq.
 
@@ -119,7 +123,7 @@ class Histogram:
 
     @property
     def bin_entries(self):
-        """ np.ndarray: Current bin entries in each bin."""
+        """np.ndarray: Current bin entries in each bin."""
         return self._bin_entries
 
     @property
@@ -167,9 +171,11 @@ class Histogram:
 
 
 class AbstractHist(ABC):
-    """Abstract histogram class. Used as base class by all
+    """
+    Abstract histogram class. Used as base class by all
     histograms.
     """
+
     def __init__(self):
         self._bin_edges = None
         self._num_bins = None
@@ -203,14 +209,18 @@ class AbstractHist(ABC):
 
     @property
     def bin_errors(self):
-        """numpy.ndarray: Bin errors, calculated as :math:`\sqrt{\sum_i w_i^2}`.
-        Shape is (`num_bins`,)."""
+        """
+        numpy.ndarray: Bin errors, calculated as :math:`\sqrt{\sum_i w_i^2}`.
+        Shape is (`num_bins`,).
+        """
         return np.sqrt(self._bin_errors_sq)
 
     @property
     def bin_errors_sq(self):
-        """numpy.ndarray: Bin errors square,  calculated as :math:`\sum_i w_i^2`.
-        Shape is (`num_bins`,)."""
+        """
+        numpy.ndarray: Bin errors square,  calculated as :math:`\sum_i w_i^2`.
+        Shape is (`num_bins`,).
+        """
         return self._bin_errors_sq
 
     @property
@@ -220,7 +230,8 @@ class AbstractHist(ABC):
 
 
 class Hist1d(AbstractHist):
-    """Implementation of a 1 dimensional histogram.
+    """
+    Implementation of a 1 dimensional histogram.
 
     Parameters
     ----------
@@ -257,7 +268,8 @@ class Hist1d(AbstractHist):
 
     @classmethod
     def from_binned_data(cls, bin_edges, bin_counts, bin_errors=None):
-        """Creates a `Hist1d` from a binned dataset.
+        """
+        Creates a `Hist1d` from a binned dataset.
 
         Parameters
         ----------
@@ -278,12 +290,13 @@ class Hist1d(AbstractHist):
         if bin_errors is None:
             bin_errors = np.sqrt(bin_counts)
 
-        instance._bin_errors_sq = bin_errors**2
+        instance._bin_errors_sq = bin_errors ** 2
 
         return instance
 
     def fill(self, data, weights=None):
-        """Fills the histogram with given data and weights.
+        """
+        Fills the histogram with given data and weights.
 
         Parameters
         ----------
