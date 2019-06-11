@@ -64,7 +64,7 @@ class Parameters:
         Parameters
         ----------
         param_id : int or str
-            Name or index in list of names of wanted paramater
+            Name or index in list of names of wanted parameter
 
         Returns
         -------
@@ -80,7 +80,7 @@ class Parameters:
         Parameters
         ----------
         param_id : int or str
-            Name or index in list of names of wanted paramater
+            Name or index in list of names of wanted parameter
 
         Returns
         -------
@@ -180,15 +180,12 @@ class Parameters:
         self._correlation = new_correlation
 
 
-MinimizeResult = namedtuple("MinimizeResult", ["fcn_min_val", "params", "succes"])
+MinimizeResult = namedtuple("MinimizeResult", ["fcn_min_val", "params", "success"])
 
 MinimizeResult.__doc__ = """NamedTuple storing the minimization results."""
-MinimizeResult.fcn_min_val.__doc__ = """float: Estimated minimum of the 
-objective function."""
-MinimizeResult.params.__doc__ = """Parameters: An instance of the parameters 
-class."""
-MinimizeResult.succes.__doc__ = """bool: Whether or not the optimizer exited 
-successfully."""
+MinimizeResult.fcn_min_val.__doc__ = """float: Estimated minimum of the objective function."""
+MinimizeResult.params.__doc__ = """Parameters: An instance of the parameters class."""
+MinimizeResult.success.__doc__ = """bool: Whether or not the optimizer exited successfully."""
 
 
 class AbstractMinimizer(ABC):

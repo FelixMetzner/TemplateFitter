@@ -137,7 +137,7 @@ class TemplateFitter:
         param_id : int or string
             Parameter index or name.
         fit_result : MinimizeResult
-            A namedtuple with the most important informations about the
+            A namedtuple with the most important information about the
             minimization.
         profile_points : np.ndarray
             Points where the estimate is evaluated. Shape is
@@ -146,7 +146,7 @@ class TemplateFitter:
         Returns
         -------
         np.ndarray
-            Hesse approximation of the negative log likelihood funciton.
+            Hesse approximation of the negative log likelihood function.
             Shape is (`num_points`,).
 
         """
@@ -171,13 +171,13 @@ class TemplateFitter:
         param_id : int or string
             Parameter index or name.
         num_points : int
-            Number of points where the negative log likelhood is
+            Number of points where the negative log likelihood is
             minimized.
         sigma : float
             Defines the width of the scan. The scan range is given by
             sigma*uncertainty of the given parameter.
         subtract_min : bool, optional
-            Wether to subtract the estimated minimum of the negative
+            Whether to subtract the estimated minimum of the negative
             log likelihood function or not. Default is True.
 
         Returns
@@ -216,7 +216,7 @@ class TemplateFitter:
             profile_values = np.array(
                 list(tqdm.tqdm(pool.imap(self._profile_helper, args),
                                total=len(profile_points),
-                               desc="Profile Progess"))
+                               desc="Profile Progress"))
             )
 
         if subtract_min:
@@ -258,12 +258,12 @@ class TemplateFitter:
         except RuntimeError as e:
             logging.info(e)
             logging.info(f"Minimization with point {point} was not "
-                         f"sucessfull, trying again.")
+                         f"successful, trying again.")
             return np.nan
 
         return loop_result.fcn_min_val
 
-    # TODO this is not yet generic, depens on param name in the likelihood
+    # TODO this is not yet generic, depends on param name in the likelihood
     def get_significance(self, process_id, verbose=True, fix_nui_params=False):
         """
         Calculate significance for yield parameter of template

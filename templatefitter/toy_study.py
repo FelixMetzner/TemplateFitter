@@ -170,7 +170,7 @@ class ToyStudy:
 
         :math:`p=\\frac{\\nu^{\mathrm{fit}} - \\nu^{\mathrm{exp}}}{\sigma_{\\nu^{\mathrm{exp}}}}`,
 
-        and should follow a standard noraml distribution.
+        and should follow a standard normal distribution.
 
         Parameters
         ----------
