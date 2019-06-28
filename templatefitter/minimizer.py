@@ -299,8 +299,8 @@ class IMinuitMinimizer(AbstractMinimizer):
         )
 
         # perform minimization twice!
-        fmin, _ = m.migrad(ncall=20000)
-        fmin, _ = m.migrad(ncall=20000)
+        fmin, _ = m.migrad(ncall=100000)
+        fmin, _ = m.migrad(ncall=100000)
 
         self._fcn_min_val = m.fval
         self._params.values = m.np_values()
@@ -370,6 +370,8 @@ class ScipyMinimizer(AbstractMinimizer):
         MinimizeResult
         """
         constraints = self._create_constraints(initial_param_values)
+
+
 
         opt_result = minimize(
             fun=self._fcn,

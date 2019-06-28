@@ -11,7 +11,7 @@ __all__ = [
 # -- goodness of fit statistics --
 
 
-def pearson_chi2_test(data, expectation, dof):
+def pearson_chi2_test(data, expectation, dof, error=None):
     """
     Performs a Pearson :math:`\chi^2`-test.
     This test reflects the level of agreement between observed
@@ -44,13 +44,20 @@ def pearson_chi2_test(data, expectation, dof):
     Returns
     -------
     float
-        :math:`\chi^2/\mathrm{dof}`
+        :math:`\chi^2`
+    float
+        :math:`\mathrm{dof}`
     float
         p-value.
     """
-    chi_sq = np.sum((data - expectation) ** 2 / expectation)
+
+    if error is not None:
+        chi_sq = np.sum((data - expectation) ** 2 / error)
+    else:
+        chi_sq = np.sum((data - expectation) ** 2 / expectation)
+
     pval = quad(chi2.pdf, chi_sq, np.inf, args=(dof,))[0]
-    return chi_sq / dof, pval
+    return chi_sq, dof, pval
 
 
 def cowan_binned_likelihood_gof(data, expectation, dof):
@@ -85,10 +92,13 @@ def cowan_binned_likelihood_gof(data, expectation, dof):
     Returns
     -------
     float
-        :math:`\chi^2/\mathrm{dof}`
+        :math:`\chi^2`
+    float
+        :math:`\mathrm{dof}`
     float
         p-value.
     """
+
     chi_sq = 2 * np.sum(data * np.log(data / expectation) + expectation - data)
     pval = quad(chi2.pdf, chi_sq, np.inf, args=(dof,))[0]
-    return chi_sq / dof, pval
+    return chi_sq, dof, pval
