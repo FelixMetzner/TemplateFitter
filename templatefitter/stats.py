@@ -4,7 +4,8 @@ from scipy.integrate import quad
 
 __all__ = [
     "pearson_chi2_test",
-    "cowan_binned_likelihood_gof"
+    "cowan_binned_likelihood_gof",
+    "toy_chi2_test"
 ]
 
 
@@ -102,3 +103,111 @@ def cowan_binned_likelihood_gof(data, expectation, dof):
     chi_sq = 2 * np.sum(data * np.log(data / expectation) + expectation - data)
     pval = quad(chi2.pdf, chi_sq, np.inf, args=(dof,))[0]
     return chi_sq, dof, pval
+
+
+def calc_chi_squared(obs, exp, exp_unc):
+    """
+    Calculates the chi squared difference between an expected and an observed
+    histogrammed distribution.
+    If obs is 2-dimensional (contains multiple histogramms), an array of
+    chi squared values will be returned.
+
+    Parameters
+    ----------
+    obs: np.ndarray
+        Array containing histogrammed observed data for which the distribution
+        shall be compared to the expected distribution. Shape is (len(exp),) or
+        (len(exp), >=1), where len(exp) is the number of bins of the histogrammed
+        expected distribution.
+    exp: np.ndarray
+        Array containing the histogrammed expected distribution. Shape is (`num_bins`, ).
+    exp_unc: np.ndarray
+        Array conatining the uncertainty on the bins of the histogrammed expected
+        distribution. Shape is (`num_bins`, )
+    Returns
+    -------
+    float or np.ndarray
+        Resulting chi squared value or array of chi squared values.
+    """
+    if len(obs.shape) > 1:
+        return np.sum(np.nan_to_num((obs - exp) ** 2 / exp_unc), axis=1)
+    else:
+        return np.sum(np.nan_to_num((obs - exp) ** 2 / exp_unc))
+
+
+def mc_chi_squared_from_toys(obs, exp, exp_unc, toys_size=1000000):
+    """
+    Evaluates chi squared difference of expected and observed histogrammed
+    distributions and obtains the chi squared distribution for exp via toy
+    samples. The number of toy samples for this evaluation can be set via
+    the parameter `toys_size`.
+
+    Parameters
+    ----------
+    obs: np.ndarray
+        Histogrammed observed distribution.
+    exp: np.ndarray
+        Histogrammed expected distribution.
+    exp_unc: np.ndarray
+        Uncertainty on bins of histogrammed expected distribution.
+    toys_size: int
+        Size of toy sample to be produced and used to obtain the
+        chi squared distribution to exp.
+
+    Returns
+    -------
+    float
+        Chi squared value of obs and exp comparison.
+    np.ndarray
+        Sampled chi squared values obtained from exp via toys.
+    """
+    exp_ge_zero = exp > 0
+    obs = obs[exp_ge_zero]
+    exp = exp[exp_ge_zero]
+    exp_unc = exp_unc[exp_ge_zero]
+    print(exp_unc)
+
+    obs_chi_squared = calc_chi_squared(obs, exp, exp_unc)
+
+    toys = np.random.poisson(exp, size=(toys_size, len(exp)))
+
+    toy_chi_squared = calc_chi_squared(toys, exp, exp_unc)
+
+    return obs_chi_squared, toy_chi_squared
+
+
+def toy_chi2_test(data, expectation, error, toys_size=1000000):
+    """
+    Performs a GoF-test using a test statistic based on toy MC sampled
+    from the expected distribution.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Data bin counts. Shape is (`num_bins`,)
+    expectation : np.ndarray
+        Expected bin counts. Shape is (`num_bins`,)
+    error : np.ndarray
+        Uncertainty on the expected distribution. Shape is (`num_bins`,)
+    toys_size : int
+        Number of toy samples to be drawn from expectation to model the chi2
+        of the expectation. Default is 1000000.
+
+    Returns
+    -------
+    float
+        :math:`\chi^2`
+    float
+        p-value.
+    tuple(bin_counts, bin_edges, chi2_toys)
+        Information needed to plot the chi2 distribution obtained from the toys.
+    """
+    obs_chi2, toys = mc_chi_squared_from_toys(obs=data, exp=expectation, exp_unc=error, toys_size=toys_size)
+
+    bc, be = np.histogram(toys, bins=100, density=True)
+
+    bm = (be[1:] + be[:-1]) / 2
+    bw = (be[1:] - be[:-1])
+    p_val = np.sum(bc[bm > obs_chi2] * bw[bm > obs_chi2])
+
+    return obs_chi2, p_val, (bc, be, toys)
