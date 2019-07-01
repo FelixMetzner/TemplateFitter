@@ -165,7 +165,6 @@ def mc_chi_squared_from_toys(obs, exp, exp_unc, toys_size=1000000):
     obs = obs[exp_ge_zero]
     exp = exp[exp_ge_zero]
     exp_unc = exp_unc[exp_ge_zero]
-    print(exp_unc)
 
     obs_chi_squared = calc_chi_squared(obs, exp, exp_unc)
 
