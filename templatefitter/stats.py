@@ -135,7 +135,7 @@ def calc_chi_squared(obs, exp, exp_unc):
         return np.sum(np.nan_to_num((obs - exp) ** 2 / exp_unc))
 
 
-def mc_chi_squared_from_toys(obs, exp, exp_unc, toys_size=1000000):
+def mc_chi_squared_from_toys(obs, exp, exp_unc, toys_size=1000000, seed=13377331):
     """
     Evaluates chi squared difference of expected and observed histogrammed
     distributions and obtains the chi squared distribution for exp via toy
@@ -153,6 +153,9 @@ def mc_chi_squared_from_toys(obs, exp, exp_unc, toys_size=1000000):
     toys_size: int
         Size of toy sample to be produced and used to obtain the
         chi squared distribution to exp.
+    seed: int
+        Seed for random generator to be used to create reproducible
+        toy samples. Default is 13377331.
 
     Returns
     -------
@@ -168,6 +171,7 @@ def mc_chi_squared_from_toys(obs, exp, exp_unc, toys_size=1000000):
 
     obs_chi_squared = calc_chi_squared(obs, exp, exp_unc)
 
+    np.random.seed(seed=seed)
     toys = np.random.poisson(exp, size=(toys_size, len(exp)))
 
     toy_chi_squared = calc_chi_squared(toys, exp, exp_unc)
