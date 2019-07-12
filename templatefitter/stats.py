@@ -122,7 +122,7 @@ def calc_chi_squared(obs, exp, exp_unc):
     exp: np.ndarray
         Array containing the histogrammed expected distribution. Shape is (`num_bins`, ).
     exp_unc: np.ndarray
-        Array conatining the uncertainty on the bins of the histogrammed expected
+        Array containing the uncertainty on the bins of the histogrammed expected
         distribution. Shape is (`num_bins`, )
     Returns
     -------
