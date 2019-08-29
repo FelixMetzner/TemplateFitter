@@ -135,7 +135,7 @@ def calc_chi_squared(obs, exp, exp_unc):
         return np.sum(np.nan_to_num((obs - exp) ** 2 / exp_unc))
 
 
-def mc_chi_squared_from_toys(obs, exp, exp_unc, toys_size=1000000, seed=13377331):
+def mc_chi_squared_from_toys(obs, exp, exp_unc, mc_unc=None, toys_size=1000000, seed=13377331):
     """
     Evaluates chi squared difference of expected and observed histogrammed
     distributions and obtains the chi squared distribution for exp via toy
@@ -173,13 +173,16 @@ def mc_chi_squared_from_toys(obs, exp, exp_unc, toys_size=1000000, seed=13377331
 
     np.random.seed(seed=seed)
     toys = np.random.poisson(exp, size=(toys_size, len(exp)))
+    if mc_unc is not None:
+        pass
+        # TODO: smearing with mc_unc...
 
     toy_chi_squared = calc_chi_squared(toys, exp, exp_unc)
 
     return obs_chi_squared, toy_chi_squared
 
 
-def toy_chi2_test(data, expectation, error, toys_size=1000000):
+def toy_chi2_test(data, expectation, error, mc_error=None, toys_size=1000000):
     """
     Performs a GoF-test using a test statistic based on toy MC sampled
     from the expected distribution.
@@ -205,7 +208,13 @@ def toy_chi2_test(data, expectation, error, toys_size=1000000):
     tuple(bin_counts, bin_edges, chi2_toys)
         Information needed to plot the chi2 distribution obtained from the toys.
     """
-    obs_chi2, toys = mc_chi_squared_from_toys(obs=data, exp=expectation, exp_unc=error, toys_size=toys_size)
+    obs_chi2, toys = mc_chi_squared_from_toys(
+        obs=data,
+        exp=expectation,
+        exp_unc=error,
+        mc_unc=mc_error,
+        toys_size=toys_size
+    )
 
     bc, be = np.histogram(toys, bins=100, density=True)
 
