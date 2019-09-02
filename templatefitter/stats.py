@@ -210,7 +210,13 @@ def toy_chi2_test(data, expectation, error, mc_cov=None, toys_size=1000000):
     tuple(bin_counts, bin_edges, chi2_toys)
         Information needed to plot the chi2 distribution obtained from the toys.
     """
-    obs_chi2, toys = mc_chi_squared_from_toys(obs=data, exp=expectation, exp_unc=error, mc_cov=mc_cov, toys_size=toys_size)
+    obs_chi2, toys = mc_chi_squared_from_toys(
+        obs=data,
+        exp=expectation,
+        exp_unc=error,
+        mc_cov=mc_cov,
+        toys_size=toys_size
+    )
 
     bc, be = np.histogram(toys, bins=100, density=True)
 
