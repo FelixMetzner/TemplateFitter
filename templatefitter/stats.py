@@ -173,7 +173,7 @@ def mc_chi_squared_from_toys(obs, exp, exp_unc, mc_cov=None, toys_size=1000000, 
 
     np.random.seed(seed=seed)
     if mc_cov is None:
-        toys = np.random.poisson(exp, size=toys_size)
+        toys = np.random.poisson(exp, size=(toys_size, len(exp)))
     else:
         toys = np.random.multivariate_normal(mean=exp, cov=mc_cov, size=toys_size)
         # toys_base = np.random.lognormal(mean=exp, sigma=np.sqrt(np.diagonal(mc_cov)), size=(toys_size, len(exp)))
