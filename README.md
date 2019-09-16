@@ -4,18 +4,18 @@
 
 Get the repository via
 ```
-git clone https://github.com/welschma/TemplateFitter
+git clone https://github.com/FelixMetzner/TemplateFitter
 ```
 or 
 ```
-git clone git@github.com:welschma/TemplateFitter.git
+git clone git@github.com:FelixMetzner/TemplateFitter.git
 ```
 and install the package with
 ```
 cd TemplateFitter
-pip3 install -r requirements.txt
-pip3 install -e .
+pip3 install -e ./
 ```
+which will also install the requirements.
 
 ## Documentation
 
