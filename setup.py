@@ -13,9 +13,9 @@ with open(requirements_file, "r") as rf:
 setup(
     name="TemplateFitter",
     version="0.0.1",
-    author="Maximilian Welsch",
-    url="https://github.com/welschma/TemplateFitter",
+    author="Maximilian Welsch, Felix Metzner",
+    url="https://github.com/FelixMetzner/TemplateFitter",
     packages=find_packages(),
-    description="Perform extended binnend log-likelhood fits using histogram templates as pdfs.",
+    description="Perform extended binned log-likelihood fits using histogram templates as PDFs.",
     install_requires=install_requires
 )
