@@ -1,7 +1,7 @@
 import os
 from setuptools import setup, find_packages
 
-package_dir = os.path.abspath(__file__)
+package_dir = os.path.dirname(os.path.abspath(__file__))
 requirements_file = os.path.join(package_dir, "requirements.txt")
 with open(requirements_file, "r") as rf:
     install_requires = [
