@@ -5,7 +5,7 @@ import tensorflow as tf
 from scipy.linalg import block_diag
 
 from templatefitter.utility import xlogyx
-from templatefitter.fitter.parameter_handler import ParameterHandler
+from templatefitter.model.parameter_handler import ParameterHandler
 
 __all__ = ["TensorModelBuilder"]
 
@@ -115,8 +115,7 @@ class TensorModelBuilder:
         return expected_per_bin
 
     def fraction_converter(self):
-        """ Determines the matrices required to 
-        tranform the subtemplate parameters"""
+        """ Determines the matrices required to transform the sub-template . """
         arrays = []
         additive = []
         count = 0
@@ -147,7 +146,7 @@ class TensorModelBuilder:
         fractions_per_template = np.array([template.fractions() for template in self.templates.values()])
         return yields @ fractions_per_template
 
-    def bin_pars(self):
+    def get_bin_pars(self):
         bin_pars = np.concatenate(
             [template.get_bin_pars() for template
              in self.templates.values()]
@@ -181,7 +180,7 @@ class TensorModelBuilder:
         poisson_term = np.sum(exp_evts_per_bin - self.x_obs -
                               xlogyx(self.x_obs, exp_evts_per_bin))
 
-        nll = poisson_term + (self._gauss_term() + self._con_term()) / 2.
+        nll = poisson_term + (self._gauss_term(self.bin_pars) + self._con_term()) / 2.
         return nll
 
     @staticmethod
@@ -243,9 +242,10 @@ class TensorModelBuilder:
             stacked=True
         )
 
-        uncertainties_sq = [(tempyield * template.fractions() * template.errors()).reshape(template.shape()) ** 2 for
-                            tempyield, template in
-                            zip(yields, self.templates.values())]
+        uncertainties_sq = [
+            (temp_yield * template.fractions() * template.errors()).reshape(template.shape()) ** 2 for
+            temp_yield, template in zip(yields, self.templates.values())
+        ]
         if self._dim > 1:
             uncertainties_sq = [
                 self._get_projection(kwargs["projection"], unc_sq) for unc_sq in uncertainties_sq

@@ -1,4 +1,5 @@
 from templatefitter.nll import *
+from templatefitter.model import *
 from templatefitter.fitter import *
 from templatefitter.toy_study import *
 from templatefitter.minimizer import *

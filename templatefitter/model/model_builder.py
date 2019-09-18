@@ -7,13 +7,13 @@ from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
 
 from templatefitter.utility import xlogyx  # TODO: Check if this has been changed!
-from templatefitter.fitter.parameter_handler import ParameterHandler
+from templatefitter.model.parameter_handler import ParameterHandler
 
 __all__ = ["ModelBuilder"]
 
 
 class ModelBuilder:
-    def __init__(self, params, data, channels='False'):
+    def __init__(self, params, data):
         self.params = params
         self.templates = {}
         self.packed_templates = {}
@@ -231,8 +231,7 @@ class ModelBuilder:
             bin_mids = [bin_mids[0]] * int(N / num_bins)
 
         if self._dim > 1:
-            bin_counts = [self._get_projection(kwargs["projection"], bc.reshape(shape)) for bc
-                          in bin_counts]
+            bin_counts = [self._get_projection(kwargs["projection"], bc.reshape(shape)) for bc in bin_counts]
             axis = kwargs["projection"]
             ax_to_index = {
                 "x": 0,
@@ -254,13 +253,12 @@ class ModelBuilder:
             stacked=True
         )
 
-        uncertainties_sq = [(tempyield * template.fractions() * template.errors()).reshape(template.shape()) ** 2 for
-                            tempyield, template in
-                            zip(yields, self.templates.values())]
+        uncertainties_sq = [
+            (temp_yield * template.fractions() * template.errors()).reshape(template.shape()) ** 2
+            for temp_yield, template in zip(yields, self.templates.values())
+        ]
         if self._dim > 1:
-            uncertainties_sq = [
-                self._get_projection(kwargs["projection"], unc_sq) for unc_sq in uncertainties_sq
-            ]
+            uncertainties_sq = [self._get_projection(kwargs["projection"], unc_sq) for unc_sq in uncertainties_sq]
 
         total_uncertainty = np.sqrt(np.sum(np.array(uncertainties_sq), axis=0))
         total_bin_count = np.sum(np.array(bin_counts), axis=0)
