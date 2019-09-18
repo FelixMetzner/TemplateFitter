@@ -211,7 +211,7 @@ class TensorModelBuilder:
             labels = []
             for template in self.templates.values():
                 labels += template.labels()
-            bin_counts = [tempyield * template.allfractions() for tempyield, template in
+            bin_counts = [tempyield * template.all_fractions() for tempyield, template in
                           zip(yields, self.templates.values())]
             bin_counts = np.concatenate(bin_counts)
             N = len(bin_counts)

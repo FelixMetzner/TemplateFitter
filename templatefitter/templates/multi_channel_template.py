@@ -3,7 +3,6 @@ import numpy as np
 
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from numba import jit
 
 from templatefitter.templates import Channel
 from templatefitter.utility import array_split_into
