@@ -26,11 +26,11 @@ class TestMultiChannelTemplate1d(unittest.TestCase):
         self.range = (3, 8)
         self.variable = "sepal_length"
 
-        hsetosa = Hist1d(self.bins, range=self.range, data=setosa)
+        hsetosa = Hist1d(self.bins, hist_range=self.range, data=setosa)
         self.tsetosa = Template1d("setosa", "length", hsetosa)
-        hversico = Hist1d(self.bins, range=self.range, data=versicolor)
+        hversico = Hist1d(self.bins, hist_range=self.range, data=versicolor)
         self.tversico = Template1d("versicolor", "length", hversico)
-        hvirgini = Hist1d(self.bins, range=self.range, data=virginica)
+        hvirgini = Hist1d(self.bins, hist_range=self.range, data=virginica)
         self.tvirgini = Template1d("virginica", "length", hvirgini)
 
         self.processes = ("setosa", "versicolor", "virginica")
@@ -57,11 +57,11 @@ class TestMultiChannelTemplate1d(unittest.TestCase):
             versicolor = iris_channel.query("(class_id==2)")["sepal_length"].values
             virginica = iris_channel.query("(class_id==3)")["sepal_length"].values
 
-            hsetosa = Hist1d(self.bins, range=self.range, data=setosa)
+            hsetosa = Hist1d(self.bins, hist_range=self.range, data=setosa)
             tsetosa = Template1d("setosa", "length", hsetosa)
-            hversico = Hist1d(self.bins, range=self.range, data=versicolor)
+            hversico = Hist1d(self.bins, hist_range=self.range, data=versicolor)
             tversico = Template1d("versicolor", "length", hversico)
-            hvirgini = Hist1d(self.bins, range=self.range, data=virginica)
+            hvirgini = Hist1d(self.bins, hist_range=self.range, data=virginica)
             tvirgini = Template1d("virginica", "length", hvirgini)
 
             mct.add_template(name, "setosa", tsetosa)
@@ -181,13 +181,13 @@ class TestMultiChannelTemplate2d(unittest.TestCase):
         ch1_virginica_length = channel_1.query("(class_id==3)")["sepal_length"].values
         ch1_virginica_width = channel_1.query("(class_id==3)")["sepal_width"].values
 
-        ch1_hsetosa = Hist2d(self.bins, range=self.range,
+        ch1_hsetosa = Hist2d(self.bins, hist_range=self.range,
                              data=(ch1_setosa_length, ch1_setosa_width))
         ch1_tsetosa = Template2d("setosa", "length", ch1_hsetosa)
-        ch1_hversico = Hist2d(self.bins, range=self.range,
+        ch1_hversico = Hist2d(self.bins, hist_range=self.range,
                               data=(ch1_versicolor_length, ch1_versicolor_width))
         ch1_tversico = Template2d("versicolor", "length", ch1_hversico)
-        ch1_hvirgini = Hist2d(self.bins, range=self.range,
+        ch1_hvirgini = Hist2d(self.bins, hist_range=self.range,
                               data=(ch1_virginica_length, ch1_virginica_width))
         ch1_tvirgini = Template2d("virginica", "length", ch1_hvirgini)
 
@@ -200,10 +200,10 @@ class TestMultiChannelTemplate2d(unittest.TestCase):
         ch2_virginica_length = channel_2.query("(class_id==3)")["sepal_length"].values
         ch2_virginica_width = channel_2.query("(class_id==3)")["sepal_width"].values
 
-        ch2_hsetosa = Hist2d(self.bins, range=self.range,
+        ch2_hsetosa = Hist2d(self.bins, hist_range=self.range,
                              data=(ch2_setosa_length, ch2_setosa_width))
         ch2_tsetosa = Template2d("setosa", "length", ch2_hsetosa)
-        ch2_hvirgini = Hist2d(self.bins, range=self.range,
+        ch2_hvirgini = Hist2d(self.bins, hist_range=self.range,
                               data=(ch2_virginica_length, ch2_virginica_width))
         ch2_tvirgini = Template2d("versicolor", "length", ch2_hvirgini)
 

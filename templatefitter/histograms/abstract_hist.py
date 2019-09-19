@@ -12,8 +12,7 @@ __all__ = [
 
 class AbstractHist(ABC):
     """
-    Abstract histogram class. Used as base class by all histogram
-    implementations.
+    Abstract histogram class. Used as base class by all histogram implementations.
     """
 
     def __init__(self):

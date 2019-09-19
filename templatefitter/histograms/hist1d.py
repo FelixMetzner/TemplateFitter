@@ -11,14 +11,10 @@ __all__ = [
 
 
 class Hist1d(AbstractHist):
-    """
-    A 1 dimensional histogram.
-    """
-
-    def __init__(self, bins, range=None, data=None, weights=None):
+    def __init__(self, bins, hist_range=None, data=None, weights=None):
         super(Hist1d, self).__init__()
 
-        self._init_bin_edges(bins, range)
+        self._init_bin_edges(bins, hist_range)
         self._bin_counts = np.zeros(self._num_bins)
         self._bin_errors_sq = np.zeros(self._num_bins)
         self._shape = self._bin_counts.shape
@@ -26,15 +22,15 @@ class Hist1d(AbstractHist):
         if data is not None:
             self.fill(data, weights)
 
-    def _init_bin_edges(self, bins, range):
+    def _init_bin_edges(self, bins, hist_range):
         if isinstance(bins, int):
             self._num_bins = bins
-            self._bin_edges = np.linspace(*range, self._num_bins + 1)
-            self._range = range
+            self._bin_edges = np.linspace(*hist_range, self._num_bins + 1)
+            self._range = hist_range
         elif isinstance(bins, tuple):
             self._num_bins = bins[0]
-            self._bin_edges = np.linspace(*range, self._num_bins + 1)
-            self._range = range
+            self._bin_edges = np.linspace(*hist_range, self._num_bins + 1)
+            self._range = hist_range
         else:
             self._num_bins = len(bins) - 1
             self._bin_edges = bins

@@ -43,7 +43,7 @@ class TestHist2d(unittest.TestCase):
         self.bins = (4, 4)
         self.num_bins = self.bins[0] * self.bins[1]
         self.range = ((4, 6), (2, 4))
-        self.hist = Hist2d(bins=self.bins, range=self.range, data=(self.x, self.y))
+        self.hist = Hist2d(bins=self.bins, hist_range=self.range, data=(self.x, self.y))
         self.template = Template2d(
             "test", ("test_x", "test_y"), self.hist
         )

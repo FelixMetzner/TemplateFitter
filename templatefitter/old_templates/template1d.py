@@ -45,10 +45,10 @@ class Template1d(AbstractTemplate):
         of the underlying histogram to the template.
         """
         hup = Hist1d(
-            bins=self._hist.num_bins, range=self._hist.range, data=data, weights=weights_up
+            bins=self._hist.num_bins, hist_range=self._hist.range, data=data, weights=weights_up
         )
         hdown = Hist1d(
-            bins=self._hist.num_bins, range=self._hist.range, data=data, weights=weights_down
+            bins=self._hist.num_bins, hist_range=self._hist.range, data=data, weights=weights_down
         )
 
         self._add_cov_mat(hup, hdown)

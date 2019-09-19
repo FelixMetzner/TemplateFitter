@@ -67,8 +67,8 @@ class Template1D(SingleTemplate):
         Add a new covariance matrix from a given systematic variation
         of the underlying histogram to the template.
         """
-        hup = Hist1d(bins=self._hist.num_bins, range=self._range, data=data, weights=weights_up)
-        hdown = Hist1d(bins=self._hist.num_bins, range=self._range, data=data, weights=weights_down)
+        hup = Hist1d(bins=self._hist.num_bins, hist_range=self._range, data=data, weights=weights_up)
+        hdown = Hist1d(bins=self._hist.num_bins, hist_range=self._range, data=data, weights=weights_down)
         self._add_cov_mat(hup, hdown)
 
     def add_single_par_variation(self, data, weights_up, weights_down, name, register=True):
@@ -76,8 +76,8 @@ class Template1D(SingleTemplate):
         Add a new covariance matrix from a given systematic variation
         of the underlying histogram to the template.
         """
-        hup = Hist1d(bins=self._hist.num_bins, range=self._range, data=data, weights=weights_up)
-        hdown = Hist1d(bins=self._hist.num_bins, range=self._range, data=data, weights=weights_down)
+        hup = Hist1d(bins=self._hist.num_bins, hist_range=self._range, data=data, weights=weights_up)
+        hdown = Hist1d(bins=self._hist.num_bins, hist_range=self._range, data=data, weights=weights_down)
 
         self._up_vars.append(list(hup.bin_counts.flatten() - self._flat_bin_counts))
         self._down_vars.append(list(hdown.bin_counts.flatten() - self._flat_bin_counts))

@@ -39,7 +39,7 @@ class TestHist2d(unittest.TestCase):
         )
 
         hiris = Hist2d(
-            bins=bins, data=(self.iris_sepal_length, self.iris_sepal_width), range=range
+            bins=bins, data=(self.iris_sepal_length, self.iris_sepal_width), hist_range=range
         )
 
         np.testing.assert_array_equal(hiris.bin_counts, bc)
@@ -64,7 +64,7 @@ class TestHist2d(unittest.TestCase):
         )
 
         hiris = Hist2d(
-            bins=bins, data=(self.iris_sepal_length, self.iris_sepal_width), range=range
+            bins=bins, data=(self.iris_sepal_length, self.iris_sepal_width), hist_range=range
         )
 
         np.testing.assert_array_equal(hiris.bin_counts, bc)

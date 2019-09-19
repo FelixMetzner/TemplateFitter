@@ -29,7 +29,7 @@ class TestHist1d(unittest.TestCase):
         nbins = 10
         range = (0, 10)
         iris_bc, iris_be = np.histogram(self.iris_sepal_length, bins=nbins, range=range)
-        iris_hist = Hist1d(data=self.iris_sepal_length, bins=nbins, range=range)
+        iris_hist = Hist1d(data=self.iris_sepal_length, bins=nbins, hist_range=range)
 
         np.testing.assert_array_equal(iris_hist.bin_counts, iris_bc)
         np.testing.assert_array_equal(iris_hist.bin_edges, iris_be)
@@ -39,14 +39,14 @@ class TestHist1d(unittest.TestCase):
     def test_shape(self):
         nbins = 10
         range = (0, 10)
-        iris_hist = Hist1d(data=self.iris_sepal_length, bins=nbins, range=range)
+        iris_hist = Hist1d(data=self.iris_sepal_length, bins=nbins, hist_range=range)
 
         self.assertEqual(iris_hist.shape, (10,))
 
     def test_range(self):
         nbins = 10
         range = (0, 10)
-        iris_hist = Hist1d(data=self.iris_sepal_length, bins=nbins, range=range)
+        iris_hist = Hist1d(data=self.iris_sepal_length, bins=nbins, hist_range=range)
 
         self.assertEqual(iris_hist.range, (0, 10))
 
@@ -54,7 +54,7 @@ class TestHist1d(unittest.TestCase):
         nbins = 10
         range = (0, 10)
         iris_bc, iris_be = np.histogram(self.iris_sepal_length, bins=nbins, range=range)
-        iris_hist = Hist1d(data=self.iris_sepal_length, bins=nbins, range=range)
+        iris_hist = Hist1d(data=self.iris_sepal_length, bins=nbins, hist_range=range)
 
         mids = (iris_be[:-1] + iris_be[1:]) / 2
         widths = iris_be[1:] - iris_be[:-1]
@@ -74,7 +74,7 @@ class TestHist1d(unittest.TestCase):
         nbins = 10
         range = (4, 6)
         iris_bc, iris_be = np.histogram(self.iris_sepal_length, bins=nbins, range=range)
-        iris_hist = Hist1d(data=self.iris_sepal_length, bins=nbins, range=range)
+        iris_hist = Hist1d(data=self.iris_sepal_length, bins=nbins, hist_range=range)
 
         np.testing.assert_array_equal(iris_hist.bin_counts, iris_bc)
         np.testing.assert_array_equal(iris_hist.bin_edges, iris_be)

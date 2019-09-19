@@ -9,13 +9,9 @@ __all__ = ["Hist2d"]
 
 
 class Hist2d(AbstractHist):
-    """
-    A 2 dimensional histogram.
-    """
-
-    def __init__(self, bins, range=None, data=None, weights=None):
+    def __init__(self, bins, hist_range=None, data=None, weights=None):
         super().__init__()
-        self._init_bin_edges(bins, range)
+        self._init_bin_edges(bins, hist_range)
         self._bin_counts = np.zeros(self._num_bins)
         self._bin_errors_sq = np.zeros(self._num_bins)
         self._shape = self._bin_counts.shape
@@ -23,14 +19,11 @@ class Hist2d(AbstractHist):
         if data is not None:
             self.fill(data, weights)
 
-    def _init_bin_edges(self, bins, range):
+    def _init_bin_edges(self, bins, hist_range):
         if all(isinstance(num_bins, int) for num_bins in bins):
             self._num_bins = bins
-            self._bin_edges = [
-                np.linspace(*limit, num_bins + 1)
-                for limit, num_bins in zip(range, bins)
-            ]
-            self._range = range
+            self._bin_edges = [np.linspace(*limit, num_bins + 1) for limit, num_bins in zip(hist_range, bins)]
+            self._range = hist_range
 
         else:
             self._num_bins = tuple(len(edges) - 1 for edges in bins)

@@ -54,10 +54,10 @@ class Template2d(AbstractTemplate):
         of the underlying histogram to the template.
         """
         hup = Hist2d(
-            bins=self._hist.num_bins, range=self._range, data=data, weights=weights_up
+            bins=self._hist.num_bins, hist_range=self._range, data=data, weights=weights_up
         )
         hdown = Hist2d(
-            bins=self._hist.num_bins, range=self._range, data=data, weights=weights_down
+            bins=self._hist.num_bins, hist_range=self._range, data=data, weights=weights_down
         )
 
         self._add_cov_mat(hup, hdown)

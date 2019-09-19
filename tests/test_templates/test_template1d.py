@@ -27,11 +27,11 @@ class TestHist1d(unittest.TestCase):
 
         self.bins = 10
         self.range = (2, 7)
-        self.hist = Hist1d(bins=self.bins, range=self.range, data=self.data)
+        self.hist = Hist1d(bins=self.bins, hist_range=self.range, data=self.data)
         self.template = Template1d("test", "test_var", self.hist)
 
     def test_empty_template(self):
-        hist = Hist1d(bins=self.bins, range=self.range)
+        hist = Hist1d(bins=self.bins, hist_range=self.range)
         template = Template1d("test", "test_var", hist)
 
         self.assertEqual(template.yield_param, 0)

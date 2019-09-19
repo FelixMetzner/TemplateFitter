@@ -32,10 +32,10 @@ e_xulnu_eff = sum(e_xulnu.weight) / sum(xulnu.weight)
 
 print(e_sig_eff, e_remaining_eff, e_xulnu_eff)
 
-e_hsig = tf.histograms.Hist1d(bins=num_bins, range=limits, data=e_sig.missingMass, weights=e_sig.weight)
-e_hremaining = tf.histograms.Hist1d(bins=num_bins, range=limits, data=e_remaining.missingMass,
+e_hsig = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=e_sig.missingMass, weights=e_sig.weight)
+e_hremaining = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=e_remaining.missingMass,
                                     weights=e_remaining.weight)
-e_hxulnu = tf.histograms.Hist1d(bins=num_bins, range=limits, data=e_xulnu.missingMass, weights=e_xulnu.weight)
+e_hxulnu = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=e_xulnu.missingMass, weights=e_xulnu.weight)
 
 e_tsig = tf.templates.Template1d("Signal", "missingMass", e_hsig, color="cornflowerblue")
 e_tremaining = tf.templates.Template1d("Remaining", "missingMass", e_hremaining, color="indianred")
@@ -57,10 +57,10 @@ mu_xulnu_eff = sum(mu_xulnu.weight) / sum(xulnu.weight)
 
 print(mu_sig_eff, mu_remaining_eff, mu_xulnu_eff)
 
-mu_hsig = tf.histograms.Hist1d(bins=num_bins, range=limits, data=mu_sig.missingMass, weights=mu_sig.weight)
-mu_hremaining = tf.histograms.Hist1d(bins=num_bins, range=limits, data=mu_remaining.missingMass,
+mu_hsig = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=mu_sig.missingMass, weights=mu_sig.weight)
+mu_hremaining = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=mu_remaining.missingMass,
                                      weights=mu_remaining.weight)
-mu_hxulnu = tf.histograms.Hist1d(bins=num_bins, range=limits, data=mu_xulnu.missingMass, weights=mu_xulnu.weight)
+mu_hxulnu = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=mu_xulnu.missingMass, weights=mu_xulnu.weight)
 
 mu_tsig = tf.templates.Template1d("Signal", "missingMass", mu_hsig, color="cornflowerblue")
 mu_tremaining = tf.templates.Template1d("Remaining", "missingMass", mu_hremaining, color="indianred")

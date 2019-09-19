@@ -33,15 +33,15 @@ class TestChannel(unittest.TestCase):
         self.range = (3, 8)
         self.variable = "length"
 
-        hsetosa = Hist1d(self.bins, range=self.range, data=setosa)
+        hsetosa = Hist1d(self.bins, hist_range=self.range, data=setosa)
         self.tsetosa = Template1d(
             "setosa", "length", hsetosa
         )
-        hversico = Hist1d(self.bins, range=self.range, data=versicolor)
+        hversico = Hist1d(self.bins, hist_range=self.range, data=versicolor)
         self.tversico = Template1d(
             "versicolor", "length", hversico
         )
-        hvirgini = Hist1d(self.bins, range=self.range, data=virginica)
+        hvirgini = Hist1d(self.bins, hist_range=self.range, data=virginica)
         self.tvirgini = Template1d(
             "virginica", "length", hvirgini
         )
@@ -59,14 +59,14 @@ class TestChannel(unittest.TestCase):
 
     def test_asimov_data_set(self):
         hasimov = self.channel.generate_asimov_dataset()
-        hiris = Hist1d(self.bins, range=self.range, data=iris_data)
+        hiris = Hist1d(self.bins, hist_range=self.range, data=iris_data)
         np.testing.assert_array_equal(hasimov.bin_counts, hiris.bin_counts)
         np.testing.assert_array_equal(hasimov.bin_edges, hiris.bin_edges)
         np.testing.assert_array_equal(hasimov.bin_errors, hiris.bin_errors)
 
     def test_toy_data_set(self):
         htoy = self.channel.generate_toy_dataset()
-        hiris = Hist1d(self.bins, range=self.range, data=iris_data)
+        hiris = Hist1d(self.bins, hist_range=self.range, data=iris_data)
         self.assertEqual(htoy.bin_counts.shape, hiris.bin_counts.shape)
         self.assertEqual(htoy.bin_edges.shape, hiris.bin_edges.shape)
         self.assertEqual(htoy.bin_errors.shape, hiris.bin_errors.shape)
@@ -102,16 +102,16 @@ class TestChannel(unittest.TestCase):
                          str(e.exception))
 
     def test_add_data(self):
-        hiris = Hist1d(self.bins, range=self.range, data=iris_data)
+        hiris = Hist1d(self.bins, hist_range=self.range, data=iris_data)
         self.channel.add_data(hiris)
 
     def test_add_data_wo_templates(self):
         empty_channel = Channel("test_empty", self.bins, self.range)
-        hiris = Hist1d(self.bins, range=self.range, data=iris_data)
+        hiris = Hist1d(self.bins, hist_range=self.range, data=iris_data)
         empty_channel.add_data(hiris)
 
     def test_add_not_comp_data(self):
-        hiris = Hist1d(2, range=self.range, data=iris_data)
+        hiris = Hist1d(2, hist_range=self.range, data=iris_data)
         with self.assertRaises(RuntimeError) as e:
             self.channel.add_data(hiris)
 
@@ -128,7 +128,7 @@ class TestChannel(unittest.TestCase):
         np.random.seed(5)
         yields = np.random.randn(self.num_templates) + 50
         nui_params = np.random.randn(self.num_templates * self.bins)
-        hiris = Hist1d(self.bins, range=self.range, data=iris_data)
+        hiris = Hist1d(self.bins, hist_range=self.range, data=iris_data)
         self.channel.add_data(hiris)
 
         nll_contrib = self.channel.nll_contribution(yields, nui_params)
