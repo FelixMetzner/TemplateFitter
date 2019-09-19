@@ -13,7 +13,7 @@ with open(requirements_file, "r") as rf:
 setup(
     name="TemplateFitter",
     version="0.0.1",
-    author="Maximilian Welsch, Felix Metzner",
+    author="Maximilian Welsch, Felix Metzner, William Sutcliffe",
     url="https://github.com/FelixMetzner/TemplateFitter",
     packages=find_packages(),
     description="Perform extended binned log-likelihood fits using histogram templates as PDFs.",
