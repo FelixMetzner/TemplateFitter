@@ -1,6 +1,5 @@
 """
-Implementation of a minimizer class based on the scipy.optimize.minimize
-function.
+Implementation of a minimizer class based on the scipy.optimize.minimize function.
 """
 import functools
 import logging
@@ -154,15 +153,12 @@ class Parameters:
     @errors.setter
     def errors(self, new_errors):
         if not len(new_errors) == self.num_params:
-            raise ValueError(
-                "Number of parameter errors must be equal" " to number of parameters"
-            )
+            raise ValueError("Number of parameter errors must be equal to number of parameters")
         self._errors = new_errors
 
     @property
     def covariance(self):
-        """np.ndarray: Parameter covariance matrix. Shape is
-        (`num_params`, `num_params`)."""
+        """ np.ndarray: Parameter covariance matrix. Shape is (`num_params`, `num_params`)."""
         return self._covariance
 
     @covariance.setter

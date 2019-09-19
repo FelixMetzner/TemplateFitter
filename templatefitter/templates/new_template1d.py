@@ -6,13 +6,10 @@ from templatefitter.templates.singletemplate import SingleTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["Template1d"]
+__all__ = ["Template1D"]
 
 
-class Template1d(SingleTemplate):
-    """
-    A 1D template class.
-    """
+class Template1D(SingleTemplate):
 
     def __init__(
             self,
@@ -24,7 +21,7 @@ class Template1d(SingleTemplate):
             pretty_variable=None,
             pretty_label=None,
     ):
-        super(Template1d, self).__init__(name=name, params=params)
+        super().__init__(name=name, params=params)
 
         self._hist = hist1d
         self._flat_bin_counts = self._hist.bin_counts.flatten()
@@ -54,6 +51,11 @@ class Template1d(SingleTemplate):
         self.color = color
         self.pretty_label = pretty_label
 
+    def _init_params(self):
+        bin_pars = np.full(self._num_bins, 0.)
+        bin_par_names = ["{}_binpar_{}".format(self.name, i) for i in range(0, self._num_bins)]
+        self._bin_par_indices = self._params.addParameters(bin_pars, bin_par_names)
+
     def colors(self):
         return [self.color]
 
@@ -65,12 +67,8 @@ class Template1d(SingleTemplate):
         Add a new covariance matrix from a given systematic variation
         of the underlying histogram to the template.
         """
-        hup = Hist1d(
-            bins=self._hist.num_bins, range=self._range, data=data, weights=weights_up
-        )
-        hdown = Hist1d(
-            bins=self._hist.num_bins, range=self._range, data=data, weights=weights_down
-        )
+        hup = Hist1d(bins=self._hist.num_bins, range=self._range, data=data, weights=weights_up)
+        hdown = Hist1d(bins=self._hist.num_bins, range=self._range, data=data, weights=weights_down)
         self._add_cov_mat(hup, hdown)
 
     def add_single_par_variation(self, data, weights_up, weights_down, name, register=True):
@@ -78,12 +76,9 @@ class Template1d(SingleTemplate):
         Add a new covariance matrix from a given systematic variation
         of the underlying histogram to the template.
         """
-        hup = Hist1d(
-            bins=self._hist.num_bins, range=self._range, data=data, weights=weights_up
-        )
-        hdown = Hist1d(
-            bins=self._hist.num_bins, range=self._range, data=data, weights=weights_down
-        )
+        hup = Hist1d(bins=self._hist.num_bins, range=self._range, data=data, weights=weights_up)
+        hdown = Hist1d(bins=self._hist.num_bins, range=self._range, data=data, weights=weights_down)
+
         self._up_vars.append(list(hup.bin_counts.flatten() - self._flat_bin_counts))
         self._down_vars.append(list(hdown.bin_counts.flatten() - self._flat_bin_counts))
         self._n_up_vars = np.array(self._up_vars)
@@ -93,9 +88,3 @@ class Template1d(SingleTemplate):
         else:
             self._sys_par_indices.append(self._params.getIndex(name))
         self._fraction_function = self.bin_fractions_with_sys
-
-    def _init_params(self):
-        """ Add parameters for the template """
-        bin_pars = np.full(self._num_bins, 0.)
-        bin_par_names = ["{}_binpar_{}".format(self.name, i) for i in range(0, self._num_bins)]
-        self._bin_par_indices = self._params.addParameters(bin_pars, bin_par_names)

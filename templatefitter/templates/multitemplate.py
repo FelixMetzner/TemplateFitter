@@ -42,8 +42,7 @@ class MultiTemplate(AbstractTemplate):
         self.pretty_label = pretty_label
 
     def _init_params(self):
-        """ Register fractions / efficiencies
-        as parameters"""
+        """ Register fractions / efficiencies as parameters """
         par_names = ["efficiency_{}".format(x) for x in templates.keys()]
         self._par_indices = self._params.addParameters(self._initial_pars, par_names)
 

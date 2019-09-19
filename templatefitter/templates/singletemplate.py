@@ -83,14 +83,14 @@ class SingleTemplate(AbstractTemplate, ABC):
 
     def bin_fractions(self):
         per_bin_yields = self._flat_bin_counts * (
-                    1. + self._params.getParameters([self._bin_par_indices]) * self._relative_errors)
+                1. + self._params.getParameters([self._bin_par_indices]) * self._relative_errors)
         return per_bin_yields / np.sum(per_bin_yields)
 
     def bin_fractions_with_sys(self):
         per_bin_yields = self._flat_bin_counts * (
-                    1. + self._params.getParameters([self._bin_par_indices]) * self._relative_errors)
+                1. + self._params.getParameters([self._bin_par_indices]) * self._relative_errors)
         sys_pars = self._params.getParameters([self._sys_par_indices])[:, np.newaxis]
-        uperrs = b = sys_pars * (sys_pars > 0) * self._up_vars
+        uperrs = sys_pars * (sys_pars > 0) * self._up_vars
         downerrs = sys_pars * (sys_pars < 0) * self._down_vars
         sys_corr = np.product(uperrs + downerrs + 1, axis=0)
         per_bin_yields = per_bin_yields * sys_corr
@@ -126,9 +126,7 @@ class SingleTemplate(AbstractTemplate, ABC):
         Helper function. Calculates a covariance matrix from
         given histogram up and down variations.
         """
-        cov_mat = get_systematic_cov_mat(
-            self._flat_bin_counts, hup.bin_counts.flatten(), hdown.bin_counts.flatten()
-        )
+        cov_mat = get_systematic_cov_mat(self._flat_bin_counts, hup.bin_counts.flatten(), hdown.bin_counts.flatten())
         self._cov_mats.append(np.copy(cov_mat))
 
         self._cov += cov_mat
@@ -149,9 +147,7 @@ class SingleTemplate(AbstractTemplate, ABC):
         is (`num_bins`,).
         """
         yield_param = self.params.getParameter(index)
-        return yield_param * self.fractions().reshape(
-            self._hist.shape
-        )
+        return yield_param * self.fractions().reshape(self._hist.shape)
 
     def reshaped_fractions(self):
         """
@@ -159,9 +155,7 @@ class SingleTemplate(AbstractTemplate, ABC):
         the current yield value and nuissance parameters. Shape
         is (`num_bins`,).
         """
-        return self.fractions().reshape(
-            self._hist.shape
-        )
+        return self.fractions().reshape(self._hist.shape)
 
     def errors(self):
         """

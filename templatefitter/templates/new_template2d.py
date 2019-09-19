@@ -11,14 +11,10 @@ from templatefitter.templates.singletemplate import SingleTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["Template2d"]
+__all__ = ["Template2D"]
 
 
-class Template2d(SingleTemplate):
-    """
-    A 2 dimensional template class.
-    """
-
+class Template2D(SingleTemplate):
     def __init__(
             self,
             name,
@@ -30,7 +26,7 @@ class Template2d(SingleTemplate):
             y_pretty_var=None,
             pretty_label=None,
     ):
-        super(Template2d, self).__init__(name=name, params=params)
+        super().__init__(name=name, params=params)
 
         self._hist = hist2d
         self._flat_bin_counts = self._hist.bin_counts.flatten()
@@ -49,7 +45,6 @@ class Template2d(SingleTemplate):
         self.pretty_label = pretty_label
 
     def _init_params(self):
-        """ Add parameters for the template """
         bin_pars = np.full(self._num_bins, 0.)
         bin_par_names = ["{}_binpar_{}".format(self.name, i) for i in range(0, self._num_bins)]
         self._bin_par_indices = self._params.addParameters(bin_pars, bin_par_names)
@@ -99,6 +94,7 @@ class Template2d(SingleTemplate):
         cmap = viridis(np.linspace(0, 1, 256))
         cmap[0, :] = np.array([1, 1, 1, 1])
         newcm = ListedColormap(cmap)
+
         cax = ax.hist2d(
             x=xy[:, 0],
             y=xy[:, 1],
@@ -107,12 +103,10 @@ class Template2d(SingleTemplate):
             cmap=newcm,
             label=self.name
         )
-        ax.set_title(self.pretty_label if self.pretty_label is not None else
-                     self.name)
-        ax.set_xlabel(self.x_pretty_var if self.x_pretty_var is not None else
-                      self._x_var)
-        ax.set_ylabel(self.y_pretty_var if self.y_pretty_var is not None else
-                      self._y_var)
+
+        ax.set_title(self.pretty_label if self.pretty_label is not None else self.name)
+        ax.set_xlabel(self.x_pretty_var if self.x_pretty_var is not None else self._x_var)
+        ax.set_ylabel(self.y_pretty_var if self.y_pretty_var is not None else self._y_var)
         fig.colorbar(cax[3])
 
     def plot_x_projection_on(self, ax):
@@ -123,8 +117,7 @@ class Template2d(SingleTemplate):
         errors = np.sqrt(np.sum(self.errors ** 2, axis=1))
         projection = self._hist.x_projection()
         self._plot_projection(ax, values, errors, projection)
-        ax.set_xlabel(self.x_pretty_var if self.x_pretty_var is not None
-                      else self._x_var)
+        ax.set_xlabel(self.x_pretty_var if self.x_pretty_var is not None else self._x_var)
 
     def plot_y_projection_on(self, ax):
         """
