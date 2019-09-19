@@ -7,7 +7,7 @@ from itertools import product
 from matplotlib.colors import ListedColormap
 
 from templatefitter.histograms import Hist2d
-from templatefitter.templates.singletemplate import SingleTemplate
+from templatefitter.templates import SingleTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 

@@ -6,7 +6,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 from templatefitter.utility import cov2corr, get_systematic_cov_mat
-from templatefitter.templates.abstract_template import AbstractTemplate
+from templatefitter.templates import AbstractTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
