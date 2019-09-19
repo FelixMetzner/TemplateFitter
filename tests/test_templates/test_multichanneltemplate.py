@@ -6,7 +6,7 @@ import pandas as pd
 import pathlib
 
 from templatefitter.histograms import Hist1d, Hist2d
-from templatefitter.templates import MultiChannelTemplate, Channel, Template1d, Template2d, NegLogLikelihood
+from templatefitter.old_templates import MultiChannelTemplate, Channel, Template1d, Template2d, NegLogLikelihood
 
 this_dir = pathlib.Path(__file__).resolve().parent
 iris = pd.read_csv(this_dir / "iris.csv", sep=",", header=0)
@@ -79,7 +79,7 @@ class TestMultiChannelTemplate1d(unittest.TestCase):
         self.assertTupleEqual(mct.processes, self.processes)
         self.assertDictEqual(mct.channels, {})
 
-        mct.define_channel("test1",  self.bins, self.range)
+        mct.define_channel("test1", self.bins, self.range)
         self.assertListEqual(list(mct.channels.keys()), ["test1"])
 
     def test_add_channel(self):
@@ -108,8 +108,8 @@ class TestMultiChannelTemplate1d(unittest.TestCase):
 
         mct = self.setup_two_channel_mct()
 
-        hdata_ch1 = Hist1d(self.bins, self.range, data= channel_1["sepal_length"])
-        hdata_ch2 = Hist1d(self.bins, self.range, data= channel_2["sepal_length"])
+        hdata_ch1 = Hist1d(self.bins, self.range, data=channel_1["sepal_length"])
+        hdata_ch2 = Hist1d(self.bins, self.range, data=channel_2["sepal_length"])
         mct.add_data(Test1=hdata_ch1, Test2=hdata_ch2)
 
         for channel in mct.channels.values():
@@ -121,8 +121,8 @@ class TestMultiChannelTemplate1d(unittest.TestCase):
 
         mct = self.setup_two_channel_mct()
 
-        hdata_ch1 = Hist1d(self.bins, self.range, data= channel_1["sepal_length"])
-        hdata_ch2 = Hist1d(self.bins, self.range, data= channel_2["sepal_length"])
+        hdata_ch1 = Hist1d(self.bins, self.range, data=channel_1["sepal_length"])
+        hdata_ch2 = Hist1d(self.bins, self.range, data=channel_2["sepal_length"])
         mct.add_data(**{"Test1": hdata_ch1, "Test2": hdata_ch2})
 
         for channel in mct.channels.values():
@@ -137,19 +137,19 @@ class TestMultiChannelTemplate1d(unittest.TestCase):
 
     def test_nui_params(self):
         mct = self.setup_two_channel_mct()
-        expected = np.zeros(len(self.channels)*len(self.processes)*self.bins)
+        expected = np.zeros(len(self.channels) * len(self.processes) * self.bins)
         np.testing.assert_array_equal(mct.nui_params, expected)
 
     def test_generate_per_channel_parameters(self):
         mct = self.setup_two_channel_mct()
         yields = iris.class_id.value_counts().values
-        nui_params = np.random.randn(len(self.channels)*len(self.processes)*self.bins)
+        nui_params = np.random.randn(len(self.channels) * len(self.processes) * self.bins)
 
         per_channel_params = mct.generate_per_channel_parameters(np.concatenate((yields, nui_params)))
 
         for y, n in zip(*per_channel_params):
             self.assertEqual(y.shape, (len(self.processes),))
-            self.assertEqual(n.shape, (len(self.processes)*self.bins,))
+            self.assertEqual(n.shape, (len(self.processes) * self.bins,))
 
 
 class TestMultiChannelTemplate2d(unittest.TestCase):
@@ -157,8 +157,8 @@ class TestMultiChannelTemplate2d(unittest.TestCase):
     def setUp(self):
 
         self.bins = (3, 3)
-        self.num_bins = reduce(lambda x,y: x*y, self.bins)
-        self.range = ((3, 8), (2,5))
+        self.num_bins = reduce(lambda x, y: x * y, self.bins)
+        self.range = ((3, 8), (2, 5))
         self.variable = ("sepal_length", "sepal_width")
 
         self.processes = ("setosa", "versicolor", "virginica")
@@ -172,7 +172,7 @@ class TestMultiChannelTemplate2d(unittest.TestCase):
             )
 
         for process in self.processes:
-           self.mct.define_process(process)
+            self.mct.define_process(process)
 
         ch1_setosa_length = channel_1.query("class_id==1")["sepal_length"].values
         ch1_setosa_width = channel_1.query("class_id==1")["sepal_width"].values
@@ -217,19 +217,19 @@ class TestMultiChannelTemplate2d(unittest.TestCase):
 
         yields = ch1_yields + ch2_yields
 
-        nui_params = np.random.randn(len(self.channels)*len(self.processes)*self.num_bins - self.num_bins)
+        nui_params = np.random.randn(len(self.channels) * len(self.processes) * self.num_bins - self.num_bins)
 
-        per_channel_yields, per_channel_nui_params = self.mct.generate_per_channel_parameters(np.concatenate((yields, nui_params)))
+        per_channel_yields, per_channel_nui_params = self.mct.generate_per_channel_parameters(
+            np.concatenate((yields, nui_params)))
 
         self.assertEqual(per_channel_yields[0].shape, (3,))
         self.assertEqual(per_channel_yields[1].shape, (2,))
         self.assertEqual(per_channel_nui_params[0].shape,
-                         (len(self.processes)*self.num_bins,))
+                         (len(self.processes) * self.num_bins,))
 
         self.assertEqual(per_channel_nui_params[1].shape,
-                         (2*self.num_bins,))
+                         (2 * self.num_bins,))
 
     def test_create_nll(self):
         nll = self.mct.create_nll()
         self.assertTrue(isinstance(nll, NegLogLikelihood))
-

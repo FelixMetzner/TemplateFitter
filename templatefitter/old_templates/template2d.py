@@ -8,7 +8,7 @@ from matplotlib.colors import ListedColormap
 import numpy as np
 
 from templatefitter.histograms import Hist2d
-from templatefitter.templates import AbstractTemplate
+from templatefitter.old_templates import AbstractTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 

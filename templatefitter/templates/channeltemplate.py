@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 
-from templatefitter.templates.abstract_template import AbstractTemplate
+from templatefitter.templates.new_abstract_template import AbstractTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -28,7 +28,7 @@ class ChannelTemplate(AbstractTemplate):
             pretty_variable=None,
             pretty_label=None,
     ):
-        super(Template1d, self).__init__(name=name, params=params)
+        super().__init__(name=name, params=params)
 
         self._templates = templates
         self._yield_indices = []

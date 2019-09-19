@@ -3,20 +3,20 @@ import unittest
 import numpy as np
 
 from templatefitter.histograms import Hist1d
-from templatefitter.templates import Channel, Template1d
+from templatefitter.old_templates import Channel, Template1d
 
 iris_data = np.array(
-    [5.1, 4.9, 4.7, 4.6, 5. , 5.4, 4.6, 5. , 4.4, 4.9, 5.4, 4.8, 4.8,
-     4.3, 5.8, 5.7, 5.4, 5.1, 5.7, 5.1, 5.4, 5.1, 4.6, 5.1, 4.8, 5. ,
-     5. , 5.2, 5.2, 4.7, 4.8, 5.4, 5.2, 5.5, 4.9, 5. , 5.5, 4.9, 4.4,
-     5.1, 5. , 4.5, 4.4, 5. , 5.1, 4.8, 5.1, 4.6, 5.3, 5. , 7. , 6.4,
-     6.9, 5.5, 6.5, 5.7, 6.3, 4.9, 6.6, 5.2, 5. , 5.9, 6. , 6.1, 5.6,
+    [5.1, 4.9, 4.7, 4.6, 5.0, 5.4, 4.6, 5.0, 4.4, 4.9, 5.4, 4.8, 4.8,
+     4.3, 5.8, 5.7, 5.4, 5.1, 5.7, 5.1, 5.4, 5.1, 4.6, 5.1, 4.8, 5.0,
+     5.0, 5.2, 5.2, 4.7, 4.8, 5.4, 5.2, 5.5, 4.9, 5.0, 5.5, 4.9, 4.4,
+     5.1, 5.0, 4.5, 4.4, 5.0, 5.1, 4.8, 5.1, 4.6, 5.3, 5.0, 7.0, 6.4,
+     6.9, 5.5, 6.5, 5.7, 6.3, 4.9, 6.6, 5.2, 5.0, 5.9, 6.0, 6.1, 5.6,
      6.7, 5.6, 5.8, 6.2, 5.6, 5.9, 6.1, 6.3, 6.1, 6.4, 6.6, 6.8, 6.7,
-     6. , 5.7, 5.5, 5.5, 5.8, 6. , 5.4, 6. , 6.7, 6.3, 5.6, 5.5, 5.5,
-     6.1, 5.8, 5. , 5.6, 5.7, 5.7, 6.2, 5.1, 5.7, 6.3, 5.8, 7.1, 6.3,
+     6.0, 5.7, 5.5, 5.5, 5.8, 6.0, 5.4, 6.0, 6.7, 6.3, 5.6, 5.5, 5.5,
+     6.1, 5.8, 5.0, 5.6, 5.7, 5.7, 6.2, 5.1, 5.7, 6.3, 5.8, 7.1, 6.3,
      6.5, 7.6, 4.9, 7.3, 6.7, 7.2, 6.5, 6.4, 6.8, 5.7, 5.8, 6.4, 6.5,
-     7.7, 7.7, 6. , 6.9, 5.6, 7.7, 6.3, 6.7, 7.2, 6.2, 6.1, 6.4, 7.2,
-     7.4, 7.9, 6.4, 6.3, 6.1, 7.7, 6.3, 6.4, 6. , 6.9, 6.7, 6.9, 5.8,
+     7.7, 7.7, 6.0, 6.9, 5.6, 7.7, 6.3, 6.7, 7.2, 6.2, 6.1, 6.4, 7.2,
+     7.4, 7.9, 6.4, 6.3, 6.1, 7.7, 6.3, 6.4, 6.0, 6.9, 6.7, 6.9, 5.8,
      6.8, 6.7, 6.7, 6.3, 6.5, 6.2, 5.9]
 )
 
@@ -74,13 +74,13 @@ class TestChannel(unittest.TestCase):
     def test_update_parameters(self):
 
         new_yields = np.array([35, 60, 80])
-        new_nui_params = np.random.randn(self.bins*self.num_templates)
+        new_nui_params = np.random.randn(self.bins * self.num_templates)
         per_template_nui_params = np.split(new_nui_params, self.num_templates)
 
         self.channel.update_parameters(new_yields, new_nui_params)
 
         for i, template in enumerate(self.channel.templates.values()):
-            self.assertEqual(template.yield_param, new_yields[i]*self.efficiencies)
+            self.assertEqual(template.yield_param, new_yields[i] * self.efficiencies)
             np.testing.assert_array_equal(template.nui_params, per_template_nui_params[i])
 
     def test_process_indices(self):
@@ -93,7 +93,7 @@ class TestChannel(unittest.TestCase):
 
     def test_add_non_comp_template(self):
         with self.assertRaises(RuntimeError) as e:
-            hsetosa = Hist1d( 5, (3, 4), data=setosa)
+            hsetosa = Hist1d(5, (3, 4), data=setosa)
             self.channel.add_template(
                 'bla', Template1d('test', 'test', hsetosa)
             )
@@ -122,12 +122,12 @@ class TestChannel(unittest.TestCase):
         inv_corr = self.channel._create_block_diag_inv_corr_mat()
 
         self.assertEqual(inv_corr.shape,
-                         (self.num_templates*self.bins, self.num_templates*self.bins))
+                         (self.num_templates * self.bins, self.num_templates * self.bins))
 
     def test_nll_contrib_is_scalar(self):
         np.random.seed(5)
-        yields = np.random.randn(self.num_templates)+50
-        nui_params = np.random.randn(self.num_templates*self.bins)
+        yields = np.random.randn(self.num_templates) + 50
+        nui_params = np.random.randn(self.num_templates * self.bins)
         hiris = Hist1d(self.bins, range=self.range, data=iris_data)
         self.channel.add_data(hiris)
 

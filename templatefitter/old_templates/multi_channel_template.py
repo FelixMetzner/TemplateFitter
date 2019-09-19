@@ -4,7 +4,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 
-from templatefitter.templates import Channel
+from templatefitter.old_templates import Channel
 from templatefitter.utility import array_split_into
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
