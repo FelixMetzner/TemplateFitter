@@ -105,15 +105,3 @@ fitter = tf.TemplateFitter(mct, "iminuit")
 
 fitter.do_fit(update_templates=True)
 print(mct.rate_uncertainties_nui_params)
-# print(model.get_significance("signal"))
-#
-# for channel in mct.channels.values():
-#     fig, axis = plt.subplots(1,1, figsize=(8,8))
-#     channel.plot_stacked_on(axis)
-#     axis.legend()
-#
-# sig_yield, nll_profile, hesse = model.profile("signal_yield", num_cpu=25)
-# fig, ax = plt.subplots(1,1, figsize=(8,8), dpi=200)
-# ax.plot(sig_yield, nll_profile, label="profile")
-# ax.plot(sig_yield, hesse, label="hesse approx.")
-# plt.show()

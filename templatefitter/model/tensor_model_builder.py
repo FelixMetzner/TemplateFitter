@@ -5,6 +5,7 @@ import tensorflow as tf
 from scipy.linalg import block_diag
 
 from templatefitter.utility import xlogyx
+from templatefitter.plotter import old_plotting
 from templatefitter.model.parameter_handler import ParameterHandler
 
 __all__ = ["TensorModelBuilder"]
@@ -26,7 +27,7 @@ class TensorModelBuilder:
         self._inv_corr = np.array([])
         self.bin_par_slice = (0, 0)
         self._dim = None
-        self.has_data = 1
+        self.has_data = True
         self.shape = ()
         self.yields_to_stack = []
         self.converter_matrix = None
@@ -193,102 +194,13 @@ class TensorModelBuilder:
         return np.sum(bc, axis=x_to_i[ax])
 
     def plot_stacked_on(self, ax, plot_all=False, **kwargs):
-        bin_mids = [template.bin_mids() for template in self.templates.values()]
-        bin_edges = next(iter(self.templates.values())).bin_edges()
-        bin_width = next(iter(self.templates.values())).bin_widths()
-        num_bins = next(iter(self.templates.values())).num_bins
-        shape = next(iter(self.templates.values())).shape()
-
-        colors = [template.color for template in self.templates.values()]
-        yields = self.params.get_parameters([self.yield_indices])
-        bin_counts = [tempyield * template.fractions() for tempyield, template in zip(yields, self.templates.values())]
-        labels = [template.name for template in self.templates.values()]
-
-        if plot_all:
-            colors = []
-            for template in self.templates.values():
-                colors += template.colors()
-            labels = []
-            for template in self.templates.values():
-                labels += template.labels()
-            bin_counts = [tempyield * template.all_fractions() for tempyield, template in
-                          zip(yields, self.templates.values())]
-            bin_counts = np.concatenate(bin_counts)
-            N = len(bin_counts)
-            bin_counts = np.split(bin_counts, N / num_bins)
-            bin_mids = [bin_mids[0]] * int(N / num_bins)
-
-        if self._dim > 1:
-            bin_counts = [self._get_projection(kwargs["projection"], bc.reshape(shape)) for bc
-                          in bin_counts]
-            axis = kwargs["projection"]
-            ax_to_index = {
-                "x": 0,
-                "y": 1,
-            }
-            bin_mids = [mids[ax_to_index[axis]] for mids in bin_mids]
-            bin_edges = bin_edges[ax_to_index[axis]]
-            bin_width = bin_width[ax_to_index[axis]]
-
-        ax.hist(
-            bin_mids,
-            weights=bin_counts,
-            bins=bin_edges,
-            edgecolor="black",
-            histtype="stepfilled",
-            lw=0.5,
-            color=colors,
-            label=labels,
-            stacked=True
+        plot_info = old_plotting.PlottingInfo(
+            templates=self.templates,
+            params=self.params,
+            yield_indices=self.yield_indices,
+            dimension=self._dim,
+            projection_fct=self._get_projection,
+            data=self.data,
+            has_data=self.has_data
         )
-
-        uncertainties_sq = [
-            (temp_yield * template.fractions() * template.errors()).reshape(template.shape()) ** 2 for
-            temp_yield, template in zip(yields, self.templates.values())
-        ]
-        if self._dim > 1:
-            uncertainties_sq = [
-                self._get_projection(kwargs["projection"], unc_sq) for unc_sq in uncertainties_sq
-            ]
-
-        total_uncertainty = np.sqrt(np.sum(np.array(uncertainties_sq), axis=0))
-        total_bin_count = np.sum(np.array(bin_counts), axis=0)
-
-        ax.bar(
-            x=bin_mids[0],
-            height=2 * total_uncertainty,
-            width=bin_width,
-            bottom=total_bin_count - total_uncertainty,
-            color="black",
-            hatch="///////",
-            fill=False,
-            lw=0,
-            label="MC Uncertainty"
-        )
-
-        if self.data is None:
-            return ax
-
-        data_bin_mids = self.data.bin_mids
-        data_bin_counts = self.data.bin_counts
-        data_bin_errors_sq = self.data.bin_errors_sq
-
-        if self.has_data:
-
-            if self._dim > 1:
-                data_bin_counts = self._get_projection(
-                    kwargs["projection"], data_bin_counts
-                )
-                data_bin_errors_sq = self._get_projection(
-                    kwargs["projection"], data_bin_errors_sq
-                )
-
-                axis = kwargs["projection"]
-                ax_to_index = {
-                    "x": 0,
-                    "y": 1,
-                }
-                data_bin_mids = data_bin_mids[ax_to_index[axis]]
-
-            ax.errorbar(x=data_bin_mids, y=data_bin_counts, yerr=np.sqrt(data_bin_errors_sq),
-                        ls="", marker=".", color="black", label="Data")
+        return old_plotting.plot_stacked_on(plot_info=plot_info, ax=ax, plot_all=plot_all, **kwargs)
