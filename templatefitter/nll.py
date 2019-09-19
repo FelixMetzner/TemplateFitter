@@ -1,14 +1,13 @@
 """
-This module contains definitions for different likelihood
-functions which are used as const function to be minimized in
-the fit.
+This module contains definitions for different likelihood functions
+which are used as const function to be minimized in the fit.
 """
-from abc import ABC, abstractmethod
 
 import logging
 import itertools
 import numpy as np
 
+from abc import ABC, abstractmethod
 from scipy.linalg import block_diag
 
 __all__ = [
@@ -26,7 +25,7 @@ class AbstractTemplateCostFunction(ABC):
 
     Parameters
     ----------
-    histdataset : AbstractHist
+    hist_data_set : AbstractHist
         Bin counts of the data histogram. Shape is (nbins,).
     templates : AbstractTemplate
         A CompositeTemplate instance. The templates are used to
@@ -34,17 +33,15 @@ class AbstractTemplateCostFunction(ABC):
         the templates to the measured data set.
     """
 
-    def __init__(self, histdataset, templates):
-        self._dataset = histdataset
+    def __init__(self, hist_data_set, templates):
+        self._dataset = hist_data_set
         self._templates = templates
 
-        self._d = histdataset.bin_counts
+        self._d = hist_data_set.bin_counts
         # self._empty = self._d < 1e-100
         # if np.any(self._empty):
         #     logging.warn("Empty bins found in given dataset. These bins are ignored.")
         # self._d = self._d[~self._empty]
-
-    # -- abstract properties
 
     @property
     @abstractmethod
@@ -57,8 +54,6 @@ class AbstractTemplateCostFunction(ABC):
     def param_names(self):
         """list of str: Parameter names. Used for convenience."""
         pass
-
-    # -- abstract methods --
 
     @abstractmethod
     def __call__(self, x: np.ndarray) -> float:
@@ -113,8 +108,7 @@ class StackedTemplateNegLogLikelihood(AbstractTemplateCostFunction):
 
     def __init__(self, binned_dataset, templates):
         super().__init__(binned_dataset, templates)
-        self._block_diag_inv_corr_mats = block_diag(
-            *self._templates.inv_corr_mats)
+        self._block_diag_inv_corr_mats = block_diag(*self._templates.inv_corr_mats)
 
     @property
     def x0(self):
@@ -125,15 +119,14 @@ class StackedTemplateNegLogLikelihood(AbstractTemplateCostFunction):
 
     @property
     def param_names(self):
-        yields = [
-            template_id + "_yield"
-            for template_id in self._templates.template_names
-        ]
+        yields = [template_id + "_yield" for template_id in self._templates.template_names]
         nui_params = [[
             template_id + "_nui" + f"_{i}"
             for i in range(self._templates.num_bins)
         ] for template_id in self._templates.template_names]
+
         yields.extend(itertools.chain.from_iterable(nui_params))
+
         return yields
 
     def __call__(self, x: np.ndarray) -> float:
@@ -152,12 +145,10 @@ class StackedTemplateNegLogLikelihood(AbstractTemplateCostFunction):
 
         exp_evts_per_bin = poi @ self._templates.fractions(nuis_params)
 
-        # this poisson term is taken from Blobel
-        poisson_term = np.sum(exp_evts_per_bin - self._d -
-                              xlogyx(self._d, exp_evts_per_bin))
+        # This poisson term is taken from Blobel
+        poisson_term = np.sum(exp_evts_per_bin - self._d - xlogyx(self._d, exp_evts_per_bin))
 
-        gauss_term = 0.5 * (
-                nuis_params @ self._block_diag_inv_corr_mats @ nuis_params)
+        gauss_term = 0.5 * (nuis_params @ self._block_diag_inv_corr_mats @ nuis_params)
 
         return poisson_term + gauss_term
 

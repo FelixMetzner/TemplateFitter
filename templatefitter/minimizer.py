@@ -1,16 +1,17 @@
 """
 Implementation of a minimizer class based on the scipy.optimize.minimize function.
 """
-import functools
-import logging
-from abc import ABC, abstractmethod
-from collections import namedtuple
 
-import numdifftools as ndt
-import numpy as np
-from iminuit import Minuit
-from scipy.optimize import minimize
+import logging
 import tabulate
+import functools
+import numpy as np
+import numdifftools as ndt
+
+from iminuit import Minuit
+from collections import namedtuple
+from scipy.optimize import minimize
+from abc import ABC, abstractmethod
 
 from templatefitter.utility import cov2corr, id_to_index
 
@@ -282,12 +283,12 @@ class IMinuitMinimizer(AbstractMinimizer):
         super().__init__(fcn, param_names)
         self._fixed_params = [False for _ in self.params.names]
 
-    def minimize(self, initial_params, verbose=False, errordef=0.5, **kwargs):
+    def minimize(self, initial_params, verbose=False, error_def=0.5, **kwargs):
         m = Minuit.from_array_func(
             self._fcn,
             initial_params,
             error=0.05 * initial_params,
-            errordef=errordef,
+            errordef=error_def,
             fix=self._fixed_params,
             name=self.params.names,
             limit=self._param_bounds,
@@ -304,9 +305,7 @@ class IMinuitMinimizer(AbstractMinimizer):
         self._params.covariance = m.np_matrix()
         self._params.correlation = m.np_matrix(correlation=True)
 
-        self._success = (
-                fmin["is_valid"] and fmin["has_valid_parameters"] and fmin["has_covariance"]
-        )
+        self._success = (fmin["is_valid"] and fmin["has_valid_parameters"] and fmin["has_covariance"])
 
         # if not self._success:
         #     raise RuntimeError(f"Minimization was not successful.\n" f"{fmin}\n")
@@ -341,9 +340,7 @@ class ScipyMinimizer(AbstractMinimizer):
     def __init__(self, fcn, param_names):
         super().__init__(fcn, param_names)
 
-    def minimize(
-            self, initial_param_values, additional_args=(), get_hesse=True, verbose=False
-    ):
+    def minimize(self, initial_param_values, additional_args=(), get_hesse=True, verbose=False):
         """
         Performs minimization of given objective function.
 
@@ -366,8 +363,6 @@ class ScipyMinimizer(AbstractMinimizer):
         MinimizeResult
         """
         constraints = self._create_constraints(initial_param_values)
-
-
 
         opt_result = minimize(
             fun=self._fcn,

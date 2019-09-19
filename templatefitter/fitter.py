@@ -167,6 +167,8 @@ class TemplateFitter:
         ----------
         param_id : int or string
             Parameter index or name.
+        num_cpu : int
+            Maximal number of processes to uses.
         num_points : int
             Number of points where the negative log likelihood is
             minimized.
@@ -176,6 +178,8 @@ class TemplateFitter:
         subtract_min : bool, optional
             Whether to subtract the estimated minimum of the negative
             log likelihood function or not. Default is True.
+        fix_nui_params : bool, optional
+            Whether to fix nuisance parameters. Default is False.
 
         Returns
         -------
@@ -268,8 +272,7 @@ class TemplateFitter:
             loop_result = minimizer.minimize(initial_values, get_hesse=False)
         except RuntimeError as e:
             logging.info(e)
-            logging.info(f"Minimization with point {point} was not "
-                         f"successful, trying again.")
+            logging.info(f"Minimization with point {point} was not successful, trying again.")
             return np.nan
 
         return loop_result.fcn_min_val
@@ -301,6 +304,10 @@ class TemplateFitter:
         process_id : str
             Id of component in the composite template for which the
             significance of the yield parameter should be calculated.
+        verbose : bool, optional
+            Whether to show output. Default is True.
+        fix_nui_params : bool, optional
+            Whether to fix nuisance parameters. Default is False.
 
         Returns
         -------
