@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 
-from templatefitter.templates.new_abstract_template import AbstractTemplate
+from templatefitter.templates import AbstractTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
