@@ -19,7 +19,7 @@ class SingleTemplate(AbstractTemplate, ABC):
     """
 
     def __init__(self, name, params):
-        super(SingleTemplate, self).__init__(name=name, params=params)
+        super().__init__(name=name, params=params)
         self._hist = None
         self._flat_bin_counts = None
         self._flat_bin_errors_sq = None
