@@ -11,6 +11,7 @@ import logging
 import numpy as np
 
 from typing import Union, Tuple, List
+from scipy.stats import binned_statistic_dd
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -30,9 +31,56 @@ class BinnedDistribution:
         self._bin_counts = None
         self._dimensions = None
 
-    def fill(self):
+    def fill(self, input_data, weights):
         # TODO
+        # use binned_statistic_dd
+        # for general case as done by Max specifically for 1d and 2d case.
         pass
+
+    """
+    def max_fill_1d(self, input_data, weights):
+        if weights is None:
+            weights = np.ones_like(input_data)
+        if isinstance(weights, list):
+            weights = np.array(weights)
+
+        self._bin_counts += binned_statistic(
+            input_data,
+            weights,
+            statistic='sum',
+            bins=self._bin_edges,
+            range=self._range
+        )[0]
+
+        self._bin_errors_sq += binned_statistic(
+            input_data,
+            weights ** 2,
+            statistic='sum',
+            bins=self._bin_edges,
+            range=self._range
+        )[0]
+
+        self._is_empty = False
+
+    def max_fill_2d(self, input_data, weights):
+        if weights is None:
+            weights = np.ones(len(input_data[0]))
+        if isinstance(weights, list):
+            weights = np.array(weights)
+
+        self._bin_counts += binned_statistic_2d(
+            x=input_data[0], y=input_data[1], values=weights, statistic="sum", bins=self._bin_edges
+        )[0]
+
+        self._bin_errors_sq += binned_statistic_2d(
+            x=input_data[0],
+            y=input_data[1],
+            values=weights ** 2,
+            statistic="sum",
+            bins=self._bin_edges,
+        )[0]
+        self._is_empty = False
+    """
 
     @classmethod
     def fill_from_binned(cls):
