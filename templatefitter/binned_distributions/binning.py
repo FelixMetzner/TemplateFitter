@@ -3,6 +3,8 @@
 import numpy as np
 from typing import Union, Tuple, Optional
 
+__all__ = ["Binning"]
+
 
 class Binning:
     def __init__(
@@ -134,5 +136,5 @@ class Binning:
         return self._bin_widths
 
     @property
-    def range(self) -> Tuple[Tuple[float, ...]]:
+    def range(self) -> Tuple[Tuple[float, float]]:
         return self._range
