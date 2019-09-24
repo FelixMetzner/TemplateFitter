@@ -1,4 +1,6 @@
-# Class providing general methods for binning in arbitrary dimensions.
+"""
+Class providing general methods for binning in arbitrary dimensions.
+"""
 
 import numpy as np
 from typing import Union, Tuple, Optional
@@ -138,3 +140,103 @@ class Binning:
     @property
     def range(self) -> Tuple[Tuple[float, float]]:
         return self._range
+
+    def apply_adaptive_binning(
+            self,
+            components,
+            bin_edges=None,
+            start_from="auto",
+            min_count=5
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        if self.dimensions != 1:
+            raise NotImplementedError("Adaptive binning is only available for 1 dimensional distributions!")
+
+        valid_start_froms = ["left", "right", "max", "auto"]
+        if start_from not in valid_start_froms:
+            raise ValueError(f"Value provided for parameter `start_from` is not valid.\n"
+                             f"You provided '{start_from}'.\nShould be one of {valid_start_froms}.")
+
+        if bin_edges is None:
+            bin_edges = np.array(self.bin_edges)
+        bin_mids = np.array(map(self._get_bin_mids, bin_edges))
+        bin_widths = np.array(map(self._get_bin_widths, bin_edges))
+
+        # Starting Condition
+        if any(len(edges) < 7 for edges in bin_edges):
+            return bin_edges, bin_mids, bin_widths
+
+        initial_hist = np.sum(
+            np.array([np.histogram(comp.data, bins=bin_edges, weights=comp.weights)[0] for comp in components]),
+            axis=0
+        )
+
+        # Termination condition
+        if np.all(initial_hist >= min_count):
+            return bin_edges, bin_mids, bin_widths
+
+        if start_from == "left":
+            starting_point = np.argmax(initial_hist < min_count)
+            offset = 1 if len(initial_hist[starting_point:]) % 2 == 0 else 0
+            original = bin_edges[:starting_point + offset]
+            adapted = bin_edges[starting_point + offset:][1::2]
+            new_edges = np.r_[original, adapted]
+            new_binning = self.apply_adaptive_binning(
+                components=components,
+                bin_edges=new_edges,
+                start_from=start_from,
+                min_count=min_count
+            )
+        elif start_from == "right":
+            starting_point = len(initial_hist) - np.argmax(np.flip(initial_hist) < min_count)
+            offset = 0 if len(initial_hist[:starting_point]) % 2 == 0 else 1
+            original = bin_edges[starting_point + offset:]
+            adapted = bin_edges[:starting_point + offset][::2]
+            new_edges = np.r_[adapted, original]
+            new_binning = self.apply_adaptive_binning(
+                components=components,
+                bin_edges=new_edges,
+                start_from=start_from,
+                min_count=min_count
+            )
+        elif start_from == "max":
+            max_bin = np.argmax(initial_hist)
+            assert np.all(initial_hist[max_bin - 2:max_bin + 3] >= min_count)
+            original_mid = bin_edges[max_bin - 1:max_bin + 2]
+            adopted_left = self.apply_adaptive_binning(
+                components=components,
+                bin_edges=bin_edges[:max_bin - 1],
+                start_from="right",
+                min_count=min_count
+            )[0]
+            adopted_right = self.apply_adaptive_binning(
+                components=components,
+                bin_edges=bin_edges[max_bin + 2:],
+                start_from="left",
+                min_count=min_count
+            )[0]
+            new_edges = np.r_[adopted_left, original_mid, adopted_right]
+            bin_mids = (new_edges[1:] + new_edges[:-1]) / 2
+            bin_widths = new_edges[1:] - new_edges[:-1]
+            new_binning = (new_edges, bin_mids, bin_widths)
+        elif start_from == "auto":
+            max_bin = np.argmax(initial_hist)
+            if max_bin / len(initial_hist) < 0.15:
+                method = "left"
+            elif max_bin / len(initial_hist) > 0.85:
+                method = "right"
+            else:
+                method = "max"
+            return self.apply_adaptive_binning(
+                components=components,
+                bin_edges=bin_edges,
+                start_from=method,
+                min_count=min_count
+            )
+        else:
+            raise ValueError(f"Value provided for parameter `start_from` is not valid.\n"
+                             f"You provided '{start_from}'.\nShould be one of {valid_start_froms}.")
+
+        assert new_binning[0][0] == bin_edges[0]
+        assert new_binning[0][-1] == bin_edges[-1]
+
+        return new_binning
