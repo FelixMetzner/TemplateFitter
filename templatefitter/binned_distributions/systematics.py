@@ -12,6 +12,8 @@ from collections.abc import Sequence
 from templatefitter.binned_distributions.weights import Weights
 
 
+# TODO: Complete type hints!
+
 class SystematicsInfoItem(ABC):
     def __init__(self):
         self._sys_type = None
