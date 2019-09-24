@@ -143,13 +143,16 @@ class Binning:
 
     def apply_adaptive_binning(
             self,
-            components,
-            bin_edges=None,
-            start_from="auto",
-            min_count=5
+            components,  # TODO add type hint, once component class is defined
+            bin_edges: np.ndarray = None,
+            start_from: str = "auto",
+            min_count: int = 5
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         if self.dimensions != 1:
             raise NotImplementedError("Adaptive binning is only available for 1 dimensional distributions!")
+
+        if not min_count > 0:
+            raise ValueError(f"min_count must be greater than 0, the value provided is {min_count}")
 
         valid_start_froms = ["left", "right", "max", "auto"]
         if start_from not in valid_start_froms:
