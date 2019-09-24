@@ -9,31 +9,50 @@ Base class for binned distributions.
 
 import logging
 import numpy as np
+import pandas as pd
 
-from typing import Union, Tuple, List
+from typing import Union, Tuple, NamedTuple
 from scipy.stats import binned_statistic_dd
 
 from templatefitter.binned_distributions.binning import Binning
+from templatefitter.binned_distributions.weights import Weights
+from templatefitter.binned_distributions.systematics import SystematicsInfo
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["BinnedDistribution"]
+__all__ = ["BinnedDistribution", "BaseDataContainer"]
+
+
+class BaseDataContainer(NamedTuple):
+    data: np.ndarray
+    weights: np.ndarray
+    systematics: SystematicsInfo
 
 
 class BinnedDistribution:
+    # TODO: Include some method to apply adaptive binning once the distribution is filled.
+    # TODO: Maybe we need a distribution component as well...
+
     def __init__(self, bins, dimensions, scope=None, name=None):
         self._name = name
         self._dimensions = dimensions
         self._binning = Binning(bins=bins, dimensions=dimensions, scope=scope)
 
-        self._bin_counts = None
-        self._bin_errors_sq = None
-        self._shape = None
+        self._bin_counts = np.zeros(self.num_bins)
+        self._bin_errors_sq = np.zeros(self.num_bins)
+        self._shape = self._bin_counts.shape
+        self._check_shapes()
 
+        self._base_data = None
         self._is_empty = True
 
-    def fill(self, input_data, weights, scope=None):
-        prepared_weights = self.get_weights(in_weights=weights)
+    def _check_shapes(self):
+        assert self.shape == self.num_bins, (self.shape, self.num_bins)
+        assert sum(self.shape) == self.num_bins_total, (self.shape, self.num_bins_total)
+
+    def fill(self, input_data, weights):
+        # TODO: Fix initialization of weights
+        prepared_weights = self._get_weights(in_weights=weights)
 
         # TODO: Take care that sample, values, bins and range are of the correct shape
         # TODO: Check the shapes!
@@ -42,16 +61,16 @@ class BinnedDistribution:
             sample=input_data,
             values=prepared_weights,
             statistic='sum',
-            bins=self._bin_edges,
-            range=self._range
+            bins=self.bin_edges,
+            range=self.range
         )[0]
 
         self._bin_errors_sq += binned_statistic_dd(
             sample=input_data,
             values=prepared_weights ** 2,
             statistic='sum',
-            bins=self._bin_edges,
-            range=self._range
+            bins=self.bin_edges,
+            range=self.range
         )[0]
 
         self.is_empty = False
@@ -69,15 +88,43 @@ class BinnedDistribution:
         instance.is_empty = False
         return instance
 
-    # TODO: Maybe define classes for all of these basic properties...
+    # TODO: Use this function
+    def _get_base_info(self, in_data, in_weights, in_systematics):
+        if isinstance(in_data, pd.Series):
+            data = in_data.values
+        elif isinstance(in_data, pd.DataFrame):
+            data = in_data[self._variable.df_label].values
+        elif isinstance(in_data, np.ndarray):
+            data = in_data
+        else:
+            raise RuntimeError(f"Got unexpected type for data: {type(in_data)}.\n"
+                               f"Should be one of pd.DataFrame, pd.Series, np.ndarray.")
+
+        weights = Weights(weight_input=in_weights, data=data, data_input=in_data).get_weights()
+        assert len(data) == len(weights)
+
+        systematics = SystematicsInfo(
+            in_sys=in_systematics,
+            data=data,
+            in_data=in_data,
+            weights=weights
+        )
+
+        return BaseDataContainer(data=data, weights=weights, systematics=systematics)
+
     @property
     def name(self) -> Union[None, str]:
         """ Name of the distribution """
         return self._name
 
     @property
-    def num_bins(self) -> int:
-        """ Number of bins; flattened if multi-dimensional """
+    def num_bins(self) -> Tuple[int, ...]:
+        """ Number of bins; multiple values if multi-dimensional """
+        return self._binning.num_bins
+
+    @property
+    def num_bins_total(self) -> int:
+        """ Number of bins after flattening, so the total number of bins """
         return self._binning.num_bins_total()
 
     @property
@@ -91,9 +138,8 @@ class BinnedDistribution:
         return self._binning.bin_mids
 
     @property
-    def shape(self) -> Union[None, int, Tuple[int, ...]]:
+    def shape(self) -> Tuple[int, ...]:
         """ Shape of the numpy array holding the binned distribution """
-        # TODO
         return self._shape
 
     @property
@@ -121,3 +167,39 @@ class BinnedDistribution:
         assert self._is_empty is True, "Trying to reset is_empty flag."
         assert value is False, "Trying to reset is_empty flag."
         self._is_empty = value
+
+    # TODO: This method should be available to find range of distribution of data
+    #       especially for multiple-component- or multi-dimensional distributions
+    # def _find_range_from_components(self) -> Tuple[float, float]:
+    #     min_vals = list()
+    #     max_vals = list()
+    #
+    #     for component in itertools.chain(*self._mc_components.values()):
+    #         min_vals.append(np.amin(component.data))
+    #         max_vals.append(np.amax(component.data))
+    #
+    #     return np.amin(min_vals), np.amax(max_vals)
+
+
+    # def _get_bin_edges(self) -> Tuple[np.ndarray, np.ndarray, float]:
+    #     """
+    #     Calculates the bin edges for the histogram.
+    #     :return: Bin edges.
+    #     """
+    #     if self._variable.has_scope():
+    #         scope = self._variable.scope
+    #     else:
+    #         scope = self._find_range_from_components()
+    #
+    #     low, high = scope[0], scope[1]
+    #
+    #     if self._variable.use_logspace:
+    #         assert low > 0, \
+    #             f"Cannot use log-space for variable {self._variable.x_label} since the minimum value is <= 0."
+    #         bin_edges = np.logspace(np.log10(low), np.log10(high), self._num_bins + 1)
+    #     else:
+    #         bin_edges = np.linspace(low, high, self._num_bins + 1)
+    #
+    #     bin_mids = (bin_edges[1:] + bin_edges[:-1]) / 2
+    #     bin_width = bin_edges[1] - bin_edges[0]
+    #     return bin_edges, bin_mids, bin_width

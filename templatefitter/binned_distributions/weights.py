@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 from typing import Union, Optional
 
+__all__ = ["Weights"]
+
 
 class Weights:
     def __init__(
@@ -43,6 +45,16 @@ class Weights:
                                f"Should be one of None, str, float, pd.Series, np.ndarray.")
 
         assert isinstance(self._weights, np.ndarray)
+
+    @classmethod
+    def obtain_weights(
+            cls,
+            weight_input: Union[None, float, str, pd.Series, np.ndarray],
+            data: Union[None, pd.Series, np.ndarray],
+            data_input: Optional[pd.DataFrame]
+    ):
+        instance = cls(weight_input=weight_input, data=data, data_input=data_input)
+        return instance.get_weights()
 
     def get_weights(self) -> np.array:
         return self._weights
