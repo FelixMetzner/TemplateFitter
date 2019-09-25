@@ -15,8 +15,8 @@ from scipy.stats import binned_statistic_dd
 from typing import Union, Tuple, Optional, NamedTuple
 
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
-from templatefitter.binned_distributions.binning import Binning, BinsInputType, ScopeInputType
 from templatefitter.binned_distributions.systematics import SystematicsInfo, SystematicsInputType
+from templatefitter.binned_distributions.binning import Binning, BinsInputType, ScopeInputType, BinEdgesType
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -56,6 +56,9 @@ class BinnedDistribution:
 
         # TODO: Take care that sample, values, bins and range are of the correct shape
         # TODO: Check the shapes!
+        # TODO: Maybe use np.histogramdd instead of binned_statistic_dd, as the former is faster \
+        #  and the result is the same. However, be sure to transform bin_edges to right form:
+        #  bins=[np.array(list(b)) for b in self.bin_edges]
 
         self._bin_counts += binned_statistic_dd(
             sample=input_data,
@@ -134,8 +137,13 @@ class BinnedDistribution:
         return self._binning.num_bins_total()
 
     @property
-    def bin_edges(self) -> np.ndarray:
-        """ Bin edges; Length = sum of (number of bins + 1) for each dimension """
+    def bin_edges(self) -> BinEdgesType:
+        """ Bin edges; Tuple of length = self.dimensions and containing tuples with bin edges for each dimension """
+        return self._binning.bin_edges
+
+    @property
+    def bin_edges_flattened(self) -> np.ndarray:
+        """ Bin edges flattened to one dimension; Length = sum of (number of bins + 1) for each dimension """
         return self._binning.bin_edges_flattened
 
     @property

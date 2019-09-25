@@ -15,18 +15,15 @@ from templatefitter.binned_distributions.weights import Weights, WeightsInputTyp
 __all__ = ["SystematicsInfo", "SystematicsInputType"]
 
 SystematicsUncertInputType = Union[WeightsInputType, List[WeightsInputType]]
+SystematicsFromVarInputType = Tuple[WeightsInputType, SystematicsUncertInputType]
 MatrixSystematicsInputType = np.ndarray
-SingleSystematicsInputType = Union[
-    None,
-    MatrixSystematicsInputType,
-    Tuple[WeightsInputType, SystematicsUncertInputType]
-]
+SingleSystematicsInputType = Union[None, MatrixSystematicsInputType, SystematicsFromVarInputType]
 MultipleSystematicsInputType = List[SingleSystematicsInputType]
 SystematicsInputType = Union[None, SingleSystematicsInputType, MultipleSystematicsInputType]
 
 
 # TODO: Conversion from 1-D histograms to n-D necessary!
-#  np.hiostogram has to be replaced by np.histogramdd for multidimensional distributions
+#  np.histogram has to be replaced by np.histogramdd for multidimensional distributions
 #  weights, data, bin_edges, etc. have to be handled correctly!
 # TODO: Check weights shapes
 # TODO: Check bin_edges shapes
