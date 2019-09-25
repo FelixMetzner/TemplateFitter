@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import Union, Optional, Tuple, List
 
+from templatefitter.binned_distributions.binning import BinEdgesType
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 
 __all__ = ["SystematicsInfo", "SystematicsInputType"]
@@ -23,7 +24,6 @@ SystematicsInputType = Union[None, SingleSystematicsInputType, MultipleSystemati
 
 
 # TODO: Conversion from 1-D histograms to n-D necessary!
-#  np.histogram has to be replaced by np.histogramdd for multidimensional distributions
 #  weights, data, bin_edges, etc. have to be handled correctly!
 # TODO: Check weights shapes
 # TODO: Check bin_edges shapes
@@ -65,8 +65,9 @@ class SystematicsInfoItemFromCov(SystematicsInfoItem):
             self,
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
-            bin_edges: Optional[Tuple[float, ...]] = None
+            bin_edges: Optional[BinEdgesType] = None
     ) -> np.ndarray:
+        assert bin_edges is not None
         assert len(bin_edges) - 1 == self._cov_matrix.shape[0], (len(bin_edges) - 1, self._cov_matrix.shape[0])
         assert len(bin_edges) - 1 == self._cov_matrix.shape[1], (len(bin_edges) - 1, self._cov_matrix.shape[1])
         return self._cov_matrix
@@ -94,7 +95,7 @@ class SystematicsInfoItemFromUpDown(SystematicsInfoItem):
             self,
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
-            bin_edges: Optional[Tuple[float, ...]] = None
+            bin_edges: Optional[BinEdgesType] = None
     ) -> np.ndarray:
         varied_hists = self.get_varied_hist(initial_varied_hists=None, data=data, weights=weights, bin_edges=bin_edges)
         return self.get_cov_from_varied_hists(varied_hists=varied_hists)
@@ -104,8 +105,11 @@ class SystematicsInfoItemFromUpDown(SystematicsInfoItem):
             initial_varied_hists,
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
-            bin_edges: Optional[Tuple[float, ...]] = None
+            bin_edges: Optional[BinEdgesType] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
+        assert data is not None
+        assert weights is not None
+        assert bin_edges is not None
         if initial_varied_hists is None:
             initial_varied_hists = (np.zeros(len(bin_edges) - 1), np.zeros(len(bin_edges) - 1))
         assert len(initial_varied_hists) == 2, len(initial_varied_hists)
@@ -115,8 +119,10 @@ class SystematicsInfoItemFromUpDown(SystematicsInfoItem):
         weights_up[wc] = weights[wc] / self._sys_weight[wc] * (self._sys_weight[wc] + self._sys_uncert[wc])
         weights_dw = copy.copy(weights)
         weights_dw[wc] = weights[wc] / self._sys_weight[wc] * (self._sys_weight[wc] - self._sys_uncert[wc])
-        hist_up, _ = np.histogram(data, bins=bin_edges, weights=weights_up)
-        hist_dw, _ = np.histogram(data, bins=bin_edges, weights=weights_dw)
+
+        bins = [np.array(list(edges)) for edges in bin_edges] if bin_edges is not None else bin_edges
+        hist_up, _ = np.histogramdd(data, bins=bins, weights=weights_up)
+        hist_dw, _ = np.histogramdd(data, bins=bins, weights=weights_dw)
 
         return initial_varied_hists[0] + hist_up, initial_varied_hists[1] + hist_dw
 
@@ -147,7 +153,7 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
             self,
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
-            bin_edges: Optional[Tuple[float, ...]] = None
+            bin_edges: Optional[BinEdgesType] = None
     ) -> np.ndarray:
         varied_hists = self.get_varied_hist(initial_varied_hists=None, data=data, weights=weights, bin_edges=bin_edges)
         return self.get_cov_from_varied_hists(varied_hists=varied_hists)
@@ -157,8 +163,11 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
             initial_varied_hists: Optional[Tuple[np.ndarray, ...]],
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
-            bin_edges: Optional[Tuple[float, ...]] = None
+            bin_edges: Optional[BinEdgesType] = None
     ) -> Tuple[np.ndarray, ...]:
+        assert data is not None
+        assert weights is not None
+        assert bin_edges is not None
         if initial_varied_hists is None:
             initial_varied_hists = (np.zeros(len(bin_edges) - 1),) * self.number_of_variations()
         assert len(initial_varied_hists) == self.number_of_variations(), (len(initial_varied_hists),
@@ -170,7 +179,9 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
             varied_weights = copy.copy(weights)
             w_cond = weights > 0.
             varied_weights[w_cond] = weights[w_cond] / self._sys_weight[w_cond] * sys_weight_var[w_cond]
-            varied_hists.append(hist_variation + np.histogram(data, bins=bin_edges, weights=varied_weights)[0])
+
+            bins = [np.array(list(edges)) for edges in bin_edges] if bin_edges is not None else bin_edges
+            varied_hists.append(hist_variation + np.histogramdd(data, bins=bins, weights=varied_weights)[0])
 
         assert len(varied_hists) == len(initial_varied_hists), (len(varied_hists), len(initial_varied_hists))
         return tuple(varied_hists)

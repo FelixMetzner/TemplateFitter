@@ -11,7 +11,6 @@ import logging
 import numpy as np
 import pandas as pd
 
-from scipy.stats import binned_statistic_dd
 from typing import Union, Tuple, Optional, NamedTuple
 
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
@@ -56,23 +55,20 @@ class BinnedDistribution:
 
         # TODO: Take care that sample, values, bins and range are of the correct shape
         # TODO: Check the shapes!
-        # TODO: Maybe use np.histogramdd instead of binned_statistic_dd, as the former is faster \
-        #  and the result is the same. However, be sure to transform bin_edges to right form:
-        #  bins=[np.array(list(b)) for b in self.bin_edges]
 
-        self._bin_counts += binned_statistic_dd(
+        bins = [np.array(list(edges)) for edges in self.bin_edges]
+
+        self._bin_counts += np.histogramdd(
             sample=input_data,
-            values=prepared_weights,
-            statistic='sum',
-            bins=self.bin_edges,
+            weights=prepared_weights,
+            bins=bins,
             range=self.range
         )[0]
 
-        self._bin_errors_sq += binned_statistic_dd(
+        self._bin_errors_sq += np.histogramdd(
             sample=input_data,
-            values=prepared_weights ** 2,
-            statistic='sum',
-            bins=self.bin_edges,
+            weights=prepared_weights ** 2,
+            bins=bins,
             range=self.range
         )[0]
 
