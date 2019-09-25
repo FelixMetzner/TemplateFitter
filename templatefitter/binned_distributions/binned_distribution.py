@@ -11,12 +11,12 @@ import logging
 import numpy as np
 import pandas as pd
 
-from typing import Union, Tuple, NamedTuple
 from scipy.stats import binned_statistic_dd
+from typing import Union, Tuple, Optional, NamedTuple
 
-from templatefitter.binned_distributions.weights import Weights
-from templatefitter.binned_distributions.systematics import SystematicsInfo
+from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 from templatefitter.binned_distributions.binning import Binning, BinsInputType, ScopeInputType
+from templatefitter.binned_distributions.systematics import SystematicsInfo, SystematicsInputType
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -89,7 +89,13 @@ class BinnedDistribution:
         return instance
 
     # TODO: Use this function
-    def _get_base_info(self, in_data, in_weights, in_systematics):
+    # TODO: Rework data to allow for n-D histograms!
+    def _get_base_info(
+            self,
+            in_data,
+            in_weights: WeightsInputType,
+            in_systematics: SystematicsInputType
+    ) -> BaseDataContainer:
         if isinstance(in_data, pd.Series):
             data = in_data.values
         elif isinstance(in_data, pd.DataFrame):

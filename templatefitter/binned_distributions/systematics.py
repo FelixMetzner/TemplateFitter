@@ -12,14 +12,26 @@ from typing import Union, Optional, Tuple, List
 
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 
-SystematicsUncertInput = Union[WeightsInputType, List[WeightsInputType]]
-MatrixSystematicsInput = np.ndarray
-SingleSystematicsInput = Union[None, MatrixSystematicsInput, Tuple[WeightsInputType, SystematicsUncertInput]]
-MultipleSystematicsInput = List[SingleSystematicsInput]
-SystematicsInput = Union[None, SingleSystematicsInput, MultipleSystematicsInput]
+__all__ = ["SystematicsInfo", "SystematicsInputType"]
+
+SystematicsUncertInputType = Union[WeightsInputType, List[WeightsInputType]]
+MatrixSystematicsInputType = np.ndarray
+SingleSystematicsInputType = Union[
+    None,
+    MatrixSystematicsInputType,
+    Tuple[WeightsInputType, SystematicsUncertInputType]
+]
+MultipleSystematicsInputType = List[SingleSystematicsInputType]
+SystematicsInputType = Union[None, SingleSystematicsInputType, MultipleSystematicsInputType]
 
 
-# TODO: np.hiostogram has to be replaced by np.histogramdd for multidimensional distributions
+# TODO: Conversion from 1-D histograms to n-D necessary!
+#  np.hiostogram has to be replaced by np.histogramdd for multidimensional distributions
+#  weights, data, bin_edges, etc. have to be handled correctly!
+# TODO: Check weights shapes
+# TODO: Check bin_edges shapes
+# TODO: Check data shapes!
+
 
 class SystematicsInfoItem(ABC):
     def __init__(self):
@@ -106,8 +118,8 @@ class SystematicsInfoItemFromUpDown(SystematicsInfoItem):
         weights_up[wc] = weights[wc] / self._sys_weight[wc] * (self._sys_weight[wc] + self._sys_uncert[wc])
         weights_dw = copy.copy(weights)
         weights_dw[wc] = weights[wc] / self._sys_weight[wc] * (self._sys_weight[wc] - self._sys_uncert[wc])
-        hist_up = np.histogram(data, bins=bin_edges, weights=weights_up)[0]
-        hist_dw = np.histogram(data, bins=bin_edges, weights=weights_dw)[0]
+        hist_up, _ = np.histogram(data, bins=bin_edges, weights=weights_up)
+        hist_dw, _ = np.histogram(data, bins=bin_edges, weights=weights_dw)
 
         return initial_varied_hists[0] + hist_up, initial_varied_hists[1] + hist_dw
 
@@ -177,7 +189,7 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
 class SystematicsInfo(Sequence):
     def __init__(
             self,
-            in_sys: SystematicsInput = None,
+            in_sys: SystematicsInputType = None,
             data: Optional[np.ndarray] = None,
             in_data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None
@@ -187,7 +199,7 @@ class SystematicsInfo(Sequence):
 
     def _get_sys_info(
             self,
-            in_systematics: SystematicsInput,
+            in_systematics: SystematicsInputType,
             data: np.ndarray,
             in_data: Optional[pd.DataFrame],
             weights: WeightsInputType
@@ -206,7 +218,7 @@ class SystematicsInfo(Sequence):
             raise ValueError(f"Provided systematics has unexpected type {type(in_systematics)}.")
 
     @staticmethod
-    def _get_sys_info_from_cov_matrix(in_systematics: SystematicsInput) -> SystematicsInfoItem:
+    def _get_sys_info_from_cov_matrix(in_systematics: SystematicsInputType) -> SystematicsInfoItem:
         assert isinstance(in_systematics, np.ndarray), type(in_systematics)
         assert len(in_systematics.shape) == 2, len(in_systematics.shape)
         assert in_systematics.shape[0] == in_systematics.shape[1], (in_systematics.shape[0], in_systematics.shape[1])
@@ -214,7 +226,7 @@ class SystematicsInfo(Sequence):
 
     def _get_single_sys_info(
             self,
-            in_systematics: SystematicsInput,
+            in_systematics: SystematicsInputType,
             data: np.ndarray,
             in_data: Optional[pd.DataFrame],
             weights: WeightsInputType
@@ -248,7 +260,7 @@ class SystematicsInfo(Sequence):
 
     def _get_sys_info_from_list(
             self,
-            in_systematics: SystematicsInput,
+            in_systematics: SystematicsInputType,
             data: np.ndarray,
             in_data: Optional[pd.DataFrame],
             weights: WeightsInputType
