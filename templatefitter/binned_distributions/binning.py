@@ -3,17 +3,21 @@ Class providing general methods for binning in arbitrary dimensions.
 """
 
 import numpy as np
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple
 
-__all__ = ["Binning"]
+__all__ = ["Binning", "BinEdgesType", "BinsInputType", "ScopeInputType"]
+
+BinsInputType = Union[int, Tuple[int, ...], Tuple[float, ...], Tuple[Tuple[float, ...], ...]]
+ScopeInputType = Union[None, Tuple[float, float], Tuple[Tuple[float, float], ...]]
+BinEdgesType = Tuple[Tuple[float, ...]]
 
 
 class Binning:
     def __init__(
             self,
-            bins: Union[int, Tuple[int, ...], Tuple[float, ...], Tuple[Tuple[float, ...], ...]],
+            bins: BinsInputType,
             dimensions: int,
-            scope: Optional[Tuple[float, float], Tuple[Tuple[float, float], ...]] = None
+            scope: ScopeInputType = None
     ):
         assert isinstance(dimensions, int) and dimensions > 0, \
             f"Dimensions must be integer greater than 0, " \
@@ -31,8 +35,8 @@ class Binning:
 
     def _init_binning(
             self,
-            bins_input: Union[int, Tuple[int, ...], Tuple[float, ...], Tuple[Tuple[float, ...], ...]],
-            scope_input: Optional[Tuple[float, float], Tuple[Tuple[float, float], ...]] = None
+            bins_input: BinsInputType,
+            scope_input: ScopeInputType = None
     ):
         error_txt = f"Ill defined binning for {self.dimensions} dimensions:\n" \
                     f"bins = {bins_input}\ntype(bins) = {type(bins_input)}"
@@ -46,12 +50,16 @@ class Binning:
             if isinstance(bins_input, int):
                 if scope_input is None:
                     raise ValueError(num_error_txt)
+                assert isinstance(scope_input, tuple) and len(scope_input) == 2, (type(scope_input), scope_input)
+                assert all(isinstance(scp, int) for scp in scope_input), scope_input
                 self._num_bins = (bins_input,)
                 self._bin_edges = (tuple(np.linspace(*scope_input, bins_input + 1)),)
             elif isinstance(bins_input, tuple) and all(isinstance(bin_num, float) for bin_num in bins_input):
                 self._num_bins = (len(bins_input) - 1,)
                 self._bin_edges = (bins_input,)
                 if scope_input is not None:
+                    assert isinstance(scope_input, tuple) and len(scope_input) == 2, (type(scope_input), scope_input)
+                    assert all(isinstance(scp, int) for scp in scope_input), scope_input
                     assert scope_input[0] == bins_input[0], scope_error_txt
                     assert scope_input[1] == bins_input[-1], scope_error_txt
             else:
@@ -60,13 +68,17 @@ class Binning:
             if not isinstance(bins_input, tuple) or self.dimensions != len(bins_input):
                 raise ValueError(error_txt)
             if all(isinstance(bin_num, int) for bin_num in bins_input):
-                if scope_input is None or len(bins_input) != len(scope_input):
+                if scope_input is None or len(bins_input) != len(scope_input) or not isinstance(scope_input, tuple):
                     raise ValueError(num_error_txt)
+                assert all(isinstance(scp, tuple) and len(scp) == 2 for scp in scope_input), scope_input
                 self._num_bins = bins_input
                 self._bin_edges = (tuple(np.linspace(*scp, num + 1)) for num, scp in zip(bins_input, scope_input))
             elif all(isinstance(bin_num, tuple) for bin_num in bins_input):
                 assert all(isinstance(edge, float) for edges in bins_input for edge in edges), bins_input
                 if scope_input is not None:
+                    # Just checking if provided scope fits the provided edges, not using it in this case...
+                    assert isinstance(scope_input, tuple), (type(scope_input), scope_input)
+                    assert all(isinstance(scp, tuple) and len(scp) == 2 for scp in scope_input), scope_input
                     assert all(scp[0] == edges[0] for scp, edges in zip(scope_input, bins_input)), scope_error_txt
                     assert all(scp[1] == edges[-1] for scp, edges in zip(scope_input, bins_input)), scope_error_txt
                 self._num_bins = (len(edges) - 1 for edges in bins_input)
@@ -122,7 +134,7 @@ class Binning:
         return sum(self._num_bins)
 
     @property
-    def bin_edges(self) -> Tuple[Tuple[float, ...]]:
+    def bin_edges(self) -> BinEdgesType:
         return self._bin_edges
 
     @property

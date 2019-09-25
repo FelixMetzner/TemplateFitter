@@ -4,15 +4,20 @@ This class provides a general Systematics class
 
 import copy
 import numpy as np
+import pandas as pd
 
-from typing import Optional
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from typing import Union, Optional, Tuple, List
 
-from templatefitter.binned_distributions.weights import Weights
+from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 
+SystematicsUncertInput = Union[WeightsInputType, List[WeightsInputType]]
+MatrixSystematicsInput = np.ndarray
+SingleSystematicsInput = Union[None, MatrixSystematicsInput, Tuple[WeightsInputType, SystematicsUncertInput]]
+MultipleSystematicsInput = List[SingleSystematicsInput]
+SystematicsInput = Union[None, SingleSystematicsInput, MultipleSystematicsInput]
 
-# TODO: Complete type hints!
 
 class SystematicsInfoItem(ABC):
     def __init__(self):
@@ -29,6 +34,11 @@ class SystematicsInfoItem(ABC):
     def get_varied_hist(self, initial_varied_hists, data=None, weights=None, bin_edges=None):
         raise NotImplementedError()
 
+    @staticmethod
+    @abstractmethod
+    def get_cov_from_varied_hists(varied_hists):
+        raise NotImplementedError()
+
 
 class SystematicsInfoItemFromCov(SystematicsInfoItem):
     def __init__(self, cov_matrix: np.ndarray):
@@ -36,10 +46,16 @@ class SystematicsInfoItemFromCov(SystematicsInfoItem):
         assert isinstance(cov_matrix, np.ndarray), type(cov_matrix)
         assert len(cov_matrix.shape) == 2, cov_matrix.shape
         assert cov_matrix.shape[0] == cov_matrix.shape[1], cov_matrix.shape
+
         self._sys_type = "cov_matrix"
         self._cov_matrix = cov_matrix
 
-    def get_cov(self, data=None, weights=None, bin_edges=None):
+    def get_cov(
+            self,
+            data: Optional[np.ndarray] = None,
+            weights: WeightsInputType = None,
+            bin_edges: Optional[Tuple[float, ...]] = None
+    ) -> np.ndarray:
         assert len(bin_edges) - 1 == self._cov_matrix.shape[0], (len(bin_edges) - 1, self._cov_matrix.shape[0])
         assert len(bin_edges) - 1 == self._cov_matrix.shape[1], (len(bin_edges) - 1, self._cov_matrix.shape[1])
         return self._cov_matrix
@@ -53,20 +69,32 @@ class SystematicsInfoItemFromCov(SystematicsInfoItem):
 
 
 class SystematicsInfoItemFromUpDown(SystematicsInfoItem):
-    def __init__(self, sys_weight, sys_uncert):
+    def __init__(self, sys_weight: np.ndarray, sys_uncert: np.ndarray):
         super().__init__()
         self._sys_type = "up_down"
         assert isinstance(sys_uncert, np.ndarray), type(sys_uncert)
         assert len(sys_uncert.shape) == 1, sys_uncert.shape
         assert len(sys_weight) == len(sys_uncert), (sys_weight.shape, sys_uncert.shape)
+
         self._sys_weight = sys_weight
         self._sys_uncert = sys_uncert
 
-    def get_cov(self, data=None, weights=None, bin_edges=None):
+    def get_cov(
+            self,
+            data: Optional[np.ndarray] = None,
+            weights: WeightsInputType = None,
+            bin_edges: Optional[Tuple[float, ...]] = None
+    ) -> np.ndarray:
         varied_hists = self.get_varied_hist(initial_varied_hists=None, data=data, weights=weights, bin_edges=bin_edges)
         return self.get_cov_from_varied_hists(varied_hists=varied_hists)
 
-    def get_varied_hist(self, initial_varied_hists, data=None, weights=None, bin_edges=None):
+    def get_varied_hist(
+            self,
+            initial_varied_hists,
+            data: Optional[np.ndarray] = None,
+            weights: WeightsInputType = None,
+            bin_edges: Optional[Tuple[float, ...]] = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
         if initial_varied_hists is None:
             initial_varied_hists = (np.zeros(len(bin_edges) - 1), np.zeros(len(bin_edges) - 1))
         assert len(initial_varied_hists) == 2, len(initial_varied_hists)
@@ -82,7 +110,7 @@ class SystematicsInfoItemFromUpDown(SystematicsInfoItem):
         return initial_varied_hists[0] + hist_up, initial_varied_hists[1] + hist_dw
 
     @staticmethod
-    def get_cov_from_varied_hists(varied_hists):
+    def get_cov_from_varied_hists(varied_hists: Tuple[np.ndarray, np.ndarray]) -> np.ndarray:
         assert len(varied_hists) == 2, len(varied_hists)
         hist_up, hist_dw = varied_hists
         diff_sym = (hist_up - hist_dw) / 2.
@@ -90,12 +118,13 @@ class SystematicsInfoItemFromUpDown(SystematicsInfoItem):
 
 
 class SystematicsInfoItemFromVariation(SystematicsInfoItem):
-    def __init__(self, sys_weight, sys_uncert):
+    def __init__(self, sys_weight: np.ndarray, sys_uncert: np.ndarray):
         super().__init__()
         assert isinstance(sys_uncert, np.ndarray), type(sys_uncert)
         assert len(sys_uncert.shape) == 2, sys_uncert.shape
         assert sys_uncert.shape[1] > 1, sys_uncert.shape
         assert len(sys_weight) == len(sys_uncert), (sys_weight.shape, sys_uncert.shape)
+
         self._sys_type = "variation"
         self._sys_weight = sys_weight
         self._sys_uncert = sys_uncert
@@ -103,11 +132,22 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
     def number_of_variations(self):
         return self._sys_uncert.shape[1]
 
-    def get_cov(self, data=None, weights=None, bin_edges=None):
+    def get_cov(
+            self,
+            data: Optional[np.ndarray] = None,
+            weights: WeightsInputType = None,
+            bin_edges: Optional[Tuple[float, ...]] = None
+    ) -> np.ndarray:
         varied_hists = self.get_varied_hist(initial_varied_hists=None, data=data, weights=weights, bin_edges=bin_edges)
         return self.get_cov_from_varied_hists(varied_hists=varied_hists)
 
-    def get_varied_hist(self, initial_varied_hists, data=None, weights=None, bin_edges=None):
+    def get_varied_hist(
+            self,
+            initial_varied_hists: Optional[Tuple[np.ndarray, ...]],
+            data: Optional[np.ndarray] = None,
+            weights: WeightsInputType = None,
+            bin_edges: Optional[Tuple[float, ...]] = None
+    ) -> Tuple[np.ndarray, ...]:
         if initial_varied_hists is None:
             initial_varied_hists = (np.zeros(len(bin_edges) - 1),) * self.number_of_variations()
         assert len(initial_varied_hists) == self.number_of_variations(), (len(initial_varied_hists),
@@ -125,7 +165,7 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
         return tuple(varied_hists)
 
     @staticmethod
-    def get_cov_from_varied_hists(varied_hists):
+    def get_cov_from_varied_hists(varied_hists: Tuple[np.ndarray, ...]) -> np.ndarray:
         cov = np.cov(np.column_stack(varied_hists))
         assert cov.shape[0] == cov.shape[1] == len(varied_hists[0]), (cov.shape[0], cov.shape[1], len(varied_hists[0]))
         assert not np.isnan(cov).any()
@@ -135,15 +175,21 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
 class SystematicsInfo(Sequence):
     def __init__(
             self,
-            in_sys=None,
-            data=None,
-            in_data=None,
-            weights=None
+            in_sys: SystematicsInput = None,
+            data: Optional[np.ndarray] = None,
+            in_data: Optional[np.ndarray] = None,
+            weights: WeightsInputType = None
     ):
         self._sys_info_list = self._get_sys_info(in_systematics=in_sys, data=data, in_data=in_data, weights=weights)
         super().__init__()
 
-    def _get_sys_info(self, in_systematics, data, in_data, weights):
+    def _get_sys_info(
+            self,
+            in_systematics: SystematicsInput,
+            data: np.ndarray,
+            in_data: Optional[pd.DataFrame],
+            weights: WeightsInputType
+    ) -> List[Union[None, SystematicsInfoItem]]:
         if in_systematics is None:
             return []
 
@@ -158,13 +204,19 @@ class SystematicsInfo(Sequence):
             raise ValueError(f"Provided systematics has unexpected type {type(in_systematics)}.")
 
     @staticmethod
-    def _get_sys_info_from_cov_matrix(in_systematics):
+    def _get_sys_info_from_cov_matrix(in_systematics: SystematicsInput) -> SystematicsInfoItem:
         assert isinstance(in_systematics, np.ndarray), type(in_systematics)
         assert len(in_systematics.shape) == 2, len(in_systematics.shape)
         assert in_systematics.shape[0] == in_systematics.shape[1], (in_systematics.shape[0], in_systematics.shape[1])
         return SystematicsInfoItemFromCov(cov_matrix=in_systematics)
 
-    def _get_single_sys_info(self, in_systematics, data, in_data, weights):
+    def _get_single_sys_info(
+            self,
+            in_systematics: SystematicsInput,
+            data: np.ndarray,
+            in_data: Optional[pd.DataFrame],
+            weights: WeightsInputType
+    ) -> Union[None, SystematicsInfoItem]:
         if in_systematics is None:
             return None
         if len(in_systematics) == 1:
@@ -192,7 +244,13 @@ class SystematicsInfo(Sequence):
                              f"Each tuple must contain 2 entries!\n"
                              f"A provided tuple was of size {len(in_systematics)} != 2.")
 
-    def _get_sys_info_from_list(self, in_systematics, data, in_data, weights):
+    def _get_sys_info_from_list(
+            self,
+            in_systematics: SystematicsInput,
+            data: np.ndarray,
+            in_data: Optional[pd.DataFrame],
+            weights: WeightsInputType
+    ) -> List[Union[None, SystematicsInfoItem]]:
         if len(in_systematics) == 0:
             return []
 
@@ -200,13 +258,13 @@ class SystematicsInfo(Sequence):
         return [e for e in result if e is not None]
 
     @property
-    def as_list(self):
+    def as_list(self) -> List[Union[None, SystematicsInfoItem]]:
         return self._sys_info_list
 
-    def __getitem__(self, i):
+    def __getitem__(self, i) -> Optional[SystematicsInfoItem]:
         return self._sys_info_list[i]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._sys_info_list)
 
 

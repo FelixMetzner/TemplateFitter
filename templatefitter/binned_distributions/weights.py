@@ -6,13 +6,15 @@ import numpy as np
 import pandas as pd
 from typing import Union, Optional
 
-__all__ = ["Weights"]
+__all__ = ["Weights", "WeightsInputType"]
+
+WeightsInputType = Union[None, float, str, pd.Series, np.ndarray]
 
 
 class Weights:
     def __init__(
             self,
-            weight_input: Union[None, float, str, pd.Series, np.ndarray] = None,
+            weight_input: WeightsInputType = None,
             data: Union[None, pd.Series, np.ndarray] = None,
             data_input: Optional[pd.DataFrame] = None
     ):
@@ -21,7 +23,7 @@ class Weights:
 
     def _init_weights(
             self,
-            weight_input: Union[None, float, str, pd.Series, np.ndarray],
+            weight_input: WeightsInputType,
             data: Union[None, pd.Series, np.ndarray],
             data_input: Optional[pd.DataFrame]
     ):
@@ -49,7 +51,7 @@ class Weights:
     @classmethod
     def obtain_weights(
             cls,
-            weight_input: Union[None, float, str, pd.Series, np.ndarray],
+            weight_input: WeightsInputType,
             data: Union[None, pd.Series, np.ndarray],
             data_input: Optional[pd.DataFrame]
     ):

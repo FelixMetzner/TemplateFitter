@@ -14,9 +14,9 @@ import pandas as pd
 from typing import Union, Tuple, NamedTuple
 from scipy.stats import binned_statistic_dd
 
-from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions.weights import Weights
 from templatefitter.binned_distributions.systematics import SystematicsInfo
+from templatefitter.binned_distributions.binning import Binning, BinsInputType, ScopeInputType
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -33,7 +33,7 @@ class BinnedDistribution:
     # TODO: Include some method to apply adaptive binning once the distribution is filled.
     # TODO: Maybe we need a distribution component as well...
 
-    def __init__(self, bins, dimensions, scope=None, name=None):
+    def __init__(self, bins: BinsInputType, dimensions: int, scope: ScopeInputType = None, name: Optional[str] = None):
         self._name = name
         self._dimensions = dimensions
         self._binning = Binning(bins=bins, dimensions=dimensions, scope=scope)
