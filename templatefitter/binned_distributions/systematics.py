@@ -19,6 +19,8 @@ MultipleSystematicsInput = List[SingleSystematicsInput]
 SystematicsInput = Union[None, SingleSystematicsInput, MultipleSystematicsInput]
 
 
+# TODO: np.hiostogram has to be replaced by np.histogramdd for multidimensional distributions
+
 class SystematicsInfoItem(ABC):
     def __init__(self):
         self._sys_type = None
@@ -266,44 +268,3 @@ class SystematicsInfo(Sequence):
 
     def __len__(self) -> int:
         return len(self._sys_info_list)
-
-
-def _get_cov_from_systematics(self, component_label: Optional[str] = None) -> Optional[np.ndarray]:
-    if component_label is not None:
-        assert component_label in [c.label for c in self._mc_components["single"]]
-        components = [c for c in self._mc_components["single"] if c.label == component_label]
-        assert len(components) == 1
-        comp = components[0]
-        if comp.systematics is None:
-            return None
-
-        cov = np.zeros((len(self._bin_mids), len(self._bin_mids)))
-        for sys_info in comp.systematics:
-            cov += sys_info.get_cov(data=comp.data, weights=comp.weights, bin_edges=self.bin_edges())
-        return cov
-    else:
-        components = self._mc_components["stacked"]
-        if all(comp.systematics is None for comp in components):
-            return None
-        if all(len(comp.systematics) == 0 for comp in components):
-            return None
-
-        assert all(len(comp.systematics) == len(components[0].systematics) for comp in components)
-
-        cov = np.zeros((len(self._bin_mids), len(self._bin_mids)))
-        for sys_index in range(len(components[0].systematics)):
-            assert all(isinstance(comp.systematics[sys_index], type(components[0].systematics[sys_index]))
-                       for comp in components)
-
-            varied_hists = None
-            for comp in components:
-                varied_hists = comp.systematics[sys_index].get_varied_hist(
-                    initial_varied_hists=varied_hists,
-                    data=comp.data,
-                    weights=comp.weights,
-                    bin_edges=self.bin_edges
-                )
-
-            cov += components[0].systematics[sys_index].get_cov_from_varied_hists(varied_hists=varied_hists)
-
-        return cov
