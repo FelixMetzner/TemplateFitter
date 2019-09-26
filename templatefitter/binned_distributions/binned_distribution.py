@@ -11,7 +11,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from typing import Union, Tuple, Optional, NamedTuple
+from typing import Union, Optional, Tuple, List, NamedTuple
 
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 from templatefitter.binned_distributions.systematics import SystematicsInfo, SystematicsInputType
@@ -22,6 +22,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = ["BinnedDistribution", "BaseDataContainer"]
 
 InputDataType = Union[pd.Series, pd.DataFrame, np.ndarray]
+DataColumnNamesInput = Union[None, str, List[str]]
 
 
 class BaseDataContainer(NamedTuple):
@@ -39,7 +40,11 @@ class BinnedDistribution:
             bins: BinsInputType,
             dimensions: int,
             scope: ScopeInputType = None,
-            name: Optional[str] = None
+            name: Optional[str] = None,
+            data: Optional[InputDataType] = None,
+            weights: WeightsInputType = None,
+            systematics: SystematicsInputType = None,
+            data_column_names: DataColumnNamesInput = None,
     ) -> None:
         self._name = name
         self._dimensions = dimensions
@@ -50,12 +55,15 @@ class BinnedDistribution:
         self._shape = self._bin_counts.shape
         self._check_shapes()
 
+        self._data_column_names = None
+        self._init_data_column_names(data_column_names=data_column_names, data=data)
+
         self._base_data = None
         self._is_empty = True
 
-    def _check_shapes(self) -> None:
-        assert self.shape == self.num_bins, (self.shape, self.num_bins)
-        assert sum(self.shape) == self.num_bins_total, (self.shape, self.num_bins_total)
+        if data is not None:
+            self._base_data = self._get_base_info(in_data=data, in_weights=weights, in_systematics=systematics)
+            self.is_empty = False
 
     def fill(
             self,
@@ -107,7 +115,6 @@ class BinnedDistribution:
         return instance
 
     # TODO: Rework data to allow for n-D histograms!
-    # TODO: Add self.data_column_names which must be List[str]!
     def _get_base_info(
             self,
             in_data: InputDataType,
@@ -120,7 +127,7 @@ class BinnedDistribution:
             if self.data_column_names is None:
                 raise ValueError("If data is provided as pandas data frame, data_column_names must be provided too!")
             assert all(c in in_data.columns for c in self.data_column_names), (self.data_column_names, in_data.columns)
-            data = in_data[self.data_column_name].values
+            data = in_data[self.data_column_names].values
         elif isinstance(in_data, np.ndarray):
             data = in_data
         else:
@@ -199,6 +206,34 @@ class BinnedDistribution:
         assert self._is_empty is True, "Trying to reset is_empty flag."
         assert value is False, "Trying to reset is_empty flag."
         self._is_empty = value
+
+    @property
+    def data_column_names(self) -> Optional[List[str]]:
+        return self._data_column_names
+
+    @property
+    def get_base_data(self) -> BaseDataContainer:
+        return self._base_data
+
+    def _check_shapes(self) -> None:
+        assert self.shape == self.num_bins, (self.shape, self.num_bins)
+        assert sum(self.shape) == self.num_bins_total, (self.shape, self.num_bins_total)
+
+    def _init_data_column_names(self, data_column_names: DataColumnNamesInput, data: Optional[InputDataType]):
+        if isinstance(data_column_names, str):
+            if isinstance(data, pd.DataFrame):
+                assert data_column_names in data.columns, (data_column_names, data.columns)
+            self._data_column_names = [data_column_names]
+        elif isinstance(data_column_names, list):
+            assert all(isinstance(col_name, str) for col_name in data_column_names)
+            if isinstance(data, pd.DataFrame):
+                assert all(c_name in data.columns for c_name in data_column_names), (data_column_names, data.columns)
+            self._data_column_names = data_column_names
+        else:
+            if data_column_names is not None:
+                raise ValueError("Received unexpected input for parameter 'data_column_names'.\n"
+                                 "This parameter should be a list of column names of columns of the "
+                                 "pandas.DataFrame that can be provided via the argument 'data'.")
 
     # TODO: This method should be available to find range of distribution of data
     #       especially for multiple-component- or multi-dimensional distributions
