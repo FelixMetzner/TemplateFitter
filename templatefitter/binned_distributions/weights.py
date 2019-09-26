@@ -17,7 +17,7 @@ class Weights:
             weight_input: WeightsInputType = None,
             data: Union[None, pd.Series, np.ndarray] = None,
             data_input: Optional[pd.DataFrame] = None
-    ):
+    ) -> None:
         self._weights = None
         self._init_weights(weight_input=weight_input, data=data, data_input=data_input)
 
@@ -26,10 +26,10 @@ class Weights:
             weight_input: WeightsInputType,
             data: Union[None, pd.Series, np.ndarray],
             data_input: Optional[pd.DataFrame]
-    ):
+    ) -> None:
         if weight_input is None:
             assert data is not None
-            self._weights = np.ones_like(data)
+            self._weights = np.ones(len(data))
         elif isinstance(weight_input, float):
             assert data is not None
             self._weights = np.ones(len(data)) * weight_input
@@ -54,9 +54,9 @@ class Weights:
             weight_input: WeightsInputType,
             data: Union[None, pd.Series, np.ndarray],
             data_input: Optional[pd.DataFrame]
-    ):
+    ) -> np.ndarray:
         instance = cls(weight_input=weight_input, data=data, data_input=data_input)
         return instance.get_weights()
 
-    def get_weights(self) -> np.array:
+    def get_weights(self) -> np.ndarray:
         return self._weights
