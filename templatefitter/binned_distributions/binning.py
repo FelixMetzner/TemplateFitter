@@ -18,7 +18,7 @@ class Binning:
             bins: BinsInputType,
             dimensions: int,
             scope: ScopeInputType = None
-    ):
+    ) -> None:
         assert isinstance(dimensions, int) and dimensions > 0, \
             f"Dimensions must be integer greater than 0, " \
             f"you provided {dimensions} of type {type(dimensions)}!"
@@ -37,7 +37,7 @@ class Binning:
             self,
             bins_input: BinsInputType,
             scope_input: ScopeInputType = None
-    ):
+    ) -> None:
         error_txt = f"Ill defined binning for {self.dimensions} dimensions:\n" \
                     f"bins = {bins_input}\ntype(bins) = {type(bins_input)}"
         num_error_txt = f"If binning is defined via number of bins, scope is required, too!\n" \
@@ -90,7 +90,7 @@ class Binning:
         self._bin_widths = tuple(map(self._get_bin_widths, self.bin_edges))
         self._range = tuple(map(self._get_range, self.bin_edges))
 
-    def _check_binning(self):
+    def _check_binning(self) -> None:
         assert self._num_bins is None, "Number of bins is not defined after initialization!"
         assert self._bin_edges is None, "Bin edges are not defined after initialization!"
 
@@ -111,15 +111,15 @@ class Binning:
         assert all(len(r) == 2 for r in self._range)
 
     @staticmethod
-    def _get_bin_mids(bin_edges):
+    def _get_bin_mids(bin_edges) -> Tuple[float, ...]:
         return tuple((np.array(bin_edges)[1:] + np.array(bin_edges)[:-1]) / 2.)
 
     @staticmethod
-    def _get_bin_widths(bin_edges):
+    def _get_bin_widths(bin_edges) -> Tuple[float, ...]:
         return tuple(np.array(bin_edges)[1:] - np.array(bin_edges)[:-1])
 
     @staticmethod
-    def _get_range(bin_edges):
+    def _get_range(bin_edges) -> Tuple[float, float]:
         return bin_edges[0], bin_edges[-1]
 
     @property

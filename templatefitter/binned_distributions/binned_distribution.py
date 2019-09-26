@@ -21,6 +21,8 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = ["BinnedDistribution", "BaseDataContainer"]
 
+InputDataType = Union[pd.Series, pd.DataFrame, np.ndarray]
+
 
 class BaseDataContainer(NamedTuple):
     data: np.ndarray
@@ -30,9 +32,15 @@ class BaseDataContainer(NamedTuple):
 
 class BinnedDistribution:
     # TODO: Include some method to apply adaptive binning once the distribution is filled.
-    # TODO: Maybe we need a distribution component as well...
+    # TODO: Maybe we need a distribution component as well... At least for plotting.
 
-    def __init__(self, bins: BinsInputType, dimensions: int, scope: ScopeInputType = None, name: Optional[str] = None):
+    def __init__(
+            self,
+            bins: BinsInputType,
+            dimensions: int,
+            scope: ScopeInputType = None,
+            name: Optional[str] = None
+    ) -> None:
         self._name = name
         self._dimensions = dimensions
         self._binning = Binning(bins=bins, dimensions=dimensions, scope=scope)
@@ -45,13 +53,17 @@ class BinnedDistribution:
         self._base_data = None
         self._is_empty = True
 
-    def _check_shapes(self):
+    def _check_shapes(self) -> None:
         assert self.shape == self.num_bins, (self.shape, self.num_bins)
         assert sum(self.shape) == self.num_bins_total, (self.shape, self.num_bins_total)
 
-    def fill(self, input_data, weights):
-        # TODO: Fix initialization of weights
-        prepared_weights = self._get_weights(in_weights=weights)
+    def fill(
+            self,
+            input_data: InputDataType,
+            weights: WeightsInputType = None,
+            systematics: SystematicsInputType = None
+    ) -> None:
+        self._base_data = self._get_base_info(in_data=input_data, in_weights=weights, in_systematics=systematics)
 
         # TODO: Take care that sample, values, bins and range are of the correct shape
         # TODO: Check the shapes!
@@ -59,15 +71,15 @@ class BinnedDistribution:
         bins = [np.array(list(edges)) for edges in self.bin_edges]
 
         self._bin_counts += np.histogramdd(
-            sample=input_data,
-            weights=prepared_weights,
+            sample=self._base_data.data,
+            weights=self._base_data.weights,
             bins=bins,
             range=self.range
         )[0]
 
         self._bin_errors_sq += np.histogramdd(
-            sample=input_data,
-            weights=prepared_weights ** 2,
+            sample=self._base_data.data,
+            weights=self._base_data.weights ** 2,
             bins=bins,
             range=self.range
         )[0]
@@ -75,8 +87,15 @@ class BinnedDistribution:
         self.is_empty = False
 
     @classmethod
-    def fill_from_binned(cls, bin_counts, bin_edges, dimensions, bin_errors=None):
-        instance = cls(bins=bin_edges, dimensions=dimensions)
+    def fill_from_binned(
+            cls,
+            bin_counts: np.ndarray,
+            bin_edges: BinEdgesType,
+            dimensions: int,
+            bin_errors=None,
+            name: Optional[str] = None
+    ) -> "BinnedDistribution":
+        instance = cls(bins=bin_edges, dimensions=dimensions, name=name)
         # TODO: Check stuff, e.g. dimensions and binning vs. shape of bin_counts...
         instance._bin_counts = bin_counts
 
@@ -87,18 +106,21 @@ class BinnedDistribution:
         instance.is_empty = False
         return instance
 
-    # TODO: Use this function
     # TODO: Rework data to allow for n-D histograms!
+    # TODO: Add self.data_column_names which must be List[str]!
     def _get_base_info(
             self,
-            in_data,
+            in_data: InputDataType,
             in_weights: WeightsInputType,
             in_systematics: SystematicsInputType
     ) -> BaseDataContainer:
         if isinstance(in_data, pd.Series):
             data = in_data.values
         elif isinstance(in_data, pd.DataFrame):
-            data = in_data[self._variable.df_label].values
+            if self.data_column_names is None:
+                raise ValueError("If data is provided as pandas data frame, data_column_names must be provided too!")
+            assert all(c in in_data.columns for c in self.data_column_names), (self.data_column_names, in_data.columns)
+            data = in_data[self.data_column_name].values
         elif isinstance(in_data, np.ndarray):
             data = in_data
         else:
