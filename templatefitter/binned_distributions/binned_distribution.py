@@ -47,7 +47,6 @@ class BinnedDistribution:
             data_column_names: DataColumnNamesInput = None,
     ) -> None:
         self._name = name
-        self._dimensions = dimensions
         self._binning = Binning(bins=bins, dimensions=dimensions, scope=scope)
 
         self._bin_counts = np.zeros(self.num_bins)
@@ -73,9 +72,6 @@ class BinnedDistribution:
     ) -> None:
         self._base_data = self._get_base_info(in_data=input_data, in_weights=weights, in_systematics=systematics)
 
-        # TODO: Take care that sample, values, bins and range are of the correct shape
-        # TODO: Check the shapes!
-
         bins = [np.array(list(edges)) for edges in self.bin_edges]
 
         self._bin_counts += np.histogramdd(
@@ -100,21 +96,39 @@ class BinnedDistribution:
             bin_counts: np.ndarray,
             bin_edges: BinEdgesType,
             dimensions: int,
-            bin_errors=None,
+            bin_errors: Optional[np.ndarray] = None,
             name: Optional[str] = None
     ) -> "BinnedDistribution":
-        instance = cls(bins=bin_edges, dimensions=dimensions, name=name)
-        # TODO: Check stuff, e.g. dimensions and binning vs. shape of bin_counts...
-        instance._bin_counts = bin_counts
+        if not len(bin_edges) == dimensions:
+            raise ValueError(
+                f"Bin edges represent a different number of dimensions than provided!\n"
+                f"Number of dimensions extracted from bin edges: {len(bin_edges)}\n"
+                f"Provided number of dimensions: {dimensions}"
+            )
+        if len(bin_counts.shape) == 1:
+            if not dimensions == 1:
+                raise ValueError(f"Shape of bin_counts {bin_counts.shape} does not match dimensions {dimensions}!")
+        elif len(bin_counts.shape) == 2:
+            if not dimensions == bin_counts.shape[1]:
+                raise ValueError(f"Shape of bin_counts {bin_counts.shape} does not match dimensions {dimensions}!")
+        else:
+            raise ValueError(f"Unexpected shape of provided bin_counts!\n"
+                             f"Should be (length of dataset, dimensions) but is {bin_counts.shape}")
 
         if bin_errors is None:
             bin_errors = np.sqrt(bin_counts)
+        else:
+            if not bin_errors.shape == bin_counts.shape:
+                raise ValueError(f"Shapes of provided bin_counts {bin_counts.shape} "
+                                 f"and bin_errors {bin_errors.shape} does not match!")
 
+        instance = cls(bins=bin_edges, dimensions=dimensions, name=name)
+        instance._bin_counts = bin_counts
         instance._bin_errors_sq = bin_errors ** 2
+
         instance.is_empty = False
         return instance
 
-    # TODO: Rework data to allow for n-D histograms!
     def _get_base_info(
             self,
             in_data: InputDataType,
@@ -133,6 +147,15 @@ class BinnedDistribution:
         else:
             raise RuntimeError(f"Got unexpected type for data: {type(in_data)}.\n"
                                f"Should be one of pd.DataFrame, pd.Series, np.ndarray.")
+
+        assert isinstance(data, np.ndarray), type(data)
+        if len(data.shape) == 1:
+            assert self.dimensions == 1, self.dimensions
+        elif len(data.shape) == 2:
+            assert self.dimensions == data.shape[1], (self.dimensions, data.shape, data.shape[1])
+        else:
+            raise RuntimeError(f"The data related to the distribution is of unexpected shape:\n"
+                               f"Shape of data: {data.shape}\nDimensions: {self.dimensions}")
 
         weights = Weights(weight_input=in_weights, data=data, data_input=in_data).get_weights()
         assert len(data) == len(weights)
@@ -185,6 +208,11 @@ class BinnedDistribution:
     def range(self) -> Tuple[Tuple[float, float], ...]:
         """ Lower and upper bound of each dimension of the binned distribution """
         return self._binning.range
+
+    @property
+    def dimensions(self) -> int:
+        """ Dimensions of the distribution """
+        return self._binning.dimensions
 
     @property
     def bin_counts(self) -> Union[None, np.ndarray]:
