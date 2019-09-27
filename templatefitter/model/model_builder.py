@@ -29,9 +29,9 @@ class ModelBuilder:
         self.x_obs_errors = data.bin_errors.flatten()
         self.yield_indices = []
         self.subfraction_indices = []
-        self.con_indices = []
-        self.con_value = np.array([])
-        self.con_sigma = np.array([])
+        self.constrain_indices = []
+        self.constrain_value = np.array([])
+        self.constrain_sigma = np.array([])
         self._inv_corr = np.array([])
         self.bin_par_slice = (0, 0)
         self._dim = None
@@ -155,10 +155,10 @@ class ModelBuilder:
         self.converter_matrix = np.vstack(arrays)
         self.converter_vector = np.vstack(additive)
 
-    def add_constraint(self, name, value, sigma):
-        self.con_indices.append(self.params.get_index(name))
-        self.con_value = np.append(self.con_value, value)
-        self.con_sigma = np.append(self.con_sigma, sigma)
+    def add_constraint(self, name: str, value: float, sigma: float) -> None:
+        self.constrain_indices.append(self.params.get_index(name))
+        self.constrain_value = np.append(self.constrain_value, value)
+        self.constrain_sigma = np.append(self.constrain_sigma, sigma)
 
     def x_expected(self):
         yields = self.params.get_parameters([self.yield_indices])
@@ -176,8 +176,8 @@ class ModelBuilder:
         self._inv_corr = block_diag(*inv_corr_mats)
 
     def _con_term(self):
-        con_pars = self.params.get_parameters([self.con_indices])
-        chi2cons = np.sum(((self.con_value - con_pars) / self.con_sigma) ** 2)
+        constrain_pars = self.params.get_parameters_by_index(self.constrain_indices)
+        chi2cons = np.sum(((self.constrain_value - constrain_pars) / self.constrain_sigma) ** 2)
         return chi2cons
 
     @jit
@@ -199,7 +199,7 @@ class ModelBuilder:
             (self.expected_events_per_bin(bin_pars.reshape(self.shape), yields, sub_pars) - self.x_obs) ** 2
             / (2 * self.x_obs_errors ** 2)
         )
-        chi2 = chi2data + self._gauss_term(bin_pars)  # + self._con_term()
+        chi2 = chi2data + self._gauss_term(bin_pars)  # + self._con_term()  # TODO: Check this
         return chi2
 
     def nll(self, pars):
@@ -212,14 +212,17 @@ class ModelBuilder:
         return nll
 
     @staticmethod
-    def _get_projection(ax, bc):
+    def _get_projection(ax: str, bc: np.ndarray) -> np.ndarray:
+        # TODO: Is the mapping for x and y defined the wrong way around?
         x_to_i = {
             "x": 1,
             "y": 0
         }
 
+        # TODO: use method provided by BinnedDistribution!
         return np.sum(bc, axis=x_to_i[ax])
 
+    # TODO: Use histogram for plotting!
     def plot_stacked_on(self, ax, plot_all=False, **kwargs):
         plot_info = old_plotting.PlottingInfo(
             templates=self.templates,
@@ -232,11 +235,13 @@ class ModelBuilder:
         )
         return old_plotting.plot_stacked_on(plot_info=plot_info, ax=ax, plot_all=plot_all, **kwargs)
 
-    def create_nll(self):
+    # TODO: Problematic; At the moment some sort of forward declaration is necessary for type hint...
+    def create_nll(self) -> CostFunction:
         return CostFunction(self, self.params)
 
 
-# Maybe relocate cost functions into separate sub-package...
+# TODO: Maybe relocate cost functions into separate sub-package;
+#  however: CostFunction depends on ModelBuilder and vice versa ...
 class AbstractTemplateCostFunction(ABC):
     """
     Abstract base class for all cost function to estimate yields using the template method.
