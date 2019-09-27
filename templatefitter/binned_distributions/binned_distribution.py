@@ -243,6 +243,21 @@ class BinnedDistribution:
     def get_base_data(self) -> BaseDataContainer:
         return self._base_data
 
+    def get_projection_on(self, dimension: int) -> Tuple[np.ndarray, Binning]:
+        if dimension < 0 or dimension >= self.dimensions:
+            raise ValueError(f"Parameter 'dimension' must be in [0, {self.dimensions - 1}] "
+                             f"as the distribution has {self.dimensions} dimensions! You provided {dimension}.")
+        other_dimensions = tuple(dim for dim in range(self.dimensions) if dim != dimension)
+        projected_bin_count = self.bin_counts.sum(axis=other_dimensions)
+        assert len(projected_bin_count.shape) == 1, projected_bin_count.shape
+
+        reduced_binning = Binning(bins=self.bin_edges[dimension], dimensions=1, scope=self.range[dimension])
+
+        assert len(projected_bin_count) == len(self.bin_edges[dimension]) - 1, \
+            (len(projected_bin_count), len(self.bin_edges[dimension]) - 1)
+
+        return projected_bin_count, reduced_binning
+
     def _check_shapes(self) -> None:
         assert self.shape == self.num_bins, (self.shape, self.num_bins)
         assert sum(self.shape) == self.num_bins_total, (self.shape, self.num_bins_total)
