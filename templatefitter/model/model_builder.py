@@ -1,10 +1,12 @@
-# TODO: Docstring
-#  class which handles computation
+"""
+Class which defines the fit model by combining templates and which handles the computation.
+"""
 
 import numpy as np
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
+from typing import Union, Dict, List, Callable
 
 from templatefitter.utility import xlogyx
 from templatefitter.model.parameter_handler import ParameterHandler
@@ -14,7 +16,11 @@ __all__ = ["ModelBuilder"]
 
 
 class ModelBuilder:
-    def __init__(self, params, data):
+    def __init__(
+            self,
+            params: ParameterHandler,
+            data  # TODO: Type hint
+    ):
         self.params = params
         self.templates = {}
         self.packed_templates = {}
@@ -37,41 +43,51 @@ class ModelBuilder:
         self.num_templates = 0
         self.num_bins = None
 
-    def add_template(self, template, value, create=True, same=True):
+    def add_template(
+            self,
+            template,  # TODO: Type hint
+            parameter_value: float,  # TODO: Maybe handle this differently
+            create: bool = True,
+            same: bool = True
+    ) -> None:
         if self.num_bins is None:
             self.num_bins = template.num_bins
         self.packed_templates[template.name] = template
         if template._num_templates > 1:
-            self.add_multi_template(template, value, create, same)
+            self.add_multi_template(template, parameter_value, create, same)
         else:
             self.templates[template.name] = template
             if create:
-                yield_index = self.params.add_parameter("{}_yield".format(template.name), value)
+                yield_index = self.params.add_parameter(parameter_value, "{}_yield".format(template.name))
                 self.yield_indices.append(yield_index)
             else:
-                self.yield_indices.append(value)
+                self.yield_indices.append(parameter_value)
 
         if self._dim is None:
             self._dim = len(template.bins)
         self.num_templates = len(self.templates)
 
-    def add_multi_template(self, template, value, create=True, same=True):
+    def add_multi_template(
+            self,
+            template,  # TODO: Type hint
+            parameter_value: Union[float, Dict[str, float]],  # TODO: Maybe handle this differently
+            create: bool = True,
+            same: bool = True
+    ) -> None:
         self.subfraction_indices += template._par_indices
         self.num_fractions += len(template._par_indices)
         if create:
             if same:
-                yield_index = self.params.add_parameter(
-                    "{}_yield".format(template.name), value)
+                yield_index = self.params.add_parameter(parameter_value, "{}_yield".format(template.name))
             for sub_temp in template._templates.values():
                 self.templates[sub_temp.name] = sub_temp
                 if not same:
-                    yield_index = self.params.add_parameter(
-                        "{}_yield".format(sub_temp.name), value[sub_temp.name])
+                    yield_index = self.params.add_parameter(parameter_value[sub_temp.name], "{}_yield".format(sub_temp.name))
                 self.yield_indices.append(yield_index)
         else:
             for sub_temp in template._templates.values():
                 self.templates[sub_temp.name] = sub_temp
-                self.yield_indices.append(value[sub_temp.name])
+                self.yield_indices.append(parameter_value[sub_temp.name])
 
     def template_matrix(self):
         """ Creates the fixed template stack """
@@ -220,50 +236,30 @@ class ModelBuilder:
         return CostFunction(self, self.params)
 
 
+# Maybe relocate cost functions into separate sub-package...
 class AbstractTemplateCostFunction(ABC):
     """
-    Abstract base class for all cost function to estimate
-    yields using the template method.
+    Abstract base class for all cost function to estimate yields using the template method.
     """
-
-    def __init__(self):
-        pass
-
-    @property
-    @abstractmethod
-    def x0(self):
-        """
-        numpy.ndarray: Starting values for the minimization.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def param_names(self):
-        """
-        list of str: Parameter names. Used for convenience.
-        """
-        pass
-
-    @abstractmethod
-    def __call__(self, x: np.ndarray) -> float:
-        pass
-
-
-class CostFunction(AbstractTemplateCostFunction):
-
-    def __init__(self, model: ModelBuilder, params: ParameterHandler):
-        super().__init__()
+    def __init__(self, model: ModelBuilder, params: ParameterHandler) -> None:
         self._model = model
         self._params = params
 
-    @property
-    def x0(self):
+    def x0(self) -> np.ndarray:
+        """ Returns initial parameters of the model """
         return self._params.get_parameters()
 
-    @property
-    def param_names(self):
+    def param_names(self) -> List[str]:
         return self._params.get_parameter_names()
 
-    def __call__(self, x):
+    @abstractmethod
+    def __call__(self, x: np.ndarray) -> Callable:
+        raise NotImplementedError(f"{self.__class__.__name__} is an abstract base class.")
+
+
+class CostFunction(AbstractTemplateCostFunction):
+    def __init__(self, model: ModelBuilder, params: ParameterHandler) -> None:
+        super().__init__(model=model, params=params)
+
+    def __call__(self, x) -> Callable:
         return self._model.chi2(x)

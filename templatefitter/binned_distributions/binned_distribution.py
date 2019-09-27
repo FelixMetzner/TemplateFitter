@@ -253,8 +253,8 @@ class BinnedDistribution:
 
         reduced_binning = Binning(bins=self.bin_edges[dimension], dimensions=1, scope=self.range[dimension])
 
-        assert len(projected_bin_count) == len(self.bin_edges[dimension]) - 1, \
-            (len(projected_bin_count), len(self.bin_edges[dimension]) - 1)
+        assert len(projected_bin_count) == self.num_bins[dimension], \
+            (len(projected_bin_count), self.num_bins[dimension])
 
         return projected_bin_count, reduced_binning
 
@@ -278,7 +278,7 @@ class BinnedDistribution:
                                  "This parameter should be a list of column names of columns of the "
                                  "pandas.DataFrame that can be provided via the argument 'data'.")
 
-    # TODO: This method should be available to find range of distribution of data
+    # TODO: This method should be available to find the range of a distribution for a given data set
     #       especially for multiple-component- or multi-dimensional distributions
     # def _find_range_from_components(self) -> Tuple[float, float]:
     #     min_vals = list()
