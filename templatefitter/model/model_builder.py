@@ -71,18 +71,22 @@ class ModelBuilder:
             self,
             template,  # TODO: Type hint
             parameter_value: Union[float, Dict[str, float]],  # TODO: Maybe handle this differently
-            create: bool = True,
-            same: bool = True
+            create: bool = True,  # TODO: Specify the meaning of 'create' further and add checks!
+            same: bool = True  # TODO: Specify the meaning of 'same' further and add checks!
     ) -> None:
         self.subfraction_indices += template._par_indices
         self.num_fractions += len(template._par_indices)
         if create:
+            yield_index = None
             if same:
                 yield_index = self.params.add_parameter(parameter_value, "{}_yield".format(template.name))
             for sub_temp in template._templates.values():
                 self.templates[sub_temp.name] = sub_temp
                 if not same:
-                    yield_index = self.params.add_parameter(parameter_value[sub_temp.name], "{}_yield".format(sub_temp.name))
+                    yield_index = self.params.add_parameter(
+                        parameter = parameter_value[sub_temp.name],
+                        name = "{}_yield".format(sub_temp.name)
+                    )
                 self.yield_indices.append(yield_index)
         else:
             for sub_temp in template._templates.values():
@@ -91,8 +95,7 @@ class ModelBuilder:
 
     def template_matrix(self):
         """ Creates the fixed template stack """
-        fractions_per_template = [template._flat_bin_counts for template
-                                  in self.templates.values()]
+        fractions_per_template = [template._flat_bin_counts for template in self.templates.values()]
 
         self.template_fractions = np.stack(fractions_per_template)
         self.shape = self.template_fractions.shape
@@ -115,8 +118,8 @@ class ModelBuilder:
         self.bin_par_slice = (bin_par_indices[0], bin_par_indices[-1] + 1)
 
     @jit
-    def expected_events_per_bin(self, bin_pars, yields, sub_pars):
-        sys_pars = self.params.getParamters(self.sys_pars)
+    def expected_events_per_bin(self, bin_pars: np.ndarray, yields: np.ndarray, sub_pars: np.ndarray) -> np.ndarray:
+        sys_pars = self.params.get_parameters_by_index(self.sys_pars)
         # compute the up and down errors for single par variations
         up_corr = np.prod(1 + sys_pars * (sys_pars > 0) * self.up_errors, 0)
         down_corr = np.prod(1 + sys_pars * (sys_pars < 0) * self.down_errors, 0)
@@ -131,7 +134,7 @@ class ModelBuilder:
         # normalised expected corrected fractions
         # determine expected amount of events in each bin
 
-    def fraction_converter(self):
+    def fraction_converter(self) -> None:
         """
         Determines the matrices required to transform the sub-template parameters
         """
@@ -140,16 +143,16 @@ class ModelBuilder:
         count = 0
         for template in self.packed_templates.values():
             if template._num_templates == 1:
-                arrays += [np.zeros((1, self.num_fractions))]
-                additive += [np.full((1, 1), 1.)]
+                arrays.append(np.zeros((1, self.num_fractions)))
+                additive.append(np.ones((1, 1)))
             else:
                 n_fractions = template._num_templates - 1
-                a = np.identity(n_fractions)
-                a = np.vstack([a, np.full((1, n_fractions), -1.)])
+                array = np.identity(n_fractions)
+                array = np.vstack([array, np.full((1, n_fractions), -1.)])
                 count += n_fractions
-                a = np.pad(a, ((0, 0), (count - n_fractions, self.num_fractions - count)), mode='constant')
-                arrays += [a]
-                additive += [np.vstack([np.zeros((n_fractions, 1)), np.full((1, 1), 1.)])]
+                array = np.pad(array, ((0, 0), (count - n_fractions, self.num_fractions - count)), mode='constant')
+                arrays.append(array)
+                additive.append(np.vstack([np.zeros((n_fractions, 1)), np.ones((1, 1))]))
         print(arrays)
         print(additive)
         self.converter_matrix = np.vstack(arrays)
@@ -160,55 +163,59 @@ class ModelBuilder:
         self.constrain_value = np.append(self.constrain_value, value)
         self.constrain_sigma = np.append(self.constrain_sigma, sigma)
 
-    def x_expected(self):
-        yields = self.params.get_parameters([self.yield_indices])
-        fractions_per_template = np.array(
-            [template.fractions() for template
-             in self.templates.values()]
-        )
+    def x_expected(self) -> np.ndarray:
+        yields = self.params.get_parameters_by_index(self.yield_indices)
+        fractions_per_template = np.array([template.fractions() for template in self.templates.values()])
         return yields @ fractions_per_template
 
-    def bin_pars(self):
+    def bin_pars(self) -> np.ndarray:
         return np.concatenate([template.get_bin_pars() for template in self.templates.values()])
 
-    def _create_block_diag_inv_corr_mat(self):
+    def _create_block_diag_inv_corr_mat(self) -> None:
         inv_corr_mats = [template.inv_corr_mat() for template in self.templates.values()]
         self._inv_corr = block_diag(*inv_corr_mats)
 
-    def _con_term(self):
+    def _constrain_term(self) -> float:
         constrain_pars = self.params.get_parameters_by_index(self.constrain_indices)
-        chi2cons = np.sum(((self.constrain_value - constrain_pars) / self.constrain_sigma) ** 2)
-        return chi2cons
+        chi2constrain = np.sum(((self.constrain_value - constrain_pars) / self.constrain_sigma) ** 2)
+        assert isinstance(chi2constrain, float), type(chi2constrain)  # TODO: Remove this assertion for speed-up!
+        return chi2constrain
 
     @jit
-    def _gauss_term(self, bin_pars):
+    def _gauss_term(self, bin_pars: np.ndarray) -> float:
         return bin_pars @ self._inv_corr @ bin_pars
 
     @jit
-    def chi2(self, pars):
+    def chi2(self, pars: np.ndarray) -> float:
         self.params.set_parameters(pars)
+
         yields = self.params.get_parameters_by_index(self.yield_indices).reshape(self.num_templates, 1)
         sub_pars = self.params.get_parameters_by_index(self.subfraction_indices).reshape(self.num_fractions, 1)
         bin_pars = self.params.get_parameters_by_slice(self.bin_par_slice)
+
         chi2 = self.chi2_compute(bin_pars, yields, sub_pars)
         return chi2
 
     @jit
-    def chi2_compute(self, bin_pars, yields, sub_pars):
+    def chi2_compute(self, bin_pars: np.ndarray, yields: np.ndarray, sub_pars: np.ndarray) -> float:
         chi2data = np.sum(
             (self.expected_events_per_bin(bin_pars.reshape(self.shape), yields, sub_pars) - self.x_obs) ** 2
             / (2 * self.x_obs_errors ** 2)
         )
-        chi2 = chi2data + self._gauss_term(bin_pars)  # + self._con_term()  # TODO: Check this
+
+        assert isinstance(chi2data, float), type(chi2data)  # TODO: Remove this assertion for speed-up!
+
+        chi2 = chi2data + self._gauss_term(bin_pars)  # + self._constrain_term()  # TODO: Check this
         return chi2
 
-    def nll(self, pars):
+    def nll(self, pars: np.ndarray) -> float:
         self.params.set_parameters(pars)
-        exp_evts_per_bin = self.x_expected()
-        poisson_term = np.sum(exp_evts_per_bin - self.x_obs -
-                              xlogyx(self.x_obs, exp_evts_per_bin))
 
-        nll = poisson_term + (self._gauss_term() + self._con_term()) / 2.
+        exp_evts_per_bin = self.x_expected()
+        poisson_term = np.sum(exp_evts_per_bin - self.x_obs - xlogyx(self.x_obs, exp_evts_per_bin))
+        assert isinstance(poisson_term, float), type(poisson_term)  # TODO: Remove this assertion for speed-up!
+
+        nll = poisson_term + (self._gauss_term() + self._constrain_term()) / 2.
         return nll
 
     @staticmethod
@@ -258,7 +265,7 @@ class AbstractTemplateCostFunction(ABC):
         return self._params.get_parameter_names()
 
     @abstractmethod
-    def __call__(self, x: np.ndarray) -> Callable:
+    def __call__(self, x: np.ndarray) -> float:
         raise NotImplementedError(f"{self.__class__.__name__} is an abstract base class.")
 
 
@@ -266,5 +273,5 @@ class CostFunction(AbstractTemplateCostFunction):
     def __init__(self, model: ModelBuilder, params: ParameterHandler) -> None:
         super().__init__(model=model, params=params)
 
-    def __call__(self, x) -> Callable:
+    def __call__(self, x) -> float:
         return self._model.chi2(x)

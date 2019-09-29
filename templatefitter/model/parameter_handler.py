@@ -16,7 +16,7 @@ class ParameterHandler:
         self._pars_dict = {}
         self._inverted_pars_dict = None
 
-    def add_parameters(self, pars: List[float], names: List[str]) -> List[int]:
+    def add_parameters(self, pars: Union[np.ndarray, List[float]], names: List[str]) -> List[int]:
         self._check_input_pars_and_names(pars=pars, names=names)
 
         indices = []
