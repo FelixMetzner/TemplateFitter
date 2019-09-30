@@ -52,7 +52,7 @@ class TemplateFitter:
         Parameters
         ----------
         update_templates : bool, optional
-            Whether to update the parameters of the given templates
+            Whether to update the parameters of the given will_templates
             or not. Default is True.
         verbose : bool, optional
             Whether to print fit information or not. Default is True

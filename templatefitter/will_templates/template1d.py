@@ -2,7 +2,7 @@ import logging
 import numpy as np
 
 from templatefitter.histograms import Hist1d
-from templatefitter.templates import SingleTemplate
+from templatefitter.will_templates import SingleTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 

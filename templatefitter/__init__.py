@@ -5,5 +5,5 @@ from templatefitter.toy_study import *
 from templatefitter.minimizer import *
 from templatefitter.utility import *
 from templatefitter.stats import *
-from templatefitter.templates import *
+from templatefitter.max_templates import *
 from templatefitter.histograms import *

@@ -1,4 +1,4 @@
-# class containing core functionality for 2D and 1D templates
+# class containing core functionality for 2D and 1D will_templates
 
 import logging
 import numpy as np
@@ -6,7 +6,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 from templatefitter.utility import cov2corr, get_systematic_cov_mat
-from templatefitter.templates import AbstractTemplate
+from templatefitter.will_templates import AbstractTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 

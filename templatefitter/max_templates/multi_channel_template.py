@@ -4,7 +4,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 
-from templatefitter.old_templates import Channel
+from templatefitter.max_templates import Channel
 from templatefitter.utility import array_split_into
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -303,10 +303,10 @@ class MultiChannelTemplate:
 
     def generate_toy_dataset(self):
         """
-        Generates a toy dataset from the given templates.
+        Generates a toy dataset from the given will_templates.
         This is a binned dataset where each bin is treated a
         random number following a poisson distribution with
-        mean equal to the bin content of all templates.
+        mean equal to the bin content of all will_templates.
 
         Returns
         -------
@@ -319,7 +319,7 @@ class MultiChannelTemplate:
         return toy_datasets
 
     def generate_asimov_dataset(self, integer_values=False):
-        """Generates an Asimov dataset from the given templates.
+        """Generates an Asimov dataset from the given will_templates.
         This is a binned dataset which corresponds to the current
         expectation values. Since data takes only integer values,
         the template expectation in each bin is rounded to the

@@ -6,7 +6,7 @@ import numpy as np
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
-from typing import Union, Dict, List, Callable
+from typing import Union, Dict, List
 
 from templatefitter.utility import xlogyx
 from templatefitter.model.parameter_handler import ParameterHandler

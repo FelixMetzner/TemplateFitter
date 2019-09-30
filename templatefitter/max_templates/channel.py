@@ -37,7 +37,7 @@ class Channel:
 
     @property
     def num_templates(self):
-        """int: Number of templates/processes in this channel."""
+        """int: Number of will_templates/processes in this channel."""
         return len(self._processes)
 
     @property
@@ -240,7 +240,7 @@ class Channel:
     # @property
     # def values(self):
     #     values = np.zeros(self.num_bins)
-    #     for template in self.templates.values()
+    #     for template in self.will_templates.values()
     #         values += template.values()
     #     return values
 
@@ -254,7 +254,7 @@ class Channel:
         process_yields: numpy.ndarray
             An array holding the yield values for the processes in
             this channel. The order has to match order of the
-            templates that have been added to the template. Shape is
+            will_templates that have been added to the template. Shape is
             (`num_processes`).
 
         Returns
@@ -319,7 +319,7 @@ class Channel:
 
     def _fractions(self, nui_params):
         """
-        Evaluates all `bin_fractions` methods of all templates in this
+        Evaluates all `bin_fractions` methods of all will_templates in this
         channel. Here, the bin fractions depend on so called nuisance
         parameters which incorporate uncertainties on the template shape.
 
@@ -333,7 +333,7 @@ class Channel:
         -------
         numpy.ndarray
             A 2D array of bin fractions. The first axis represents the
-            templates in this container and the second axis represents
+            will_templates in this container and the second axis represents
             the bins of each template.
             Shape is (`num_templates`, `num_bins`).
         """

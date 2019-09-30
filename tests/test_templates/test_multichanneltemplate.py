@@ -6,7 +6,7 @@ import pandas as pd
 import pathlib
 
 from templatefitter.histograms import Hist1d, Hist2d
-from templatefitter.old_templates import MultiChannelTemplate, Channel, Template1d, Template2d, NegLogLikelihood
+from templatefitter.max_templates import MultiChannelTemplate, Channel, Template1d, Template2d, NegLogLikelihood
 
 this_dir = pathlib.Path(__file__).resolve().parent
 iris = pd.read_csv(this_dir / "iris.csv", sep=",", header=0)

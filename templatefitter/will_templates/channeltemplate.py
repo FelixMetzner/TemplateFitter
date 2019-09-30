@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 
-from templatefitter.templates import AbstractTemplate
+from templatefitter.will_templates import AbstractTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -10,7 +10,7 @@ __all__ = ["ChannelTemplate"]
 
 class ChannelTemplate(AbstractTemplate):
     """
-    Combines several templates according with both yields and efficiencies.
+    Combines several will_templates according with both yields and efficiencies.
     There is the possibility of using shared yields between channeltemplates.
     """
 
@@ -59,7 +59,7 @@ class ChannelTemplate(AbstractTemplate):
 
     def fractions(self):
         """
-        Computes the multi-template bin-fractions using individual templates
+        Computes the multi-template bin-fractions using individual will_templates
         constructed together with the number of 
         """
         yields = self._params.getParameters(self._yield_indices)

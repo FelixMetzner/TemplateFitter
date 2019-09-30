@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 from templatefitter.histograms import Hist1d
-from templatefitter.old_templates import Channel, Template1d
+from templatefitter.max_templates import Channel, Template1d
 
 iris_data = np.array(
     [5.1, 4.9, 4.7, 4.6, 5.0, 5.4, 4.6, 5.0, 4.4, 4.9, 5.4, 4.8, 4.8,

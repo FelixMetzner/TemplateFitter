@@ -3,7 +3,7 @@ import numpy as np
 
 from scipy.linalg import block_diag
 
-from templatefitter.templates import AbstractTemplate
+from templatefitter.will_templates import AbstractTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -14,7 +14,7 @@ __all__ = [
 
 
 class MultiTemplate(AbstractTemplate):
-    """ combines several templates according to fractions.
+    """ combines several will_templates according to fractions.
     This produces a new pdf.
     """
 
@@ -54,7 +54,7 @@ class MultiTemplate(AbstractTemplate):
 
     def fractions(self):
         """
-        Computes the multi-template bin-fractions using individual templates
+        Computes the multi-template bin-fractions using individual will_templates
         constructed together with the number of TODO ???
         """
         pars = self._params.getParameters(self._par_indices)
@@ -64,7 +64,7 @@ class MultiTemplate(AbstractTemplate):
 
 class MultiNormTemplate(AbstractTemplate):
     """
-    Combines several templates according to fractions.
+    Combines several will_templates according to fractions.
     This produces a new pdf.
     """
 
@@ -104,7 +104,7 @@ class MultiNormTemplate(AbstractTemplate):
 
     def fractions(self):
         """
-        Computes the multi-template bin-fractions using individual templates
+        Computes the multi-template bin-fractions using individual will_templates
         constructed together with the number of 
         """
         pars = self._params.getParameters(self._par_indices)
@@ -124,7 +124,7 @@ class MultiNormTemplate(AbstractTemplate):
 
     def all_fractions(self):
         """
-        Computes the multi-template bin-fractions using individual templates
+        Computes the multi-template bin-fractions using individual will_templates
         constructed together with the number of 
         """
         pars = self._params.getParameters(self._par_indices)

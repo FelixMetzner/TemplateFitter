@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from templatefitter.old_templates import Template2d
+from templatefitter.max_templates import Template2d
 from templatefitter.histograms import Hist2d
 
 from templatefitter.utility import get_systematic_cov_mat

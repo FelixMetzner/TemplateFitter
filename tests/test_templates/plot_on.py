@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from templatefitter.old_templates import Template1d, Template2d
+from templatefitter.max_templates import Template1d, Template2d
 
 x = np.array(
     [5.1, 4.9, 4.7, 4.6, 5.0, 5.4, 4.6, 5.0, 4.4, 4.9, 5.4, 4.8, 4.8,

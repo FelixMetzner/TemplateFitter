@@ -37,9 +37,9 @@ e_hremaining = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=e_rem
                                     weights=e_remaining.weight)
 e_hxulnu = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=e_xulnu.missingMass, weights=e_xulnu.weight)
 
-e_tsig = tf.templates.Template1d("Signal", "missingMass", e_hsig, color="cornflowerblue")
-e_tremaining = tf.templates.Template1d("Remaining", "missingMass", e_hremaining, color="indianred")
-e_txulnu = tf.templates.Template1d("Xulnu", "missingMass", e_hxulnu, color="khaki")
+e_tsig = tf.max_templates.Template1d("Signal", "missingMass", e_hsig, color="cornflowerblue")
+e_tremaining = tf.max_templates.Template1d("Remaining", "missingMass", e_hremaining, color="indianred")
+e_txulnu = tf.max_templates.Template1d("Xulnu", "missingMass", e_hxulnu, color="khaki")
 
 for template in [e_tsig, e_tremaining, e_txulnu]:
     _, axis = plt.subplots(1, 1)
@@ -62,9 +62,9 @@ mu_hremaining = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=mu_r
                                      weights=mu_remaining.weight)
 mu_hxulnu = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=mu_xulnu.missingMass, weights=mu_xulnu.weight)
 
-mu_tsig = tf.templates.Template1d("Signal", "missingMass", mu_hsig, color="cornflowerblue")
-mu_tremaining = tf.templates.Template1d("Remaining", "missingMass", mu_hremaining, color="indianred")
-mu_txulnu = tf.templates.Template1d("Xulnu", "missingMass", mu_hxulnu, color="khaki")
+mu_tsig = tf.max_templates.Template1d("Signal", "missingMass", mu_hsig, color="cornflowerblue")
+mu_tremaining = tf.max_templates.Template1d("Remaining", "missingMass", mu_hremaining, color="indianred")
+mu_txulnu = tf.max_templates.Template1d("Xulnu", "missingMass", mu_hxulnu, color="khaki")
 
 for template in [mu_tsig, mu_tremaining, mu_txulnu]:
     _, axis = plt.subplots(1, 1)
@@ -72,7 +72,7 @@ for template in [mu_tsig, mu_tremaining, mu_txulnu]:
 
 # ## MultiChannelTemplate
 
-mct = tf.templates.MultiChannelTemplate()
+mct = tf.max_templates.MultiChannelTemplate()
 
 mct.define_channel("e", num_bins, limits)
 mct.define_channel("mu", num_bins, limits)

@@ -1,7 +1,7 @@
 import logging
 
 from templatefitter.histograms import Hist1d
-from templatefitter.old_templates import AbstractTemplate
+from templatefitter.max_templates import AbstractTemplate
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
