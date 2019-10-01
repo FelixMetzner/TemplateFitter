@@ -2,6 +2,7 @@
 Class which defines the fit model by combining templates and which handles the computation.
 """
 
+import logging
 import numpy as np
 from numba import jit
 from scipy.linalg import block_diag
@@ -11,6 +12,8 @@ from typing import Union, Dict, List
 from templatefitter.utility import xlogyx
 from templatefitter.fit_model.parameter_handler import ParameterHandler
 from templatefitter.plotter import old_plotting
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = ["ModelBuilder"]
 

@@ -2,9 +2,12 @@
 Class providing a generalized weights object.
 """
 
+import logging
 import numpy as np
 import pandas as pd
 from typing import Union, Optional
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = ["Weights", "WeightsInputType"]
 

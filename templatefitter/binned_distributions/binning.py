@@ -2,8 +2,11 @@
 Class providing general methods for binning in arbitrary dimensions.
 """
 
+import logging
 import numpy as np
 from typing import Union, Tuple
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = ["Binning", "BinEdgesType", "BinsInputType", "ScopeInputType"]
 

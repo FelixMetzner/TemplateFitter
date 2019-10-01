@@ -3,6 +3,7 @@ This class provides a general Systematics class
 """
 
 import copy
+import logging
 import numpy as np
 import pandas as pd
 
@@ -12,6 +13,8 @@ from typing import Union, Optional, Tuple, List
 
 from templatefitter.binned_distributions.binning import BinEdgesType
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = ["SystematicsInfo", "SystematicsInputType"]
 

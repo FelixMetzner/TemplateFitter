@@ -2,9 +2,11 @@
 Parameter Handler
     Class for managing parameters of all templates contained within a fit model.
 """
-
+import logging
 import numpy as np
 from typing import Optional, Union, List, Tuple, Dict
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = ["ParameterHandler"]
 
