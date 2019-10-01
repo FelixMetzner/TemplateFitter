@@ -175,6 +175,10 @@ class BinnedDistribution:
         return self._name
 
     @property
+    def binning(self) -> Binning:
+        return self._binning
+
+    @property
     def num_bins(self) -> Tuple[int, ...]:
         """ Number of bins; multiple values if multi-dimensional """
         return self._binning.num_bins

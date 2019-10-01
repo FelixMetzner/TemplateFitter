@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Union, Dict, List
 
 from templatefitter.utility import xlogyx
-from templatefitter.model.parameter_handler import ParameterHandler
+from templatefitter.fit_model.parameter_handler import ParameterHandler
 from templatefitter.plotter import old_plotting
 
 __all__ = ["ModelBuilder"]
@@ -84,8 +84,8 @@ class ModelBuilder:
                 self.templates[sub_temp.name] = sub_temp
                 if not same:
                     yield_index = self.params.add_parameter(
-                        parameter = parameter_value[sub_temp.name],
-                        name = "{}_yield".format(sub_temp.name)
+                        parameter=parameter_value[sub_temp.name],
+                        name="{}_yield".format(sub_temp.name)
                     )
                 self.yield_indices.append(yield_index)
         else:
@@ -253,6 +253,7 @@ class AbstractTemplateCostFunction(ABC):
     """
     Abstract base class for all cost function to estimate yields using the template method.
     """
+
     def __init__(self, model: ModelBuilder, params: ParameterHandler) -> None:
         self._model = model
         self._params = params

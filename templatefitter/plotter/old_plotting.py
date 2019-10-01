@@ -3,7 +3,7 @@
 import numpy as np
 from typing import NamedTuple, Callable
 
-from templatefitter.model.parameter_handler import ParameterHandler
+from templatefitter.fit_model.parameter_handler import ParameterHandler
 from templatefitter.histograms.abstract_hist import AbstractHist
 
 
