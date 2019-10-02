@@ -6,4 +6,35 @@ Otherwise it acts just as a wrapper for the template class.
 
 import logging
 
+from typing import Union, List
+
+from templatefitter.fit_model.template import Template
+
 logging.getLogger(__name__).addHandler(logging.NullHandler())
+
+__all__ = ["Component"]
+
+
+class Component:
+    def __init__(
+            self,
+            templates: Union[Template, List[Template]]
+    ):
+        if isinstance(templates, Template):
+            self._templates = (templates,)
+        elif isinstance(templates, list):
+            if not all(isinstance(t, Template) for t in templates):
+                raise ValueError("The parameter 'template' must be a Template or a List of Templates!\n"
+                                 "You provided a list with the types:\n\t-"
+                                 + "\n\t-".join([str(type(t)) for t in templates]))
+            self._templates = tuple(t for t in templates)
+        else:
+            raise ValueError(f"The parameter 'template' must be a Template or a List of Templates!\n"
+                             f"You provided an object of type {type(templates)}.")
+
+    # TODO: needs method to get
+    #           - templates
+    #           - template fractions
+    #           - indices
+    #           - parameters ?
+    # TODO: needs method to assign indices and parameters to the templates once the model is fixed.
