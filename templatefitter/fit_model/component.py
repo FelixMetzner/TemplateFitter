@@ -36,5 +36,9 @@ class Component:
     #           - templates
     #           - template fractions
     #           - indices
+    #           - initial parameters
     #           - parameters ?
+
     # TODO: needs method to assign indices and parameters to the templates once the model is fixed.
+
+    # TODO: Check that every template of a model uses the same ParameterHandler instance!

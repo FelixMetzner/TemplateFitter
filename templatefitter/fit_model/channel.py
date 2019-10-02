@@ -62,6 +62,7 @@ class Channel(Sequence):
 
     # TODO: Assign fractions, parameters, indices and so on
     # TODO: Ensure, that all components/templates in the channel have the same binning!
+    # TODO: Check that every template of a model uses the same ParameterHandler instance!
 
 
 class ChannelContainer(Sequence):
@@ -107,3 +108,5 @@ class ChannelContainer(Sequence):
 
     def __len__(self) -> int:
         return len(self._channels)
+
+    # TODO: Check that every template of a model uses the same ParameterHandler instance!

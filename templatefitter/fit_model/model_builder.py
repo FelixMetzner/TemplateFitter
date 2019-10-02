@@ -21,10 +21,13 @@ __all__ = ["ModelBuilder"]
 class ModelBuilder:
     def __init__(
             self,
-            params: ParameterHandler,
+            parameter_handler: ParameterHandler,
             data  # TODO: Type hint
     ):
-        self.params = params
+        self._data = data
+        self._params = parameter_handler
+
+        # TODO:
         self.templates = {}
         self.packed_templates = {}
         self.data = data
@@ -46,55 +49,20 @@ class ModelBuilder:
         self.num_templates = 0
         self.num_bins = None
 
-    def add_template(
-            self,
-            template,  # TODO: Type hint
-            parameter_value: float,  # TODO: Maybe handle this differently
-            create: bool = True,
-            same: bool = True
-    ) -> None:
-        if self.num_bins is None:
-            self.num_bins = template.num_bins
-        self.packed_templates[template.name] = template
-        if template._num_templates > 1:
-            self.add_multi_template(template, parameter_value, create, same)
-        else:
-            self.templates[template.name] = template
-            if create:
-                yield_index = self.params.add_parameter(parameter_value, "{}_yield".format(template.name))
-                self.yield_indices.append(yield_index)
-            else:
-                self.yield_indices.append(parameter_value)
+    # TODO: Check that every template of a model uses the same ParameterHandler instance!
+    # TODO: Possible Check: For first call of expected_events_per_bin: Check if template indices are ordered correctly.
 
-        if self._dim is None:
-            self._dim = len(template.bins)
-        self.num_templates = len(self.templates)
+    def setup_model_from_channel_container(self):
+        # TODO: Keep track of binning of all channels!
+        # TODO: Keep track of number of channels!
+        # TODO: Keep track of number of components per channel
+        # TODO: Keep track of number of number of templates
 
-    def add_multi_template(
-            self,
-            template,  # TODO: Type hint
-            parameter_value: Union[float, Dict[str, float]],  # TODO: Maybe handle this differently
-            create: bool = True,  # TODO: Specify the meaning of 'create' further and add checks!
-            same: bool = True  # TODO: Specify the meaning of 'same' further and add checks!
-    ) -> None:
-        self.subfraction_indices += template._par_indices
-        self.num_fractions += len(template._par_indices)
-        if create:
-            yield_index = None
-            if same:
-                yield_index = self.params.add_parameter(parameter_value, "{}_yield".format(template.name))
-            for sub_temp in template._templates.values():
-                self.templates[sub_temp.name] = sub_temp
-                if not same:
-                    yield_index = self.params.add_parameter(
-                        parameter=parameter_value[sub_temp.name],
-                        name="{}_yield".format(sub_temp.name)
-                    )
-                self.yield_indices.append(yield_index)
-        else:
-            for sub_temp in template._templates.values():
-                self.templates[sub_temp.name] = sub_temp
-                self.yield_indices.append(parameter_value[sub_temp.name])
+        # TODO: keep track of fractions for each channel...
+        #         self.subfraction_indices += template._par_indices
+        #         self.num_fractions += len(template._par_indices)
+
+        pass
 
     def template_matrix(self):
         """ Creates the fixed template stack """
@@ -104,7 +72,6 @@ class ModelBuilder:
         self.shape = self.template_fractions.shape
 
     def relative_error_matrix(self):
-        """ Creates the fixed template stack """
         errors_per_template = [template.errors() for template
                                in self.templates.values()]
 
@@ -117,12 +84,12 @@ class ModelBuilder:
         bin_par_names = []
         for template in self.templates.values():
             bin_par_names += ["{}_binpar_{}".format(template.name, i) for i in range(0, self.num_bins)]
-        bin_par_indices = self.params.add_parameters(bin_pars, bin_par_names)
+        bin_par_indices = self._params.add_parameters(bin_pars, bin_par_names)
         self.bin_par_slice = (bin_par_indices[0], bin_par_indices[-1] + 1)
 
     @jit
     def expected_events_per_bin(self, bin_pars: np.ndarray, yields: np.ndarray, sub_pars: np.ndarray) -> np.ndarray:
-        sys_pars = self.params.get_parameters_by_index(self.sys_pars)
+        sys_pars = self._params.get_parameters_by_index(self.sys_pars)
         # compute the up and down errors for single par variations
         up_corr = np.prod(1 + sys_pars * (sys_pars > 0) * self.up_errors, 0)
         down_corr = np.prod(1 + sys_pars * (sys_pars < 0) * self.down_errors, 0)
@@ -162,12 +129,12 @@ class ModelBuilder:
         self.converter_vector = np.vstack(additive)
 
     def add_constraint(self, name: str, value: float, sigma: float) -> None:
-        self.constrain_indices.append(self.params.get_index(name))
+        self.constrain_indices.append(self._params.get_index(name))
         self.constrain_value = np.append(self.constrain_value, value)
         self.constrain_sigma = np.append(self.constrain_sigma, sigma)
 
     def x_expected(self) -> np.ndarray:
-        yields = self.params.get_parameters_by_index(self.yield_indices)
+        yields = self._params.get_parameters_by_index(self.yield_indices)
         fractions_per_template = np.array([template.fractions() for template in self.templates.values()])
         return yields @ fractions_per_template
 
@@ -179,7 +146,7 @@ class ModelBuilder:
         self._inv_corr = block_diag(*inv_corr_mats)
 
     def _constrain_term(self) -> float:
-        constrain_pars = self.params.get_parameters_by_index(self.constrain_indices)
+        constrain_pars = self._params.get_parameters_by_index(self.constrain_indices)
         chi2constrain = np.sum(((self.constrain_value - constrain_pars) / self.constrain_sigma) ** 2)
         assert isinstance(chi2constrain, float), type(chi2constrain)  # TODO: Remove this assertion for speed-up!
         return chi2constrain
@@ -190,11 +157,11 @@ class ModelBuilder:
 
     @jit
     def chi2(self, pars: np.ndarray) -> float:
-        self.params.set_parameters(pars)
+        self._params.set_parameters(pars)
 
-        yields = self.params.get_parameters_by_index(self.yield_indices).reshape(self.num_templates, 1)
-        sub_pars = self.params.get_parameters_by_index(self.subfraction_indices).reshape(self.num_fractions, 1)
-        bin_pars = self.params.get_parameters_by_slice(self.bin_par_slice)
+        yields = self._params.get_parameters_by_index(self.yield_indices).reshape(self.num_templates, 1)
+        sub_pars = self._params.get_parameters_by_index(self.subfraction_indices).reshape(self.num_fractions, 1)
+        bin_pars = self._params.get_parameters_by_slice(self.bin_par_slice)
 
         chi2 = self.chi2_compute(bin_pars, yields, sub_pars)
         return chi2
@@ -212,7 +179,7 @@ class ModelBuilder:
         return chi2
 
     def nll(self, pars: np.ndarray) -> float:
-        self.params.set_parameters(pars)
+        self._params.set_parameters(pars)
 
         exp_evts_per_bin = self.x_expected()
         poisson_term = np.sum(exp_evts_per_bin - self.x_obs - xlogyx(self.x_obs, exp_evts_per_bin))
@@ -236,7 +203,7 @@ class ModelBuilder:
     def plot_stacked_on(self, ax, plot_all=False, **kwargs):
         plot_info = old_plotting.PlottingInfo(
             templates=self.templates,
-            params=self.params,
+            params=self._params,
             yield_indices=self.yield_indices,
             dimension=self._dim,
             projection_fct=self._get_projection,
@@ -247,7 +214,7 @@ class ModelBuilder:
 
     # TODO: Problematic; At the moment some sort of forward declaration is necessary for type hint...
     def create_nll(self) -> CostFunction:
-        return CostFunction(self, self.params)
+        return CostFunction(self, parameter_handler=self._params)
 
 
 # TODO: Maybe relocate cost functions into separate sub-package;
@@ -257,9 +224,9 @@ class AbstractTemplateCostFunction(ABC):
     Abstract base class for all cost function to estimate yields using the template method.
     """
 
-    def __init__(self, model: ModelBuilder, params: ParameterHandler) -> None:
+    def __init__(self, model: ModelBuilder, parameter_handler: ParameterHandler) -> None:
         self._model = model
-        self._params = params
+        self._params = parameter_handler
 
     def x0(self) -> np.ndarray:
         """ Returns initial parameters of the model """
@@ -274,8 +241,8 @@ class AbstractTemplateCostFunction(ABC):
 
 
 class CostFunction(AbstractTemplateCostFunction):
-    def __init__(self, model: ModelBuilder, params: ParameterHandler) -> None:
-        super().__init__(model=model, params=params)
+    def __init__(self, model: ModelBuilder, parameter_handler: ParameterHandler) -> None:
+        super().__init__(model=model, parameter_handler=parameter_handler)
 
     def __call__(self, x) -> float:
         return self._model.chi2(x)

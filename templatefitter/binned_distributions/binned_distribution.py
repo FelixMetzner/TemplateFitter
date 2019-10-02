@@ -19,7 +19,7 @@ from templatefitter.binned_distributions.binning import Binning, BinsInputType, 
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["BinnedDistribution", "BaseDataContainer"]
+__all__ = ["BinnedDistribution", "BaseDataContainer", "DataColumnNamesInput"]
 
 InputDataType = Union[pd.Series, pd.DataFrame, np.ndarray]
 DataColumnNamesInput = Union[None, str, List[str]]
@@ -268,10 +268,12 @@ class BinnedDistribution:
 
     def _init_data_column_names(self, data_column_names: DataColumnNamesInput, data: Optional[InputDataType]):
         if isinstance(data_column_names, str):
+            assert self.dimensions == 1, (data_column_names, self.dimensions)
             if isinstance(data, pd.DataFrame):
                 assert data_column_names in data.columns, (data_column_names, data.columns)
             self._data_column_names = [data_column_names]
         elif isinstance(data_column_names, list):
+            assert self.dimensions == len(data_column_names), (data_column_names, self.dimensions)
             assert all(isinstance(col_name, str) for col_name in data_column_names)
             if isinstance(data, pd.DataFrame):
                 assert all(c_name in data.columns for c_name in data_column_names), (data_column_names, data.columns)
