@@ -93,6 +93,18 @@ class Binning:
         self._bin_widths = tuple(map(self._get_bin_widths, self.bin_edges))
         self._range = tuple(map(self._get_range, self.bin_edges))
 
+    def __eq__(self, other: "Binning") -> bool:
+        if not self.dimensions == other.dimensions:
+            return False
+        if not self.num_bins == other.num_bins:
+            return False
+        if not self.bin_edges == other.bin_edges:
+            return False
+        if not self.range == other.range:
+            return False
+
+        return True
+
     def _check_binning(self) -> None:
         assert self._num_bins is None, "Number of bins is not defined after initialization!"
         assert self._bin_edges is None, "Bin edges are not defined after initialization!"

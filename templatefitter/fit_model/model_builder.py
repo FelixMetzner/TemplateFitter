@@ -7,9 +7,11 @@ import numpy as np
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
-from typing import Union, Dict, List
+
+from typing import List, Optional
 
 from templatefitter.utility import xlogyx
+from templatefitter.fit_model.channel import ChannelContainer
 from templatefitter.fit_model.parameter_handler import ParameterHandler
 from templatefitter.plotter import old_plotting
 
@@ -21,8 +23,8 @@ __all__ = ["ModelBuilder"]
 class ModelBuilder:
     def __init__(
             self,
+            data,  # TODO: Type hint
             parameter_handler: ParameterHandler,
-            data  # TODO: Type hint
     ):
         self._data = data
         self._params = parameter_handler
@@ -52,7 +54,10 @@ class ModelBuilder:
     # TODO: Check that every template of a model uses the same ParameterHandler instance!
     # TODO: Possible Check: For first call of expected_events_per_bin: Check if template indices are ordered correctly.
 
-    def setup_model_from_channel_container(self):
+    def setup_model_from_channel_container(self, channels: ChannelContainer):
+        if not all(c.params is self._params for c in channels):
+            raise RuntimeError("The used ParameterHandler instances are not the same!")
+
         # TODO: Keep track of binning of all channels!
         # TODO: Keep track of number of channels!
         # TODO: Keep track of number of components per channel

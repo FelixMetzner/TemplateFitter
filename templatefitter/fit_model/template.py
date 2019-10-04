@@ -16,9 +16,6 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = ["Template"]
 
 
-# TODO: Check __init__ once all files have been refactored
-
-
 class Template(BinnedDistribution):
     def __init__(
             self,
@@ -26,22 +23,32 @@ class Template(BinnedDistribution):
             dimensions: int,
             bins: BinsInputType,
             scope: ScopeInputType,
-            yield_index: Optional[int],
-            bin_parameter_indices: Optional[List[int]],
-            efficiency_index: Optional[int],
-            component_index: Optional[int],
-            channel_index: Optional[int],
             params: ParameterHandler,
             data_column_names: DataColumnNamesInput
     ):
         super().__init__(bins=bins, dimensions=dimensions, scope=scope, name=name, data_column_names=data_column_names)
         self._params = params
 
-        self._yield_index = yield_index
-        self._bin_parameter_indices = bin_parameter_indices
-        self._efficiency_index = efficiency_index
-        self._component_index = component_index
-        self._channel_index = channel_index
+        self._yield_index = None
+        self._bin_parameter_indices = None
+        self._efficiency_index = None
+        self._component_index = None
+        self._channel_index = None
+
+        # TODO: One should also be able to set the efficiency to a fixed value.
+
+    def initialize_parameters(
+            self,
+            yield_index: int,
+            bin_parameter_indices: List[int],
+            efficiency_index: Optional[int] = None
+    ):
+        # TODO: Maybe this function should set the initial values for the parameters
+        #       and return the respective indices from the parameter handler
+        self.yield_index = yield_index
+        self.bin_parameter_indices = bin_parameter_indices
+        if efficiency_index is not None:
+            self.efficiency_index = efficiency_index
 
     @property
     def yield_index(self) -> int:
@@ -63,6 +70,7 @@ class Template(BinnedDistribution):
         if not (isinstance(indices, list) and all(isinstance(i, int) for i in indices)):
             raise ValueError("Expected list of integers...")
         self._parameter_setter_checker(parameter=self._bin_parameter_indices, parameter_name="bin_parameter_indices")
+        assert len(indices) == self.num_bins_total, (len(indices), self.num_bins_total)
         self._bin_parameter_indices = indices
 
     @property
@@ -106,6 +114,10 @@ class Template(BinnedDistribution):
         if parameter is not None:
             name_info = "" if self.name is None else f" with name '{self.name}'"
             raise RuntimeError(f"Trying to reset {parameter_name} for template{name_info}.")
+
+    @property
+    def params(self) -> ParameterHandler:
+        return self._params
 
     def fractions(self):
         # TODO: Should be able to calculate its own bin yields from parameters for plotting and so on...
