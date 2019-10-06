@@ -89,6 +89,10 @@ class Channel(Sequence):
         return self._binning
 
     @property
+    def components(self) -> List[Component]:
+        return self._channel_components
+
+    @property
     def channel_index(self) -> int:
         assert self._channel_index is not None
         return self._channel_index

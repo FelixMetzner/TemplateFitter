@@ -8,12 +8,14 @@ from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
 
-from typing import List, Optional
+from typing import List, Tuple
 
 from templatefitter.utility import xlogyx
-from templatefitter.fit_model.channel import ChannelContainer
-from templatefitter.fit_model.parameter_handler import ParameterHandler
 from templatefitter.plotter import old_plotting
+
+from templatefitter.fit_model.channel import ChannelContainer
+from templatefitter.binned_distributions.binning import Binning
+from templatefitter.fit_model.parameter_handler import ParameterHandler
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -29,45 +31,64 @@ class ModelBuilder:
         self._data = data
         self._params = parameter_handler
 
+        self._channels = None
         # TODO:
-        self.templates = {}
-        self.packed_templates = {}
-        self.data = data
-        self.x_obs = data.bin_counts.flatten()
-        self.x_obs_errors = data.bin_errors.flatten()
-        self.yield_indices = []
-        self.subfraction_indices = []
-        self.constrain_indices = []
-        self.constrain_value = np.array([])
-        self.constrain_sigma = np.array([])
-        self._inv_corr = np.array([])
-        self.bin_par_slice = (0, 0)
-        self._dim = None
-        self.has_data = True
-        self.shape = ()
-        self.converter_matrix = None
-        self.converter_vector = None
-        self.num_fractions = 0
-        self.num_templates = 0
-        self.num_bins = None
+        # self.templates = {}
+        # self.packed_templates = {}
+        # self.data = data
+        # self.x_obs = data.bin_counts.flatten()
+        # self.x_obs_errors = data.bin_errors.flatten()
+        # self.yield_indices = []
+        # self.subfraction_indices = []
+        # self.constrain_indices = []
+        # self.constrain_value = np.array([])
+        # self.constrain_sigma = np.array([])
+        # self._inv_corr = np.array([])
+        # self.bin_par_slice = (0, 0)
+        # self._dim = None
+        # self.has_data = True
+        # self.shape = ()
+        # self.converter_matrix = None
+        # self.converter_vector = None
+        # self.num_fractions = 0
+        # self.num_templates = 0
+        # self.num_bins = None
 
     # TODO: Check that every template of a model uses the same ParameterHandler instance!
     # TODO: Possible Check: For first call of expected_events_per_bin: Check if template indices are ordered correctly.
 
-    def setup_model_from_channel_container(self, channels: ChannelContainer):
+    def setup_model(self, channels: ChannelContainer):
         if not all(c.params is self._params for c in channels):
             raise RuntimeError("The used ParameterHandler instances are not the same!")
 
-        # TODO: Keep track of binning of all channels!
-        # TODO: Keep track of number of channels!
-        # TODO: Keep track of number of components per channel
-        # TODO: Keep track of number of number of templates
+        if not self._channels is None:
+            raise RuntimeError("Model already has channels defined!")
+
+        self._channels = channels
 
         # TODO: keep track of fractions for each channel...
         #         self.subfraction_indices += template._par_indices
         #         self.num_fractions += len(template._par_indices)
 
         pass
+
+    @property
+    def number_of_channels(self) -> int:
+        return len(self._channels)
+
+    @property
+    def binning(self) -> Tuple[Binning, ...]:
+        return tuple(channel.binning for channel in self._channels)
+
+    @property
+    def number_of_components(self) -> Tuple[int, ...]:
+        return tuple(len(channel) for channel in self._channels)
+
+    @property
+    def number_of_templates(self) -> Tuple[int, ...]:
+        return tuple(sum([comp.number_of_subcomponents for comp in ch.components]) for ch in self._channels)
+
+    # TODO: The following stuff is not adapted, yet...
 
     def template_matrix(self):
         """ Creates the fixed template stack """
@@ -218,7 +239,7 @@ class ModelBuilder:
         return old_plotting.plot_stacked_on(plot_info=plot_info, ax=ax, plot_all=plot_all, **kwargs)
 
     # TODO: Problematic; At the moment some sort of forward declaration is necessary for type hint...
-    def create_nll(self) -> CostFunction:
+    def create_nll(self) -> "CostFunction":
         return CostFunction(self, parameter_handler=self._params)
 
 
