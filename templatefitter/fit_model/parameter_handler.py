@@ -18,6 +18,14 @@ class ParameterHandler:
         self._pars_dict = {}
         self._inverted_pars_dict = None
 
+    # TODO: Differentiate between FixedParameter and FloatingParameter
+    #       - Maybe add respective classes, which should inherit from a Parameter base class.
+    #       - Use these parameter classes in templates and components (maybe there should only be
+    #         one parameter class then... we will see)
+    #       - Parameter class should have knowledge of the initial value of its parameter, of the current one
+    #         and should maybe allow to temporarily overwrite the parameter for tests/plotting or whatever.
+
+
     def add_parameters(self, pars: Union[np.ndarray, List[float]], names: List[str]) -> List[int]:
         self._check_input_pars_and_names(pars=pars, names=names)
 

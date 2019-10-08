@@ -76,6 +76,39 @@ class ModelBuilder:
 
         pass
 
+    def get_yields_vector(self):
+        # TODO: Yields are provided by parameter handler...
+        # TODO: number of yields = number of components
+        # TODO: Vector or matrix? <-> Use additional dimension for channels?
+        pass
+
+    def get_fractions_vector(self):
+        # TODO: Fractions are provided by parameter handler...
+        # TODO: Number of fractions = number of templates - number of multi template components
+        # TODO: Are NOT DIFFERENT for different channels
+        pass
+
+    def create_fractions(self):
+        # TODO: Uses fraction parameters from get_fractions_vector
+        # TODO: Uses fraction conversion matrix plus vector
+        pass
+
+    def get_efficiency_vector(self):
+        # TODO: Efficiencies are provided by parameter handler...
+        # TODO: Number of efficiencies = number of templates
+        # TODO: Are DIFFERENT for different channels
+        # TODO: Might be fixed (extracted from simulation) or floating
+        pass
+
+    def get_template_bin_counts(self):
+        # TODO: Get initial (not normed) shapes from templates
+        pass
+
+    def create_templates(self):
+        # TODO: Are normed after application of corrections
+        # TODO: Based on template bin counts
+        pass
+
     @property
     def number_of_channels(self) -> int:
         return len(self._channels)
