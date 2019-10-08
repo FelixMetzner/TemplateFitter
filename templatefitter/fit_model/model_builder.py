@@ -1,5 +1,5 @@
 """
-Class which defines the fit model by combining templates and which handles the computation.
+Class which defines the fit model by combining templates and handles the computation.
 """
 
 import logging
@@ -32,27 +32,31 @@ class ModelBuilder:
         self._params = parameter_handler
 
         self._channels = None
+
         # TODO:
-        # self.templates = {}
-        # self.packed_templates = {}
         # self.data = data
-        # self.x_obs = data.bin_counts.flatten()
-        # self.x_obs_errors = data.bin_errors.flatten()
+        # self.has_data = True
+
         # self.yield_indices = []
+
         # self.subfraction_indices = []
+        # self.num_fractions = 0
+
         # self.constrain_indices = []
         # self.constrain_value = np.array([])
         # self.constrain_sigma = np.array([])
-        # self._inv_corr = np.array([])
-        # self.bin_par_slice = (0, 0)
-        # self._dim = None
-        # self.has_data = True
-        # self.shape = ()
+
         # self.converter_matrix = None
         # self.converter_vector = None
-        # self.num_fractions = 0
-        # self.num_templates = 0
-        # self.num_bins = None
+
+        # self.x_obs = data.bin_counts.flatten()
+        # self.x_obs_errors = data.bin_errors.flatten()
+
+        # self._inv_corr = np.array([])
+        # self.bin_par_slice = (0, 0)
+
+        # self._dim = None
+        # self.shape = ()
 
     # TODO: Check that every template of a model uses the same ParameterHandler instance!
     # TODO: Possible Check: For first call of expected_events_per_bin: Check if template indices are ordered correctly.
@@ -61,7 +65,7 @@ class ModelBuilder:
         if not all(c.params is self._params for c in channels):
             raise RuntimeError("The used ParameterHandler instances are not the same!")
 
-        if not self._channels is None:
+        if self._channels is not None:
             raise RuntimeError("Model already has channels defined!")
 
         self._channels = channels

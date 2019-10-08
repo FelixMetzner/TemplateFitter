@@ -87,10 +87,11 @@ class TemplateFitter:
         for param_id, bounds in self._bound_parameters.items():
             minimizer.set_param_bounds(param_id, bounds)
 
-        # fit_result = minimizer.minimize(
-        #     self._nll.x0, get_hesse=False, verbose=False
-        # )
-        fit_result = minimizer.minimize(self._nll.x0, get_hesse=get_hesse, verbose=verbose)
+        fit_result = minimizer.minimize(
+            initial_param_values=self._nll.x0,
+            get_hesse=get_hesse,
+            verbose=verbose
+        )
 
         if update_templates:
             self._templates.update_parameters(fit_result.params.values)
@@ -151,10 +152,7 @@ class TemplateFitter:
         result = fit_result.params.get_param_value(param_id)
         param_index = fit_result.params.param_id_to_index(param_id)
         hesse_error = fit_result.params.errors[param_index]
-        hesse_approx = (
-                0.5 * (1 / hesse_error) ** 2 * (profile_points - result) ** 2
-                + fit_result.fcn_min_val
-        )
+        hesse_approx = (0.5 * (1 / hesse_error) ** 2 * (profile_points - result) ** 2 + fit_result.fcn_min_val)
 
         return hesse_approx
 
@@ -197,9 +195,10 @@ class TemplateFitter:
         )
 
         if fix_nui_params:
-            for i in range(self._templates.num_processes,
-                           self._templates.num_nui_params +
-                           self._templates.num_processes):
+            for i in range(
+                    self._templates.num_processes,
+                    self._templates.num_nui_params + self._templates.num_processes
+            ):
                 minimizer.set_param_fixed(i)
 
         for fix_param_id in self._fixed_parameters:
