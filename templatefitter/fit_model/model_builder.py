@@ -8,7 +8,7 @@ from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
 
-from typing import List, Tuple
+from typing import List, Tuple, NamedTuple
 
 from templatefitter.utility import xlogyx
 from templatefitter.plotter import old_plotting
@@ -22,6 +22,12 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = ["ModelBuilder"]
 
 
+class FractionConversionInfo(NamedTuple):
+    needed: bool
+    conversion_matrix: np.ndarray
+    conversion_vector: np.ndarray
+
+
 class ModelBuilder:
     def __init__(
             self,
@@ -33,10 +39,11 @@ class ModelBuilder:
 
         self._channels = None
 
-        # TODO:
-        # self.data = data
-        # self.has_data = True
+        self._fraction_conversion = None
 
+        self._is_checked = False
+
+        # TODO:
         # self.yield_indices = []
 
         # self.subfraction_indices = []
@@ -45,9 +52,6 @@ class ModelBuilder:
         # self.constrain_indices = []
         # self.constrain_value = np.array([])
         # self.constrain_sigma = np.array([])
-
-        # self.converter_matrix = None
-        # self.converter_vector = None
 
         # self.x_obs = data.bin_counts.flatten()
         # self.x_obs_errors = data.bin_errors.flatten()
@@ -70,11 +74,14 @@ class ModelBuilder:
 
         self._channels = channels
 
-        # TODO: keep track of fractions for each channel...
-        #         self.subfraction_indices += template._par_indices
-        #         self.num_fractions += len(template._par_indices)
+        # TODO: Initialize parameters...
+        #           - set indices,
+        #           - identify floating parameters and fixed ones,
+        #           - differentiate between different parameter types in ParameterHandler? -> would probably be better,
 
-        pass
+        self._initialize_fraction_conversion()
+
+        # TODO: Complete Model setup
 
     def get_yields_vector(self):
         # TODO: Yields are provided by parameter handler...
@@ -88,16 +95,51 @@ class ModelBuilder:
         # TODO: Are NOT DIFFERENT for different channels
         pass
 
-    def create_fractions(self):
-        # TODO: Uses fraction parameters from get_fractions_vector
-        # TODO: Uses fraction conversion matrix plus vector
-        pass
+    def _initialize_fraction_conversion(self):
+        # Fraction conversion matrix and vector should be equal in all channels.
+        # The matrices and vectors are generated for each channel, tested for equality and then stored once.
+
+        conversion_matrices = []
+        conversion_vectors = []
+        for channel in self._channels:
+            matrices_for_channel = []
+            vectors_for_channel = []
+            for component in channel:
+                n_sub = component.number_of_subcomponents
+                # TODO: What about component.share_yield ? Maybe remove has_fractions and only use shared_yield...
+                if component.has_fractions:
+                    matrix_part1 = np.diag(np.ones(n_sub - 1))
+                    matrix_part2 = -1 * np.ones(n_sub - 1)
+                    matrix = np.vstack([matrix_part1, matrix_part2])
+                    matrices_for_channel.append(matrix)
+                    vector = np.zeros((n_sub, 1))
+                    vector[-1][0] = 1.
+                    vectors_for_channel.append(vector)
+                else:
+                    matrices_for_channel.append(np.zeros((n_sub, n_sub)))
+                    vectors_for_channel.append(np.ones((n_sub, 1)))
+
+            conversion_matrices.append(block_diag(*matrices_for_channel))
+            conversion_vectors.append(np.vstack(vectors_for_channel))
+
+        assert all(m.shape[0] == v.shape[0] for m, v in zip(conversion_matrices, conversion_vectors))
+        assert all(m.shape[0] == n_f for m, n_f in zip(conversion_matrices, self.number_of_fraction_parameters))
+        assert all(np.array_equal(m, conversion_matrices[0]) for m in conversion_matrices)
+        assert all(np.array_equal(v, conversion_vectors[0]) for v in conversion_vectors)
+
+        self._fraction_conversion = FractionConversionInfo(
+            needed=(not all(conversion_vectors[0] == 1)),
+            conversion_matrix=conversion_matrices[0],
+            conversion_vector=conversion_vectors[0]
+        )
 
     def get_efficiency_vector(self):
         # TODO: Efficiencies are provided by parameter handler...
         # TODO: Number of efficiencies = number of templates
         # TODO: Are DIFFERENT for different channels
         # TODO: Might be fixed (extracted from simulation) or floating
+        # TODO: Should be normalized to 1 over all channels? Can not be done when set to be floating
+        # TODO: Would benefit from allowing constrains, e.g. let them float around MC expectation
         pass
 
     def get_template_bin_counts(self):
@@ -105,9 +147,34 @@ class ModelBuilder:
         pass
 
     def create_templates(self):
-        # TODO: Are normed after application of corrections
+        # TODO: Are normed after application of corrections, but this should be done in calculate_bin_count!
         # TODO: Based on template bin counts
         pass
+
+    def calculate_bin_count(self):
+        if not self._is_checked:
+            assert self._fraction_conversion is not None
+            assert isinstance(self._fraction_conversion, FractionConversionInfo), type(self._fraction_conversion)
+            # TODO: Check shapes!
+
+        if self._fraction_conversion.needed:
+            bin_count = yield_parameters * (
+                    self._fraction_conversion.conversion_matrix * fraction_parameters
+                    + self._fraction_conversion.conversion_vector
+            ) * normed_efficiency_parameters * normed_templates
+        else:
+            bin_count = yield_parameters * (
+                    self._fraction_conversion.conversion_matrix * fraction_parameters
+                    + self._fraction_conversion.conversion_vector
+            ) * normed_efficiency_parameters * normed_templates
+
+        if not self._is_checked:
+            assert bin_count is not None
+            # TODO: Check output shape!
+
+            self._is_checked = True
+
+        return bin_count
 
     @property
     def number_of_channels(self) -> int:
@@ -124,6 +191,21 @@ class ModelBuilder:
     @property
     def number_of_templates(self) -> Tuple[int, ...]:
         return tuple(sum([comp.number_of_subcomponents for comp in ch.components]) for ch in self._channels)
+
+    @property
+    def number_of_independent_templates(self) -> Tuple[int, ...]:
+        return tuple(
+            sum([1 if comp.shared_yield else comp.number_of_subcomponents for comp in ch.components])
+            for ch in self._channels
+        )
+
+    @property
+    def number_of_fraction_parameters(self) -> Tuple[int, ...]:
+        return tuple(
+            sum([comp.number_of_subcomponents - 1 if comp.shared_yield
+                 else comp.number_of_subcomponents for comp in ch.components])
+            for ch in self._channels
+        )
 
     # TODO: The following stuff is not adapted, yet...
 

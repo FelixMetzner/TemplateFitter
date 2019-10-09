@@ -25,7 +25,6 @@ class ParameterHandler:
     #       - Parameter class should have knowledge of the initial value of its parameter, of the current one
     #         and should maybe allow to temporarily overwrite the parameter for tests/plotting or whatever.
 
-
     def add_parameters(self, pars: Union[np.ndarray, List[float]], names: List[str]) -> List[int]:
         self._check_input_pars_and_names(pars=pars, names=names)
 

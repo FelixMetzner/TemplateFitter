@@ -90,6 +90,10 @@ class Component:
         return self._shared_yield
 
     @property
+    def has_fractions(self) -> bool:
+        return self._has_fractions
+
+    @property
     def template_indices(self) -> List[int]:
         assert self._template_indices is not None
         return self._template_indices
