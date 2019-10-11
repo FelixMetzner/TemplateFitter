@@ -4,11 +4,13 @@ Parameter Handler
 """
 import logging
 import numpy as np
+
+from abc import ABC
 from typing import Optional, Union, List, Tuple, Dict
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["ParameterHandler"]
+__all__ = ["ParameterHandler", "TemplateParameter", "ModelParameter"]
 
 
 class ParameterHandler:
@@ -17,13 +19,6 @@ class ParameterHandler:
         self._np_pars = np.array([])
         self._pars_dict = {}
         self._inverted_pars_dict = None
-
-    # TODO: Differentiate between FixedParameter and FloatingParameter
-    #       - Maybe add respective classes, which should inherit from a Parameter base class.
-    #       - Use these parameter classes in templates and components (maybe there should only be
-    #         one parameter class then... we will see)
-    #       - Parameter class should have knowledge of the initial value of its parameter, of the current one
-    #         and should maybe allow to temporarily overwrite the parameter for tests/plotting or whatever.
 
     def add_parameters(self, pars: Union[np.ndarray, List[float]], names: List[str]) -> List[int]:
         self._check_input_pars_and_names(pars=pars, names=names)
@@ -98,3 +93,123 @@ class ParameterHandler:
             raise ValueError(f"Length of 'pars' and 'names' should be the same, but is {len(pars)} != {len(names)}!")
         if not len(names) == len(set(names)):
             raise ValueError(f"Entries of 'names' should be unique! You provided:\n{names}")
+
+
+class Parameter(ABC):
+    # TODO: Maybe allow to temporarily overwrite the parameter for tests/plotting or whatever.
+
+    def __init__(
+            self,
+            name: str,
+            parameter_handler: ParameterHandler,
+            floating: bool,
+            initial_value: float
+    ):
+        self._name = name
+        self._params = parameter_handler
+        self._floating = floating
+        self._initial_value = initial_value
+
+        self._index = None
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def floating(self) -> bool:
+        return self._floating
+
+    @property
+    def initial_value(self) -> float:
+        return self._initial_value
+
+    @property
+    def value(self) -> float:
+        if self._index is None:
+            return self.initial_value
+        return self._params.get_parameters_by_index(self._index)
+
+    @property
+    def index(self) -> Optional[int]:
+        return self._index
+
+    @index.setter
+    def index(self, index: int) -> None:
+        if self._index is not None:
+            raise RuntimeError("Trying to reset a parameter index!")
+        self._index = index
+
+    @property
+    def parameter_handler(self) -> ParameterHandler:
+        return self._params
+
+    def __eq__(self, other: "Parameter") -> bool:
+        if not self.index == other.index:
+            return False
+        if not self.floating == other.floating:
+            return False
+        if not self.initial_value == other.initial_value:
+            return False
+        if self.parameter_handler is not other.parameter_handler:
+            return False
+
+        return True
+
+
+class TemplateParameter(Parameter):
+    def __init__(
+            self,
+            name: str,
+            parameter_handler: ParameterHandler,
+            floating: bool,
+            initial_value: float,
+            index: Optional[int],
+    ):
+        super().__init__(
+            name=name,
+            parameter_handler=parameter_handler,
+            floating=floating,
+            initial_value=initial_value
+        )
+
+        if index is not None:
+            self.index = index
+
+
+class ModelParameter(Parameter):
+    def __init__(
+            self,
+            name: str,
+            parameter_handler: ParameterHandler,
+            index: int,
+            floating: bool,
+            initial_value: float
+    ):
+        super().__init__(
+            name=name,
+            parameter_handler=parameter_handler,
+            floating=floating,
+            initial_value=initial_value
+        )
+        self._usage_list = []
+        self.index = index
+
+    def used_by(
+            self,
+            template_parameter: TemplateParameter,
+            channel_index: int,
+            component_index: int,
+            template_index: int
+    ):
+        info_tuple = (template_parameter, channel_index, component_index, template_index)
+        assert not any(info_tuple == entry for entry in self._usage_list), info_tuple
+        self._usage_list.append(info_tuple)
+
+    @property
+    def usage_list(self) -> List[Tuple[TemplateParameter, int, int, int]]:
+        return self._usage_list
+
+    @property
+    def usage_indices_list(self) -> List[Tuple[int, int, int]]:
+        return [(ch, comp, t) for _, ch, comp, t in self._usage_list]

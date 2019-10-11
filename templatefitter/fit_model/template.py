@@ -5,10 +5,10 @@ Template Class to be used in fit models.
 import logging
 import numpy as np
 
-from typing import List, Optional
+from typing import Optional, List, Tuple
 
-from templatefitter.fit_model.parameter_handler import ParameterHandler
 from templatefitter.binned_distributions.binning import BinsInputType, ScopeInputType
+from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataColumnNamesInput
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -29,14 +29,16 @@ class Template(BinnedDistribution):
         super().__init__(bins=bins, dimensions=dimensions, scope=scope, name=name, data_column_names=data_column_names)
         self._params = params
 
-        self._yield_index = None
-        self._bin_parameter_indices = None
-        self._efficiency_index = None
+        self._yield_parameter = None
+        self._bin_parameters = None
+        self._efficiency_parameter = None
+        self._fraction_parameter = None
+
+        self._template_index = None
         self._component_index = None
         self._channel_index = None
 
-        # TODO: One should also be able to set the efficiency to a fixed value.
-
+    # TODO: Needs rework
     def initialize_parameters(
             self,
             yield_index: int,
@@ -44,48 +46,101 @@ class Template(BinnedDistribution):
             efficiency_index: Optional[int] = None
     ):
         # TODO: Maybe this function should set the initial values for the parameters
-        #       and return the respective indices from the parameter handler
+        #       and set the indices from the parameter handler also in the respective TemplateParameters
+
+        # TODO: Should set template, channel and component indices!
+
+        # TODO: One should also be able to set the efficiency to a fixed value.
+
         self.yield_index = yield_index
         self.bin_parameter_indices = bin_parameter_indices
         if efficiency_index is not None:
             self.efficiency_index = efficiency_index
 
     @property
-    def yield_index(self) -> int:
-        return self._yield_index
+    def yield_parameter(self) -> Optional[TemplateParameter]:
+        return self._yield_parameter
+
+    @property
+    def yield_index(self) -> Optional[int]:
+        if self._yield_parameter is None:
+            return None
+        return self._yield_parameter.index
 
     @yield_index.setter
     def yield_index(self, index: int) -> None:
         if not isinstance(index, int):
             raise ValueError("Expected integer...")
-        self._parameter_setter_checker(parameter=self._yield_index, parameter_name="yield_index")
-        self._yield_index = index
+        self._parameter_setter_checker(parameter=self._yield_parameter.index, parameter_name="yield_index")
+        self._yield_parameter.index = index
 
     @property
-    def bin_parameter_indices(self) -> List[int]:
-        return self._bin_parameter_indices
-
-    @bin_parameter_indices.setter
-    def bin_parameter_indices(self, indices: List[int]) -> None:
-        if not (isinstance(indices, list) and all(isinstance(i, int) for i in indices)):
-            raise ValueError("Expected list of integers...")
-        self._parameter_setter_checker(parameter=self._bin_parameter_indices, parameter_name="bin_parameter_indices")
-        assert len(indices) == self.num_bins_total, (len(indices), self.num_bins_total)
-        self._bin_parameter_indices = indices
+    def efficiency_parameter(self) -> Optional[TemplateParameter]:
+        return self._efficiency_parameter
 
     @property
     def efficiency_index(self) -> int:
-        return self._efficiency_index
+        return self._efficiency_parameter.index
 
     @efficiency_index.setter
     def efficiency_index(self, index: int) -> None:
         if not isinstance(index, int):
             raise ValueError("Expected integer...")
-        self._parameter_setter_checker(parameter=self._efficiency_index, parameter_name="efficiency_index")
-        self._efficiency_index = index
+        self._parameter_setter_checker(parameter=self._efficiency_parameter.index, parameter_name="efficiency_index")
+        self._efficiency_parameter.index = index
+
+    @property
+    def fraction_parameter(self) -> Optional[TemplateParameter]:
+        return self._fraction_parameter
+
+    @property
+    def fraction_index(self) -> int:
+        return self._fraction_parameter.index
+
+    @fraction_index.setter
+    def fraction_index(self, index: int) -> None:
+        if not isinstance(index, int):
+            raise ValueError("Expected integer...")
+        self._parameter_setter_checker(parameter=self._fraction_parameter.index, parameter_name="fraction_index")
+        self._fraction_parameter.index = index
+
+    @property
+    def bin_parameters(self) -> List[Optional[TemplateParameter]]:
+        return self._bin_parameters
+
+    @property
+    def bin_parameter_indices(self) -> List[Optional[int]]:
+        return [None if bin_param is None else bin_param.index for bin_param in self._bin_parameters]
+
+    @bin_parameter_indices.setter
+    def bin_parameter_indices(self, indices: List[int]) -> None:
+        if not (isinstance(indices, list) and all(isinstance(i, int) for i in indices)):
+            raise ValueError("Expected list of integers...")
+        assert len(indices) == self.num_bins_total, (len(indices), self.num_bins_total)
+        assert len(indices) == len(self._bin_parameters), (len(indices), len(self._bin_parameters))
+        for i, (bin_param, index) in enumerate(zip(self._bin_parameters, indices)):
+            self._parameter_setter_checker(parameter=bin_param, parameter_name=f"bin_parameter_index_{i}")
+            bin_param.index = index
+
+    @property
+    def global_template_identifier(self) -> Tuple[int, int, int]:
+        return self.channel_index, self.component_index, self.template_index
+
+    @property
+    def template_index(self) -> int:
+        assert self._template_index is not None
+        return self._template_index
+
+    @template_index.setter
+    def template_index(self, index: int) -> None:
+        if not isinstance(index, int):
+            raise ValueError("Expected integer...")
+        self._parameter_setter_checker(parameter=self._template_index, parameter_name="template_index")
+        self._template_index = index
 
     @property
     def component_index(self) -> int:
+        assert self._component_index is not None
         return self._component_index
 
     @component_index.setter
@@ -97,6 +152,7 @@ class Template(BinnedDistribution):
 
     @property
     def channel_index(self) -> int:
+        assert self._channel_index is not None
         return self._channel_index
 
     @channel_index.setter

@@ -51,6 +51,7 @@ class Component:
     def _initialize_templates(self, templates: Union[Template, List[Template]]) -> None:
         if isinstance(templates, Template):
             self._templates = (templates,)
+            templates.template_index = 0
             self._binning = templates.binning
         elif isinstance(templates, list):
             if not all(isinstance(t, Template) for t in templates):
@@ -60,6 +61,8 @@ class Component:
             if not all(t.binning == templates[0].binning for t in templates):
                 raise ValueError("All templates of a component must have the same binning.")
             self._templates = tuple(t for t in templates)
+            for template_index, template in enumerate(templates):
+                template.template_index = template_index
             self._binning = templates[0].binning
         else:
             raise ValueError(f"The parameter 'template' must be a Template or a List of Templates!\n"
@@ -121,6 +124,8 @@ class Component:
         if not isinstance(index, int):
             raise ValueError("Expected integer...")
         self._component_index = index
+        for template in self._templates:
+            template._component_index = index
 
     @property
     def channel_index(self) -> int:
@@ -133,6 +138,8 @@ class Component:
         if not isinstance(index, int):
             raise ValueError("Expected integer...")
         self._channel_index = index
+        for template in self._templates:
+            template.channel_index = index
 
     @property
     def number_of_subcomponents(self) -> int:

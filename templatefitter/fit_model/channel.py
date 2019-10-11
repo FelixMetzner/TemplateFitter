@@ -51,7 +51,7 @@ class Channel(Sequence):
 
         component_index = self.__len__()
         self._channel_components.append(component)
-        component.channel_index = self.channel_index
+        component.component_index = component_index
 
         return component_index
 
@@ -71,10 +71,11 @@ class Channel(Sequence):
         self._channel_components.extend(components)
         last_index_plus_one = self.__len__()
 
-        for component in components:
-            component.channel_index = self.channel_index
+        component_indices = list(range(first_index, last_index_plus_one))
+        for component, component_index in zip(components, component_indices):
+            component.component_index = component_index
 
-        return list(range(first_index, last_index_plus_one))
+        return component_indices
 
     @property
     def name(self) -> str:
@@ -103,6 +104,8 @@ class Channel(Sequence):
         if not isinstance(index, int):
             raise ValueError("Expected integer...")
         self._channel_index = index
+        for component in self._channel_components:
+            component.channel_index = self._channel_index
 
     def _parameter_setter_checker(self, parameter, parameter_name):
         if parameter is not None:
@@ -148,6 +151,7 @@ class ChannelContainer(Sequence):
 
         channel_index = self.__len__()
         self._channels.append(channel)
+        channel.channel_index = channel_index
 
         return channel_index
 
@@ -158,7 +162,11 @@ class ChannelContainer(Sequence):
         self._channels.extend(channels)
         last_index_plus_one = self.__len__()
 
-        return list(range(first_index, last_index_plus_one))
+        channel_indices = list(range(first_index, last_index_plus_one))
+        for channel, channel_index in zip(channels, channel_indices):
+            channel.channel_index = channel_index
+
+        return channel_indices
 
     @staticmethod
     def _check_channels_input(channels: List[Channel]):
