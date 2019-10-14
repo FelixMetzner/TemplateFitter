@@ -5,7 +5,7 @@ Parameter Handler
 import logging
 import numpy as np
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import Optional, Union, List, Tuple, Dict
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -13,12 +13,29 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = ["ParameterHandler", "TemplateParameter", "ModelParameter"]
 
 
+# TODO: Needs rework!
 class ParameterHandler:
+    parameter_types = [
+        "yield",
+        "fraction",
+        "efficiency"
+    ]
+
     def __init__(self):
         self._pars = []
         self._np_pars = np.array([])
         self._pars_dict = {}
         self._inverted_pars_dict = None
+
+    def add_parameter(
+            self,
+            name: str,
+            parameter_type: str,
+            floating: bool,
+            initial_value: float
+    ):
+        pass
+        # TODO: Implement!
 
     def add_parameters(self, pars: Union[np.ndarray, List[float]], names: List[str]) -> List[int]:
         self._check_input_pars_and_names(pars=pars, names=names)
@@ -33,6 +50,7 @@ class ParameterHandler:
 
         return indices
 
+    # TODO: replace by new function with same name above!
     def add_parameter(self, parameter: float, name: str, update: bool = True) -> int:
         assert name not in self._pars_dict.keys(), (name, self._pars_dict.keys())
 
@@ -102,11 +120,16 @@ class Parameter(ABC):
             self,
             name: str,
             parameter_handler: ParameterHandler,
+            parameter_type: str,
             floating: bool,
             initial_value: float
     ):
+        if parameter_type not in ParameterHandler.parameter_types:
+            raise ValueError(f"Parameter type must be one of {ParameterHandler.parameter_types}!\n"
+                             f"You provided '{parameter_type}'...")
         self._name = name
         self._params = parameter_handler
+        self._parameter_type = parameter_type
         self._floating = floating
         self._initial_value = initial_value
 
@@ -115,6 +138,10 @@ class Parameter(ABC):
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def parameter_type(self) -> str:
+        return self._parameter_type
 
     @property
     def floating(self) -> bool:
@@ -144,6 +171,21 @@ class Parameter(ABC):
     def parameter_handler(self) -> ParameterHandler:
         return self._params
 
+    @abstractmethod
+    def _additional_info(self) -> Optional[str]:
+        return None
+
+    def as_string(self) -> str:
+        output = f"{self.__class__.__name__}\n" \
+                 f"\tname: {self._name}\n" \
+                 f"\tparameter type: {self._parameter_type}\n" \
+                 f"\tindex: {self._index}\n" \
+                 f"\tfloating: {self._floating}\n" \
+                 f"\tinitial value: {self._initial_value}\n"
+        if self._additional_info is not None:
+            output += self._additional_info
+        return output
+
     def __eq__(self, other: "Parameter") -> bool:
         if not self.index == other.index:
             return False
@@ -162,19 +204,34 @@ class TemplateParameter(Parameter):
             self,
             name: str,
             parameter_handler: ParameterHandler,
+            parameter_type: str,
             floating: bool,
             initial_value: float,
-            index: Optional[int],
+            index: Optional[int]
     ):
         super().__init__(
             name=name,
             parameter_handler=parameter_handler,
+            parameter_type=parameter_type,
             floating=floating,
             initial_value=initial_value
         )
+        self._base_model_parameter = None
 
         if index is not None:
             self.index = index
+
+    @property
+    def base_model_parameter(self) -> "ModelParameter":
+        return self._base_model_parameter
+
+    @base_model_parameter.setter
+    def base_model_parameter(self, base_model_parameter: "ModelParameter") -> None:
+        assert self._base_model_parameter is None
+        self._base_model_parameter = base_model_parameter
+
+    def _additional_info(self) -> Optional[str]:
+        return f"base model parameter index: {self._base_model_parameter.model_index}"
 
 
 class ModelParameter(Parameter):
@@ -182,34 +239,54 @@ class ModelParameter(Parameter):
             self,
             name: str,
             parameter_handler: ParameterHandler,
-            index: int,
+            parameter_type: str,
+            model_index: int,
             floating: bool,
             initial_value: float
     ):
         super().__init__(
             name=name,
             parameter_handler=parameter_handler,
+            parameter_type=parameter_type,
             floating=floating,
             initial_value=initial_value
         )
         self._usage_list = []
+        self._model_index = model_index
+
+        self._register_in_parameter_handler()
+
+    @property
+    def model_index(self) -> int:
+        return self._model_index
+
+    def _register_in_parameter_handler(self) -> None:
+        index = self._params.add_parameter(
+            name=self.name,
+            parameter_type=self.parameter_type,
+            floating=self.floating,
+            initial_value=self.initial_value
+        )
+
         self.index = index
 
     def used_by(
             self,
             template_parameter: TemplateParameter,
-            channel_index: int,
-            component_index: int,
-            template_index: int
+            template_serial_number: int
     ):
-        info_tuple = (template_parameter, channel_index, component_index, template_index)
+        template_parameter.base_model_parameter = self
+        info_tuple = (template_parameter, template_serial_number)
         assert not any(info_tuple == entry for entry in self._usage_list), info_tuple
         self._usage_list.append(info_tuple)
 
     @property
-    def usage_list(self) -> List[Tuple[TemplateParameter, int, int, int]]:
+    def usage_list(self) -> List[Tuple[TemplateParameter, int]]:
         return self._usage_list
 
     @property
-    def usage_indices_list(self) -> List[Tuple[int, int, int]]:
-        return [(ch, comp, t) for _, ch, comp, t in self._usage_list]
+    def usage_serial_number_list(self) -> List[int]:
+        return [serial_number for _, serial_number in self._usage_list]
+
+    def _additional_info(self) -> Optional[str]:
+        return f"\tused by templates with the serial numbers: {self.usage_serial_number_list}\n"

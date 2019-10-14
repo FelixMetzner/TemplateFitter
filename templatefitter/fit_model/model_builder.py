@@ -8,14 +8,15 @@ from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
 
-from typing import List, Tuple, NamedTuple
+from typing import Union, List, Tuple, NamedTuple
 
 from templatefitter.utility import xlogyx
 from templatefitter.plotter import old_plotting
 
+from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.channel import ChannelContainer
 from templatefitter.binned_distributions.binning import Binning
-from templatefitter.fit_model.parameter_handler import ParameterHandler
+from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -34,8 +35,14 @@ class ModelBuilder:
             data,  # TODO: Type hint
             parameter_handler: ParameterHandler,
     ):
-        self._data = data
+        self._data = data  # TODO: not used, yet!
         self._params = parameter_handler
+
+        self._model_parameters = []
+        self._model_parameters_mapping = {}
+
+        self._templates = []
+        self._templates_mapping = {}
 
         self._channels = None
 
@@ -64,6 +71,71 @@ class ModelBuilder:
 
     # TODO: Check that every template of a model uses the same ParameterHandler instance!
     # TODO: Possible Check: For first call of expected_events_per_bin: Check if template indices are ordered correctly.
+
+    def add_model_parameter(
+            self,
+            name: str,
+            parameter_type: str,
+            floating: bool,
+            initial_value: float
+    ) -> Tuple[int, ModelParameter]:
+        if name in self._model_parameters_mapping.keys():
+            raise RuntimeError(f"The model parameter with the name {name} already exists!\n"
+                               f"It has the following properties:\n"
+                               f"{self._model_parameters[self._model_parameters_mapping[name]].as_string()}")
+        model_index = len(self._model_parameters)
+
+        model_parameter = ModelParameter(
+            name=name,
+            parameter_handler=self._params,
+            parameter_type=parameter_type,
+            model_index=model_index,
+            floating=floating,
+            initial_value=initial_value
+        )
+        self._model_parameters.append(model_parameter)
+        self._model_parameters_mapping.update({name: model_index})
+        return model_index, model_parameter
+
+    def add_template(
+            self,
+            template: Template,
+            yield_parameter: Union[ModelParameter, str],
+            bin_parameters  # TODO!
+    ):
+        if template.name in self._templates_mapping.keys():
+            raise RuntimeError(f"The template with the name {template.name} is already registered!\n"
+                               f"It has the index {self._templates_mapping[template.name]}\n")
+
+        if isinstance(yield_parameter, str):
+            yield_model_parameter = self.get_model_parameter(name_or_index=yield_parameter)
+        elif isinstance(yield_parameter, ModelParameter):
+            yield_model_parameter = ModelParameter
+        else:
+            raise ValueError(f"Expected ro receive object of type string or ModelParameter "
+                             f"for argument yield_parameter, but you provided object of type {type(yield_parameter)}!")
+
+        yield_param = TemplateParameter(
+            name=f"{template.name}_{yield_model_parameter.name}",
+            parameter_handler=self._params,
+            parameter_type=yield_model_parameter.parameter_type,
+            floating=yield_model_parameter.floating,
+            initial_value=yield_model_parameter.initial_value,
+            index=yield_model_parameter.index,
+        )
+
+        serial_number = len(self._templates)
+        template.serial_number = serial_number
+
+        yield_model_parameter.used_by(template_parameter=yield_param, template_serial_number=serial_number)
+
+        template.initialize_parameters(
+            yield_parameter=yield_param,
+            bin_parameter_indices=  # TODO
+        )
+
+        self._templates.append(template)
+        self._templates_mapping.update({template.name: serial_number})
 
     def setup_model(self, channels: ChannelContainer):
         if not all(c.params is self._params for c in channels):
@@ -106,7 +178,6 @@ class ModelBuilder:
             vectors_for_channel = []
             for component in channel:
                 n_sub = component.number_of_subcomponents
-                # TODO: What about component.share_yield ? Maybe remove has_fractions and only use shared_yield...
                 if component.has_fractions:
                     matrix_part1 = np.diag(np.ones(n_sub - 1))
                     matrix_part2 = -1 * np.ones(n_sub - 1)
@@ -157,6 +228,8 @@ class ModelBuilder:
             assert isinstance(self._fraction_conversion, FractionConversionInfo), type(self._fraction_conversion)
             # TODO: Check shapes!
 
+        # TODO: Define remaining variables
+
         if self._fraction_conversion.needed:
             bin_count = yield_parameters * (
                     self._fraction_conversion.conversion_matrix * fraction_parameters
@@ -206,6 +279,18 @@ class ModelBuilder:
                  else comp.number_of_subcomponents for comp in ch.components])
             for ch in self._channels
         )
+
+    def get_model_parameter(self, name_or_index: Union[str, int]) -> ModelParameter:
+        if isinstance(name_or_index, int):
+            assert name_or_index < len(self._model_parameters), (name_or_index, len(self._model_parameters))
+            return self._model_parameters[name_or_index]
+        elif isinstance(name_or_index, str):
+            assert name_or_index in self._model_parameters_mapping.keys(), \
+                (name_or_index, self._model_parameters_mapping.keys())
+            return self._model_parameters[self._model_parameters_mapping[name_or_index]]
+        else:
+            raise ValueError(f"Expected string or integer for argument 'name_or_index'\n"
+                             f"However, {name_or_index} of type {type(name_or_index)} was provided!")
 
     # TODO: The following stuff is not adapted, yet...
 

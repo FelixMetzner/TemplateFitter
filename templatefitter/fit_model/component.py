@@ -28,6 +28,8 @@ class Component:
     ):
         self._binning = None
         self._templates = None
+        self._initial_fractions = None
+        self._fractions = None
 
         self._name = name
         self._params = params
@@ -39,14 +41,7 @@ class Component:
         self._channel_index = None
 
         self._initialize_templates(templates=templates)
-
-        if initial_fractions is not None:
-            if not len(initial_fractions) == len(templates):
-                raise ValueError(f"Number of templates and number of initial fraction values must be equal.\n"
-                                 f"You provided {len(templates)} templates and "
-                                 f"{len(initial_fractions)} initial fraction values.")
-        self._initial_fractions = initial_fractions
-        self._initialize_fractions()
+        self._initialize_fractions(initial_fractions=initial_fractions)
 
     def _initialize_templates(self, templates: Union[Template, List[Template]]) -> None:
         if isinstance(templates, Template):
@@ -71,10 +66,23 @@ class Component:
         if not all(t.params is self._params for t in self._templates):
             raise RuntimeError("The used ParameterHandler instances are not the same!")
 
-    def _initialize_fractions(self) -> None:
+    def _initialize_fractions(self, initial_fractions: Optional[Tuple[float]]) -> None:
+        if initial_fractions is not None:
+            if not len(initial_fractions) == len(self._templates):
+                raise ValueError(f"Number of templates and number of initial fraction values must be equal.\n"
+                                 f"You provided {len(self._templates)} templates and "
+                                 f"{len(initial_fractions)} initial fraction values.")
+            self._initial_fractions = initial_fractions
+        elif len(self._templates) == 1:
+            self._initial_fractions = (1.,)
+        else:
+            raise RuntimeError("The component consists of more than one template,"
+                               "but no initial fractions have been provided for the component!"
+                               )
         if self.shared_yield and len(self._templates) > 1:
             self._has_fractions = True
-            self._fractions = self._initial_fractions
+
+        self._fractions = self._initial_fractions
 
     @property
     def name(self) -> str:

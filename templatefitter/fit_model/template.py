@@ -8,7 +8,7 @@ import numpy as np
 from typing import Optional, List, Tuple
 
 from templatefitter.binned_distributions.binning import BinsInputType, ScopeInputType
-from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
+from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter, ModelParameter
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataColumnNamesInput
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -28,6 +28,7 @@ class Template(BinnedDistribution):
     ):
         super().__init__(bins=bins, dimensions=dimensions, scope=scope, name=name, data_column_names=data_column_names)
         self._params = params
+        self._serial_number = None
 
         self._yield_parameter = None
         self._bin_parameters = None
@@ -41,21 +42,26 @@ class Template(BinnedDistribution):
     # TODO: Needs rework
     def initialize_parameters(
             self,
-            yield_index: int,
-            bin_parameter_indices: List[int],
-            efficiency_index: Optional[int] = None
+            yield_parameter: TemplateParameter,
+            bin_parameter_indices: List[int]  # TODO!
     ):
-        # TODO: Maybe this function should set the initial values for the parameters
-        #       and set the indices from the parameter handler also in the respective TemplateParameters
+        if not isinstance(yield_parameter, TemplateParameter):
+            raise ValueError(f"Argument 'yield_parameter' must be of type TemplateParameter!\n"
+                             f"You provided an object of type {type(yield_parameter)}...")
+        if not yield_parameter.parameter_type == "yield":
+            raise ValueError("Expected TemplateParameter of parameter_type 'yield', "
+                             "but received one with parameter_type {yield_parameter.parameter_type}!")
+        self._yield_parameter = yield_parameter
 
-        # TODO: Should set template, channel and component indices!
-
-        # TODO: One should also be able to set the efficiency to a fixed value.
-
-        self.yield_index = yield_index
         self.bin_parameter_indices = bin_parameter_indices
-        if efficiency_index is not None:
-            self.efficiency_index = efficiency_index
+
+    @property
+    def serial_number(self) -> int:
+        return self._serial_number
+
+    @serial_number.setter
+    def serial_number(self, serial_number: str) -> None:
+        self._serial_number = serial_number
 
     @property
     def yield_parameter(self) -> Optional[TemplateParameter]:
@@ -66,13 +72,6 @@ class Template(BinnedDistribution):
         if self._yield_parameter is None:
             return None
         return self._yield_parameter.index
-
-    @yield_index.setter
-    def yield_index(self, index: int) -> None:
-        if not isinstance(index, int):
-            raise ValueError("Expected integer...")
-        self._parameter_setter_checker(parameter=self._yield_parameter.index, parameter_name="yield_index")
-        self._yield_parameter.index = index
 
     @property
     def efficiency_parameter(self) -> Optional[TemplateParameter]:
