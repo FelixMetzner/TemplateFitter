@@ -54,13 +54,14 @@ class ModelBuilder:
         self._model_parameters = []
         self._model_parameters_mapping = {}
 
+        # TODO: Maybe define also dedicated containers for templates, model_parameters and components, as for channels!
         self._templates = []
         self._templates_mapping = {}
 
         self._components = []
         self._components_mapping = {}
 
-        self._channels = None
+        self._channels = ChannelContainer()
 
         self._fraction_conversion = None
 
@@ -127,6 +128,7 @@ class ModelBuilder:
             yield_model_parameter = self.get_model_parameter(name_or_index=yield_parameter)
         elif isinstance(yield_parameter, ModelParameter):
             yield_model_parameter = yield_parameter
+            # TODO: Check if model_parameter is registered, if not: call add_model_parameter!
         else:
             raise ValueError(f"Expected to receive object of type string or ModelParameter "
                              f"for argument yield_parameter, but you provided object of type {type(yield_parameter)}!")
@@ -179,10 +181,21 @@ class ModelBuilder:
         if (component is None and templates is None) or (component is not None and templates is not None):
             raise ValueError(component_input_error_text)
         elif component is not None:
-            if component.name in self._components_mapping.keys():
-                raise RuntimeError(f"The component with the name {component.name} is already registered!\n"
-                                   f"It has the index {self._components_mapping[component.name]}\n")
+            if not isinstance(component, Component):
+                raise ValueError(f"The argument 'component' must be of type 'Component', "
+                                 f"but you provided an object of type {type(component)}")
+            if name is not None and name != component.name:
+                raise ValueError(f"You set the argument 'name' to {name} despite the provided component "
+                                 f"already having a different name, which is {component.name}")
+            if shared_yield is not None and (shared_yield != component.shared_yield):
+                raise ValueError(f"You set the argument 'shared_yield' to {shared_yield} despite the provided"
+                                 f" component already having shared_yield set to {component.shared_yield}.")
         elif templates is not None:
+            if not (isinstance(templates, list)
+                    and all(isinstance(t, Template) or isinstance(t, int) or isinstance(t, str) for t in templates)):
+                raise ValueError("The argument 'templates 'takes a list of Templates, integers or strings, but you "
+                                 "provided " + f"an object of type {type(templates)}" if not isinstance(templates, list)
+                                 else f"a list containing the types {[type(t) for t in templates]}")
             if shared_yield is None:
                 raise ValueError("If you want to directly create and add component, you have to specify whether the "
                                  "templates of the component shall share their yields via the boolean parameter "
@@ -211,6 +224,10 @@ class ModelBuilder:
         else:
             raise ValueError(component_input_error_text)
 
+        if component.name in self._components_mapping.keys():
+            raise RuntimeError(f"A component with the name {component.name} is already registered!\n"
+                               f"It has the index {self._components_mapping[component.name]}\n")
+
         if component.required_fraction_parameters == 0:
             if not (fraction_parameters is None or len(fraction_parameters) == 0):
                 raise ValueError(f"The component requires no fraction parameters, "
@@ -227,6 +244,7 @@ class ModelBuilder:
                     fraction_model_parameter = self.get_model_parameter(name_or_index=fraction_parameter)
                 elif isinstance(fraction_parameter, ModelParameter):
                     fraction_model_parameter = fraction_parameter
+                    # TODO: Check if model_parameter is registered, if not: call add_model_parameter!
                 else:
                     raise ValueError(f"Encountered unexpected type {type(fraction_parameter)} "
                                      f"in the provided fraction_parameters")
@@ -262,15 +280,94 @@ class ModelBuilder:
             efficiency_parameters: List[Union[ModelParameter, str]],
             channel: Optional[Channel] = None,
             name: Optional[str] = None,
-            components: Optional[Union[List[int], List[str], Component]] = None,
+            components: Optional[List[Union[int, str, Component]]] = None,
+            # TODO: If we want to add templates via serial_number or name directly, we have to be able to
+            #       differentiate template names/serial_numbers from component names/serial_numbers
     ) -> Union[int, Tuple[int, Channel]]:
-        # TODO!
-        pass
+        creates_new_channel = False
+
+        input_error_text = "A channel can either be added by providing\n" \
+                           "\t- an already prepared channel via the argument 'channel'\nor\n" \
+                           "\t- a list of components (directly, via their names or via their serial_numbers)\n" \
+                           "\t  and a name for the channel, using the arguments 'components' and 'name', respectively."
+
+        if channel is not None and components is not None:
+            raise ValueError(input_error_text)
+        elif channel is not None:
+            if not isinstance(channel, Channel):
+                raise ValueError(f"The argument 'channel' must be of type 'Channel', "
+                                 f"but you provided an object of type {type(channel)}")
+            if name is not None and name != channel.name:
+                raise ValueError(f"You set the argument 'name' to {name} despite the provided channel "
+                                 f"already having a different name, which is {channel.name}")
+        elif components is not None:
+            if not (isinstance(components, list)
+                    and all(isinstance(c, Component) or isinstance(c, int) or isinstance(c, str) for c in components)):
+                raise ValueError("The argument 'components 'takes a list of Components, integers or strings, but you "
+                                 "provided "
+                                 + f"an object of type {type(components)}" if not isinstance(components, list)
+                                 else f"a list containing the types {[type(c) for c in components]}")
+            if name is None:
+                raise ValueError("When directly creating and adding a channel, you have to set the argument 'name'!")
+
+            component_list = []
+            for component in components:
+                if isinstance(component, Component):
+                    component_list.append(component)
+                elif isinstance(component, int) or isinstance(component, str):
+                    component_list.append(self.get_component(name_or_index=component))
+                else:
+                    raise ValueError(f"Unexpected type {type(component)} for element of provided list of components.")
+
+            creates_new_channel = True
+            channel = Channel(params=self._params, name=name, components=component_list)
+        else:
+            raise ValueError(input_error_text)
+
+        # TODO: implement channel.required_efficiency_parameters
+        if not len(efficiency_parameters) == channel.required_efficiency_parameters:
+            raise ValueError(f"The channel requires {channel.required_efficiency_parameters} efficiency parameters, "
+                             f"but you provided {len(efficiency_parameters)}!")
+        efficiency_params = []
+        # TODO: implement channel.template_serial_numbers
+        for efficiency_parameter, temp_serial_number in zip(efficiency_parameters, channel.template_serial_numbers):
+            if isinstance(efficiency_parameter, str):
+                efficiency_model_parameter = self.get_model_parameter(name_or_index=efficiency_parameter)
+            elif isinstance(efficiency_parameter, ModelParameter):
+                efficiency_model_parameter = efficiency_parameter
+                # TODO: Check if model_parameter is registered, if not: call add_model_parameter!
+            else:
+                raise ValueError(f"Encountered unexpected type {type(efficiency_parameter)} "
+                                 f"in the provided efficiency_parameters")
+            efficiency_param = TemplateParameter(
+                name=f"{channel.name}_{efficiency_model_parameter.name}",
+                parameter_handler=self._params,
+                parameter_type=efficiency_model_parameter.parameter_type,
+                floating=efficiency_model_parameter.floating,
+                initial_value=efficiency_model_parameter.initial_value,
+                index=efficiency_model_parameter.index,
+            )
+            efficiency_model_parameter.used_by(
+                template_parameter=efficiency_param,
+                template_serial_number=temp_serial_number
+            )
+            efficiency_params.append(efficiency_param)
+
+        # TODO: implement channel.initialize_parameters
+        channel.initialize_parameters(efficiency_parameters=efficiency_params)
+
+        channel_serial_number = self._channels.add_channel(channel=channel)
+
+        if creates_new_channel:
+            return channel_serial_number, channel
+        else:
+            return channel_serial_number
 
     def setup_model(self, channels: ChannelContainer):
         if not all(c.params is self._params for c in channels):
             raise RuntimeError("The used ParameterHandler instances are not the same!")
 
+        # TODO: Needs rework, as self._channels is now initialized as empty ChannelContainer
         if self._channels is not None:
             raise RuntimeError("Model already has channels defined!")
 
@@ -360,6 +457,9 @@ class ModelBuilder:
 
         # TODO: Define remaining variables
 
+        # TODO: Remember: fraction_parameters are None for last template in a component with shared yields
+        #  and always None for components with no shared yields.
+
         if self._fraction_conversion.needed:
             bin_count = yield_parameters * (
                     self._fraction_conversion.conversion_matrix * fraction_parameters
@@ -426,6 +526,18 @@ class ModelBuilder:
             assert name_or_index in self._templates_mapping.keys(), \
                 (name_or_index, self._templates_mapping.keys())
             return self._templates[self._templates_mapping[name_or_index]]
+        else:
+            raise ValueError(f"Expected string or integer for argument 'name_or_index'\n"
+                             f"However, {name_or_index} of type {type(name_or_index)} was provided!")
+
+    def get_component(self, name_or_index: Union[str, int]) -> Component:
+        if isinstance(name_or_index, int):
+            assert name_or_index < len(self._components), (name_or_index, len(self._components))
+            return self._components[name_or_index]
+        elif isinstance(name_or_index, str):
+            assert name_or_index in self._components_mapping.keys(), \
+                (name_or_index, self._components_mapping.keys())
+            return self._components[self._components_mapping[name_or_index]]
         else:
             raise ValueError(f"Expected string or integer for argument 'name_or_index'\n"
                              f"However, {name_or_index} of type {type(name_or_index)} was provided!")

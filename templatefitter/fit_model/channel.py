@@ -6,12 +6,13 @@ This package provides
 
 import logging
 
-from typing import Optional, List
+from collections import Counter
 from collections.abc import Sequence
+from typing import Optional, List, Dict
 
 from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.binning import Binning
-from templatefitter.fit_model.parameter_handler import ParameterHandler
+from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -22,7 +23,7 @@ class Channel(Sequence):
     def __init__(
             self,
             params: ParameterHandler,
-            name: Optional[str] = None,
+            name: Optional[str],
             components: Optional[List[Component]] = None
     ):
         self._channel_components = []
@@ -35,6 +36,8 @@ class Channel(Sequence):
         self._name = name
         self._binning = None
         self._channel_index = None
+
+        self._efficiency_parameters = None
 
     def add_component(self, component: Component) -> int:
         if not isinstance(component, Component):
@@ -77,6 +80,13 @@ class Channel(Sequence):
 
         return component_indices
 
+    def initialize_parameters(
+            self,
+            efficiency_parameters: List[TemplateParameter]
+    ) -> None:
+        # TODO!
+        pass
+
     @property
     def name(self) -> str:
         return self._name
@@ -95,6 +105,12 @@ class Channel(Sequence):
 
     @property
     def channel_index(self) -> int:
+        assert self._channel_index is not None
+        return self._channel_index
+
+    @property
+    def channel_serial_number(self) -> int:
+        # As channels are at the highest level, their index and serial number are the same.
         assert self._channel_index is not None
         return self._channel_index
 
@@ -133,11 +149,10 @@ class Channel(Sequence):
 
 class ChannelContainer(Sequence):
     def __init__(self, channels: Optional[List[Channel]] = None):
-        if channels is None:
-            self._channels = []
-        else:
-            self._check_channels_input(channels=channels)
-            self._channels = channels
+        self._channels = []
+        self._channels_mapping = {}
+        if channels is not None:
+            self.add_channels(channels=channels)
 
         super().__init__()
 
@@ -148,9 +163,11 @@ class ChannelContainer(Sequence):
         if self.__len__() > 0:
             if self._channels[0].params is not channel.params:
                 raise RuntimeError("The used ParameterHandler instances are not the same!")
+            self._check_channel_names(channels=[channel])
 
         channel_index = self.__len__()
         self._channels.append(channel)
+        self._channels_mapping.update({channel.name: channel_index})
         channel.channel_index = channel_index
 
         return channel_index
@@ -165,11 +182,11 @@ class ChannelContainer(Sequence):
         channel_indices = list(range(first_index, last_index_plus_one))
         for channel, channel_index in zip(channels, channel_indices):
             channel.channel_index = channel_index
+            self._channels_mapping.update({channel.name: channel_index})
 
         return channel_indices
 
-    @staticmethod
-    def _check_channels_input(channels: List[Channel]):
+    def _check_channels_input(self, channels: List[Channel]):
         if not isinstance(channels, list):
             raise ValueError(f"The parameter 'channels' must either be a list of Channels or None!\n"
                              f"You provided an object of type {type(channels)}.")
@@ -179,6 +196,23 @@ class ChannelContainer(Sequence):
                              + "\n\t-".join([str(type(c)) for c in channels]))
         if not all(c.params is channels[0].params for c in channels):
             raise RuntimeError("The used ParameterHandler instances are not the same!")
+        self._check_channel_names(channels=channels)
+
+    def _check_channel_names(self, channels: List[Channel]) -> None:
+        if any(channel.name in self._channels_mapping.keys() for channel in channels):
+            exist_names = [c.name for c in channels if c in self._channels_mapping.keys()]
+            exist_i = [self._channels_mapping[n] for n in exist_names]
+            raise ValueError(f"Trying to add new channel(s) with name(s) {exist_names} to channel container, but"
+                             f"but channel(s) with these name(s) are already registered under the indices {exist_i}.")
+        if not len(set([c.name for c in channels])) == len([c.name for c in channels]):
+            name_duplicates = [name for name, counter in Counter([c.name for c in channels]).items() if counter > 1]
+            raise ValueError(f"Trying to add new channels with same name channel container. "
+                             f"The respective channel names are {name_duplicates}.")
+
+    @property
+    def channel_mapping(self) -> Dict[str, int]:
+        assert len(self.channel_mapping) == len(self._channels), (len(self.channel_mapping), len(self._channels))
+        return self._channels_mapping
 
     def __getitem__(self, i) -> Optional[Channel]:
         return self._channels[i]
