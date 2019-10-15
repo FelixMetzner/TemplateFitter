@@ -6,44 +6,47 @@ Otherwise it acts just as a wrapper for the template class.
 
 import logging
 
-from typing import Union, Optional, List, Tuple
+from typing import Union, Optional, List
 
 from templatefitter.fit_model.template import Template
 from templatefitter.binned_distributions.binning import Binning
-from templatefitter.fit_model.parameter_handler import ParameterHandler
+from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["Component"]
+__all__ = ["Component", "ComponentTemplateInputType"]
+
+ComponentTemplateInputType = Union[Template, List[Template]]
 
 
 class Component:
     def __init__(
             self,
-            templates: Union[Template, List[Template]],
+            templates: ComponentTemplateInputType,
             params: ParameterHandler,
-            name: Optional[str] = None,
-            shared_yield: bool = True,
-            initial_fractions: Optional[Tuple[float]] = None
+            name: str,
+            shared_yield: Optional[bool] = None,
     ):
-        self._binning = None
-        self._templates = None
-        self._initial_fractions = None
-        self._fractions = None
-
         self._name = name
+        self._templates = None
+        self._binning = None
         self._params = params
-        self._shared_yield = shared_yield
-        self._has_fractions = False
 
-        self._template_indices = None
+        self._shared_yield = None
+        self._has_fractions = None
+        self._required_fraction_parameters = None
+
+        self._initialize_templates(templates=templates)
+        self._initialize_fractions(shared_yield=shared_yield)
+
+        self._fraction_parameters = None
+
+        self._component_serial_number = None
+
         self._component_index = None
         self._channel_index = None
 
-        self._initialize_templates(templates=templates)
-        self._initialize_fractions(initial_fractions=initial_fractions)
-
-    def _initialize_templates(self, templates: Union[Template, List[Template]]) -> None:
+    def _initialize_templates(self, templates: ComponentTemplateInputType) -> None:
         if isinstance(templates, Template):
             self._templates = (templates,)
             templates.template_index = 0
@@ -63,26 +66,63 @@ class Component:
             raise ValueError(f"The parameter 'template' must be a Template or a List of Templates!\n"
                              f"You provided an object of type {type(templates)}.")
 
+        if len(self._templates) < 1:
+            raise RuntimeError(f"No templates have been added to the component! You provided templates = {templates}")
         if not all(t.params is self._params for t in self._templates):
             raise RuntimeError("The used ParameterHandler instances are not the same!")
 
-    def _initialize_fractions(self, initial_fractions: Optional[Tuple[float]]) -> None:
-        if initial_fractions is not None:
-            if not len(initial_fractions) == len(self._templates):
-                raise ValueError(f"Number of templates and number of initial fraction values must be equal.\n"
-                                 f"You provided {len(self._templates)} templates and "
-                                 f"{len(initial_fractions)} initial fraction values.")
-            self._initial_fractions = initial_fractions
-        elif len(self._templates) == 1:
-            self._initial_fractions = (1.,)
+    def _initialize_fractions(self, shared_yield: Optional[bool]) -> None:
+        if self.number_of_subcomponents == 1:
+            self._shared_yield = False
+            self._has_fractions = False
+            self._required_fraction_parameters = 0
+        elif shared_yield is None:
+            raise ValueError("Please specify whether yields are shared via the argument shared_yields "
+                             "when the component consists of more than one template!")
         else:
-            raise RuntimeError("The component consists of more than one template,"
-                               "but no initial fractions have been provided for the component!"
-                               )
-        if self.shared_yield and len(self._templates) > 1:
-            self._has_fractions = True
+            self._shared_yield = shared_yield
+            if shared_yield:
+                self._has_fractions = True
+                self._required_fraction_parameters = self.number_of_subcomponents - 1
+            else:
+                self._has_fractions = False
+                self._required_fraction_parameters = 0
 
-        self._fractions = self._initial_fractions
+    def initialize_parameters(
+            self,
+            fraction_parameters: Union[None, List[TemplateParameter], TemplateParameter]
+    ) -> None:
+        if not (isinstance(fraction_parameters, List) or fraction_parameters is None):
+            raise ValueError("Expecting list of TemplateParameters or None for argument 'fraction_parameters'")
+        if self._required_fraction_parameters > 0:
+            if (fraction_parameters is None or (isinstance(fraction_parameters, List)
+                                                and len(fraction_parameters) != self._required_fraction_parameters)):
+                raise ValueError(f"The component {self.name}, consisting of {self.number_of_subcomponents} templates,"
+                                 f"requires {self._required_fraction_parameters} ModelParameters of parameter_type "
+                                 f"'fraction' to be set, but you provided "
+                                 + "'None'!" if fraction_parameters is None else
+                                 f"a list containing {len(fraction_parameters)} parameters!")
+            assert isinstance(fraction_parameters, list)
+            if not all(isinstance(fraction_parameter, TemplateParameter) for fraction_parameter in fraction_parameters):
+                raise ValueError(f"Argument 'fraction_parameters' must be a list of TemplateParameters!\n"
+                                 f"You provided a list containing the types "
+                                 f"{[type(p) for p in fraction_parameters]}...")
+            if not all(fraction_parameter.parameter_type == "fraction" for fraction_parameter in fraction_parameters):
+                raise ValueError(f"Expected TemplateParameters of parameter_type 'fraction', "
+                                 f"but fraction_parameters contains TemplateParameters of the parameter_types "
+                                 f"{[p.parameter_type for p in fraction_parameters]}!")
+
+            self._fraction_parameters = fraction_parameters
+            for template, fraction_parameter in zip(self._templates[:-1], fraction_parameters):
+                template.fraction_parameter = fraction_parameters
+            # For the last template of the component the template.fraction_parameter remains unset.
+
+        else:
+            if not (fraction_parameters is None
+                    or (isinstance(fraction_parameters, List) and len(fraction_parameters) == 0)):
+                raise ValueError(f"The component does not require fraction TemplateParameters, but you provided some!")
+            # For only one template or templates which do not share their yields,
+            # the template.fraction_parameter remains unset.
 
     @property
     def name(self) -> str:
@@ -105,21 +145,23 @@ class Component:
         return self._has_fractions
 
     @property
-    def template_indices(self) -> List[int]:
-        assert self._template_indices is not None
-        return self._template_indices
+    def component_serial_number(self) -> int:
+        assert self._component_serial_number is not None
+        return self._component_serial_number
 
-    @template_indices.setter
-    def template_indices(self, indices: Union[int, List[int]]) -> None:
-        self._parameter_setter_checker(parameter=self._template_indices, parameter_name="template_indices")
-        if isinstance(indices, int):
-            self._template_indices = (indices,)
-        elif isinstance(indices, list):
-            if not all(isinstance(i, int) for i in indices):
-                raise ValueError("Expected integer or list of integers...")
-            self._template_indices = indices
-        else:
-            raise ValueError("Expected integer or list of integers...")
+    @component_serial_number.setter
+    def component_serial_number(self, component_serial_number: int) -> None:
+        if self._component_serial_number is not None:
+            raise RuntimeError(f"Trying to reset component serial number "
+                               f"from {self._component_serial_number} to {component_serial_number}!")
+        self._component_serial_number = component_serial_number
+        for template in self._templates:
+            template.component_serial_number = component_serial_number
+
+    @property
+    def template_serial_numbers(self) -> List[int]:
+        assert self._templates is not None
+        return [template.serial_number for template in self._templates]
 
     @property
     def component_index(self) -> int:
@@ -133,7 +175,7 @@ class Component:
             raise ValueError("Expected integer...")
         self._component_index = index
         for template in self._templates:
-            template._component_index = index
+            template.component_index = index
 
     @property
     def channel_index(self) -> int:
@@ -152,6 +194,10 @@ class Component:
     @property
     def number_of_subcomponents(self) -> int:
         return len(self._templates)
+
+    @property
+    def required_fraction_parameters(self) -> int:
+        return self._required_fraction_parameters
 
     def _parameter_setter_checker(self, parameter, parameter_name) -> None:
         if parameter is not None:

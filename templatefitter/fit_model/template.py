@@ -8,7 +8,7 @@ import numpy as np
 from typing import Optional, List, Tuple
 
 from templatefitter.binned_distributions.binning import BinsInputType, ScopeInputType
-from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter, ModelParameter
+from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataColumnNamesInput
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -29,6 +29,7 @@ class Template(BinnedDistribution):
         super().__init__(bins=bins, dimensions=dimensions, scope=scope, name=name, data_column_names=data_column_names)
         self._params = params
         self._serial_number = None
+        self._component_serial_number = None
 
         self._yield_parameter = None
         self._bin_parameters = None
@@ -48,20 +49,35 @@ class Template(BinnedDistribution):
         if not isinstance(yield_parameter, TemplateParameter):
             raise ValueError(f"Argument 'yield_parameter' must be of type TemplateParameter!\n"
                              f"You provided an object of type {type(yield_parameter)}...")
-        if not yield_parameter.parameter_type == "yield":
-            raise ValueError("Expected TemplateParameter of parameter_type 'yield', "
-                             "but received one with parameter_type {yield_parameter.parameter_type}!")
+        if not yield_parameter.parameter_type == ParameterHandler.yield_parameter_type:
+            raise ValueError(f"Expected TemplateParameter of parameter_type 'yield', "
+                             f"but received one with parameter_type {yield_parameter.parameter_type}!")
         self._yield_parameter = yield_parameter
 
         self.bin_parameter_indices = bin_parameter_indices
 
     @property
     def serial_number(self) -> int:
+        assert self._serial_number is not None
         return self._serial_number
 
     @serial_number.setter
-    def serial_number(self, serial_number: str) -> None:
+    def serial_number(self, serial_number: int) -> None:
+        if self._serial_number is not None:
+            raise RuntimeError(f"Trying to reset template serial number from {self._serial_number} to {serial_number}!")
         self._serial_number = serial_number
+
+    @property
+    def component_serial_number(self) -> int:
+        assert self._component_serial_number is not None
+        return self._component_serial_number
+
+    @component_serial_number.setter
+    def component_serial_number(self, component_serial_number: int) -> None:
+        if self._component_serial_number is not None:
+            raise RuntimeError(f"Trying to reset template's component serial number from "
+                               f"{self._component_serial_number} to {component_serial_number}!")
+        self._component_serial_number = component_serial_number
 
     @property
     def yield_parameter(self) -> Optional[TemplateParameter]:
@@ -92,16 +108,24 @@ class Template(BinnedDistribution):
     def fraction_parameter(self) -> Optional[TemplateParameter]:
         return self._fraction_parameter
 
-    @property
-    def fraction_index(self) -> int:
-        return self._fraction_parameter.index
+    @fraction_parameter.setter
+    def fraction_parameter(self, fraction_parameter: TemplateParameter) -> None:
+        if self._fraction_parameter is not None:
+            raise RuntimeError(f"Trying to reset fraction parameter of template {self.name}.")
+        if not isinstance(fraction_parameter, TemplateParameter):
+            raise ValueError(f"The fraction_parameter can only be set to a TemplateParameter. "
+                             f"You provided an object of type {type(fraction_parameter)}!")
+        if fraction_parameter.parameter_type != ParameterHandler.fraction_parameter_type:
+            raise ValueError(f"The fraction_parameter can only be set to a TemplateParameter "
+                             f"of type {ParameterHandler.fraction_parameter_type}. However, the provided "
+                             f"TemplateParameter is of parameter_type {fraction_parameter.parameter_type}...")
+        self._fraction_parameter = fraction_parameter
 
-    @fraction_index.setter
-    def fraction_index(self, index: int) -> None:
-        if not isinstance(index, int):
-            raise ValueError("Expected integer...")
-        self._parameter_setter_checker(parameter=self._fraction_parameter.index, parameter_name="fraction_index")
-        self._fraction_parameter.index = index
+    @property
+    def fraction_index(self) -> Optional[int]:
+        if self._fraction_parameter is None:
+            return None
+        return self._fraction_parameter.index
 
     @property
     def bin_parameters(self) -> List[Optional[TemplateParameter]]:

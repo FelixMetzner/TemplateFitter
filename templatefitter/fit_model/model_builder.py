@@ -8,14 +8,15 @@ from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
 
-from typing import Union, List, Tuple, NamedTuple
+from typing import Optional, Union, List, Tuple, NamedTuple
 
 from templatefitter.utility import xlogyx
 from templatefitter.plotter import old_plotting
 
 from templatefitter.fit_model.template import Template
-from templatefitter.fit_model.channel import ChannelContainer
+from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.binning import Binning
+from templatefitter.fit_model.channel import ChannelContainer, Channel
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -27,6 +28,18 @@ class FractionConversionInfo(NamedTuple):
     needed: bool
     conversion_matrix: np.ndarray
     conversion_vector: np.ndarray
+
+
+# TODO: Not yet considered are Yield Ratios:
+#       We could add a ratio parameter instead of a yield parameter for components for which
+#       the ratio of two yields should be fitted.
+#       This would require an additional parameter type and an additional vector in the
+#       calculation in calculate_bin_count:
+#           yield_vector * ratio_vector
+#       where ratio vector holds ones except for the row of the component which is related to another component
+#       via the ratio. For this component the respective yield must stand at the place of its own yield value, e.g.:
+#           ratio = yield_2 / yield_1 -> yield_2 = ratio * yield_1
+#           => (yield_i, yield_1, yield_1, yield_j, ...)^T * (1, 1, ratio, 1, ...)^T
 
 
 class ModelBuilder:
@@ -43,6 +56,9 @@ class ModelBuilder:
 
         self._templates = []
         self._templates_mapping = {}
+
+        self._components = []
+        self._components_mapping = {}
 
         self._channels = None
 
@@ -102,7 +118,7 @@ class ModelBuilder:
             template: Template,
             yield_parameter: Union[ModelParameter, str],
             bin_parameters  # TODO!
-    ):
+    ) -> int:
         if template.name in self._templates_mapping.keys():
             raise RuntimeError(f"The template with the name {template.name} is already registered!\n"
                                f"It has the index {self._templates_mapping[template.name]}\n")
@@ -110,10 +126,15 @@ class ModelBuilder:
         if isinstance(yield_parameter, str):
             yield_model_parameter = self.get_model_parameter(name_or_index=yield_parameter)
         elif isinstance(yield_parameter, ModelParameter):
-            yield_model_parameter = ModelParameter
+            yield_model_parameter = yield_parameter
         else:
-            raise ValueError(f"Expected ro receive object of type string or ModelParameter "
+            raise ValueError(f"Expected to receive object of type string or ModelParameter "
                              f"for argument yield_parameter, but you provided object of type {type(yield_parameter)}!")
+
+        if not yield_model_parameter.parameter_type == ParameterHandler.yield_parameter_type:
+            raise ValueError(f"The ModelParameter provided for the template yield must be of parameter_type 'yield', "
+                             f"however, the ModelParameter you provided is of parameter_type "
+                             f"'{yield_model_parameter.parameter_type}'")
 
         yield_param = TemplateParameter(
             name=f"{template.name}_{yield_model_parameter.name}",
@@ -136,6 +157,115 @@ class ModelBuilder:
 
         self._templates.append(template)
         self._templates_mapping.update({template.name: serial_number})
+
+        return serial_number
+
+    def add_component(
+            self,
+            fraction_parameters: Optional[List[Union[ModelParameter, str]]] = None,
+            component: Optional[Component] = None,
+            name: Optional[str] = None,
+            templates: Optional[List[Union[int, str, Template]]] = None,
+            shared_yield: Optional[bool] = None,
+    ) -> Union[int, Tuple[int, Component]]:
+        creates_new_component = False
+        component_input_error_text = "You can either add an already prepared component or create a new one.\n" \
+                                     "For the first option, the argument 'component' must be used;\n" \
+                                     "For the second option, please use the arguments 'templates', 'name' and " \
+                                     "'shared_yield' as you would when creating a new Component object.\n" \
+                                     "In the latter case, the templates can also be provided via their name or " \
+                                     "serial_number es defined for this model."
+
+        if (component is None and templates is None) or (component is not None and templates is not None):
+            raise ValueError(component_input_error_text)
+        elif component is not None:
+            if component.name in self._components_mapping.keys():
+                raise RuntimeError(f"The component with the name {component.name} is already registered!\n"
+                                   f"It has the index {self._components_mapping[component.name]}\n")
+        elif templates is not None:
+            if shared_yield is None:
+                raise ValueError("If you want to directly create and add component, you have to specify whether the "
+                                 "templates of the component shall share their yields via the boolean parameter "
+                                 "'shared_yields'!")
+            if name is None:
+                raise ValueError("If you want to directly create and add component, you have to specify its name "
+                                 "via the argument 'name'!")
+            template_list = []
+            for template in templates:
+                if isinstance(template, Template):
+                    template_list.append(template)
+                elif isinstance(template, int) or isinstance(template, str):
+                    template_list.append(self.get_template(name_or_index=template))
+                else:
+                    raise ValueError(f"Parameter 'templates' must be a list of strings, integer or Templates "
+                                     f"to allow for the creation of a new component.\n"
+                                     f"You provided a list containing the types {[type(t) for t in templates]}.")
+
+            creates_new_component = True
+            component = Component(
+                templates=template_list,
+                params=self._params,
+                name=name,
+                shared_yield=shared_yield
+            )
+        else:
+            raise ValueError(component_input_error_text)
+
+        if component.required_fraction_parameters == 0:
+            if not (fraction_parameters is None or len(fraction_parameters) == 0):
+                raise ValueError(f"The component requires no fraction parameters, "
+                                 f"but you provided {len(fraction_parameters)}!")
+            fraction_params = None
+        else:
+            if not all(isinstance(p, ModelParameter) or isinstance(p, str) for p in fraction_parameters):
+                raise ValueError(f"Expected to receive list of string or ModelParameters for argument "
+                                 f"fraction_parameters, but you provided a list containing objects of the types "
+                                 f"{[type(p) for p in fraction_parameters]}!")
+            fraction_params = []
+            for fraction_parameter, temp_serial_number in zip(fraction_parameters, component.template_serial_numbers):
+                if isinstance(fraction_parameter, str):
+                    fraction_model_parameter = self.get_model_parameter(name_or_index=fraction_parameter)
+                elif isinstance(fraction_parameter, ModelParameter):
+                    fraction_model_parameter = fraction_parameter
+                else:
+                    raise ValueError(f"Encountered unexpected type {type(fraction_parameter)} "
+                                     f"in the provided fraction_parameters")
+                fraction_param = TemplateParameter(
+                    name=f"{component.name}_{fraction_model_parameter.name}",
+                    parameter_handler=self._params,
+                    parameter_type=fraction_model_parameter.parameter_type,
+                    floating=fraction_model_parameter.floating,
+                    initial_value=fraction_model_parameter.initial_value,
+                    index=fraction_model_parameter.index,
+                )
+                fraction_model_parameter.used_by(
+                    template_parameter=fraction_param,
+                    template_serial_number=temp_serial_number
+                )
+                fraction_params.append(fraction_param)
+
+        serial_number = len(self._components)
+        component.serial_number = serial_number
+
+        component.initialize_parameters(fraction_parameters=fraction_params)
+
+        self._components.append(component)
+        self._components_mapping.update({component.name: serial_number})
+
+        if creates_new_component:
+            return serial_number, component
+        else:
+            return serial_number
+
+    def add_channel(
+            self,
+            efficiency_parameters: List[Union[ModelParameter, str]],
+            channel: Optional[Channel] = None,
+            name: Optional[str] = None,
+            components: Optional[Union[List[int], List[str], Component]] = None,
+    ) -> Union[int, Tuple[int, Channel]]:
+        # TODO!
+        pass
 
     def setup_model(self, channels: ChannelContainer):
         if not all(c.params is self._params for c in channels):
@@ -274,11 +404,7 @@ class ModelBuilder:
 
     @property
     def number_of_fraction_parameters(self) -> Tuple[int, ...]:
-        return tuple(
-            sum([comp.number_of_subcomponents - 1 if comp.shared_yield
-                 else comp.number_of_subcomponents for comp in ch.components])
-            for ch in self._channels
-        )
+        return tuple(sum([comp.required_fraction_parameters for comp in ch.components]) for ch in self._channels)
 
     def get_model_parameter(self, name_or_index: Union[str, int]) -> ModelParameter:
         if isinstance(name_or_index, int):
@@ -288,6 +414,18 @@ class ModelBuilder:
             assert name_or_index in self._model_parameters_mapping.keys(), \
                 (name_or_index, self._model_parameters_mapping.keys())
             return self._model_parameters[self._model_parameters_mapping[name_or_index]]
+        else:
+            raise ValueError(f"Expected string or integer for argument 'name_or_index'\n"
+                             f"However, {name_or_index} of type {type(name_or_index)} was provided!")
+
+    def get_template(self, name_or_index: Union[str, int]) -> Template:
+        if isinstance(name_or_index, int):
+            assert name_or_index < len(self._templates), (name_or_index, len(self._templates))
+            return self._templates[name_or_index]
+        elif isinstance(name_or_index, str):
+            assert name_or_index in self._templates_mapping.keys(), \
+                (name_or_index, self._templates_mapping.keys())
+            return self._templates[self._templates_mapping[name_or_index]]
         else:
             raise ValueError(f"Expected string or integer for argument 'name_or_index'\n"
                              f"However, {name_or_index} of type {type(name_or_index)} was provided!")

@@ -15,10 +15,13 @@ __all__ = ["ParameterHandler", "TemplateParameter", "ModelParameter"]
 
 # TODO: Needs rework!
 class ParameterHandler:
+    yield_parameter_type = "yield"
+    fraction_parameter_type = "fraction"
+    efficiency_parameter_type = "efficiency"
     parameter_types = [
-        "yield",
-        "fraction",
-        "efficiency"
+        yield_parameter_type,
+        fraction_parameter_type,
+        efficiency_parameter_type
     ]
 
     def __init__(self):
