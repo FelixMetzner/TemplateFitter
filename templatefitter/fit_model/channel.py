@@ -8,7 +8,7 @@ import logging
 
 from collections import Counter
 from collections.abc import Sequence
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 
 from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.binning import Binning
@@ -140,6 +140,31 @@ class Channel(Sequence):
         if not all(c.binning == components[0].binning for c in components):
             raise ValueError("All components of a channel must have the same binning.")
 
+    @property
+    def number_of_components(self) -> int:
+        return self.__len__()
+
+    @property
+    def component_serial_numbers(self) -> Tuple[int, ...]:
+        return tuple(c.component_serial_number for c in self._channel_components)
+
+    @property
+    def number_of_templates_per_component(self) -> Tuple[int, ...]:
+        return tuple(c.number_of_subcomponents for c in self._channel_components)
+
+    @property
+    def total_number_of_templates(self) -> int:
+        return sum([c.number_of_subcomponents for c in self._channel_components])
+
+    @property
+    def template_serial_numbers(self) -> Tuple[int, ...]:
+        return tuple(tsn for c in self._channel_components for tsn in c.template_serial_numbers)
+
+    @property
+    def required_efficiency_parameters(self) -> int:
+        # As efficiencies are different for each template, we need as many efficiency parameters as templates.
+        return self.total_number_of_templates
+
     def __getitem__(self, i) -> Optional[Component]:
         return self._channel_components[i]
 
@@ -208,6 +233,23 @@ class ChannelContainer(Sequence):
             name_duplicates = [name for name, counter in Counter([c.name for c in channels]).items() if counter > 1]
             raise ValueError(f"Trying to add new channels with same name channel container. "
                              f"The respective channel names are {name_duplicates}.")
+
+    def _check_number_of_components(self, new_channels: List[Channel]) -> None:
+        assert isinstance(new_channels, list), type(new_channels)
+        assert len(new_channels) > 0, len(new_channels)
+        if len(new_channels) > 1:
+            if not all(c.total_number_of_templates == c[0].total_number_of_templates for c in new_channels):
+                raise ValueError("Trying to add channels with different numbers of templates:\n\t-"
+                                 + "\n\t-".join([f"{c.name}: {c.total_number_of_templates}" for c in new_channels]))
+
+        if self.__len__() > 0:
+            new_total_number_of_templates = new_channels[0].total_number_of_templates
+            if not all(c.total_number_of_templates == new_total_number_of_templates for c in self._channels):
+                raise ValueError("Trying to add new channels with different numbers of templates than for "
+                                 "the ones already added. Current channels:\n\t-"
+                                 + "\n\t-".join([f"{c.name}: {c.total_number_of_templates}" for c in self._channels])
+                                 + "\nNew channels:\n\t-"
+                                 + "\n\t-".join([f"{c.name}: {c.total_number_of_templates}" for c in new_channels]))
 
     @property
     def channel_mapping(self) -> Dict[str, int]:

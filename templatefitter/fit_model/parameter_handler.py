@@ -270,7 +270,6 @@ class ModelParameter(Parameter):
             floating=self.floating,
             initial_value=self.initial_value
         )
-
         self.index = index
 
     def used_by(

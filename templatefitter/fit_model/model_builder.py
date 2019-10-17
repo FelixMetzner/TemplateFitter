@@ -41,6 +41,11 @@ class FractionConversionInfo(NamedTuple):
 #           ratio = yield_2 / yield_1 -> yield_2 = ratio * yield_1
 #           => (yield_i, yield_1, yield_1, yield_j, ...)^T * (1, 1, ratio, 1, ...)^T
 
+# TODO: Checks that can be imposed in parameters:
+#           - number of efficiency parameters: number_of_templates * number_of_channels,
+#             as efficiency is different for each template and each channel
+#           - number of fraction_parameters: Depends on the components. Can be the same for each channel
+#           - number of yield_parameters: number_of_independent_components of ONE channel. Are shared by all channel.
 
 class ModelBuilder:
     def __init__(
@@ -170,6 +175,10 @@ class ModelBuilder:
             templates: Optional[List[Union[int, str, Template]]] = None,
             shared_yield: Optional[bool] = None,
     ) -> Union[int, Tuple[int, Component]]:
+
+        # TODO: If fractions are used: Check that each template has the same yield parameter!
+        #       Vice versa: If shared_yield is false: Check that each of the used templates has another yield parameter!
+
         creates_new_component = False
         component_input_error_text = "You can either add an already prepared component or create a new one.\n" \
                                      "For the first option, the argument 'component' must be used;\n" \
@@ -285,7 +294,6 @@ class ModelBuilder:
             #       differentiate template names/serial_numbers from component names/serial_numbers
     ) -> Union[int, Tuple[int, Channel]]:
         creates_new_channel = False
-
         input_error_text = "A channel can either be added by providing\n" \
                            "\t- an already prepared channel via the argument 'channel'\nor\n" \
                            "\t- a list of components (directly, via their names or via their serial_numbers)\n" \
@@ -324,12 +332,10 @@ class ModelBuilder:
         else:
             raise ValueError(input_error_text)
 
-        # TODO: implement channel.required_efficiency_parameters
         if not len(efficiency_parameters) == channel.required_efficiency_parameters:
             raise ValueError(f"The channel requires {channel.required_efficiency_parameters} efficiency parameters, "
                              f"but you provided {len(efficiency_parameters)}!")
         efficiency_params = []
-        # TODO: implement channel.template_serial_numbers
         for efficiency_parameter, temp_serial_number in zip(efficiency_parameters, channel.template_serial_numbers):
             if isinstance(efficiency_parameter, str):
                 efficiency_model_parameter = self.get_model_parameter(name_or_index=efficiency_parameter)

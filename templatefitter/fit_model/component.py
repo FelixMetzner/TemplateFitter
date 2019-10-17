@@ -6,7 +6,7 @@ Otherwise it acts just as a wrapper for the template class.
 
 import logging
 
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Tuple
 
 from templatefitter.fit_model.template import Template
 from templatefitter.binned_distributions.binning import Binning
@@ -159,9 +159,9 @@ class Component:
             template.component_serial_number = component_serial_number
 
     @property
-    def template_serial_numbers(self) -> List[int]:
+    def template_serial_numbers(self) -> Tuple[int, ...]:
         assert self._templates is not None
-        return [template.serial_number for template in self._templates]
+        return tuple(template.serial_number for template in self._templates)
 
     @property
     def component_index(self) -> int:
