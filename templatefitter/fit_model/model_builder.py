@@ -121,25 +121,6 @@ class ModelBuilder:
         self._model_parameters_mapping.update({name: model_index})
         return model_index, model_parameter
 
-    def register_existing_model_parameter(self, model_parameter: ModelParameter) -> int:
-        if not model_parameter.parameter_handler is self._params:
-            raise ValueError(f"The model parameter you are trying to register uses a different ParameterHandler "
-                             f"than the model you are trying to register it to!\n"
-                             f"\tModel's ParameterHandler: {self._params}\n"
-                             f"\tModelParameters's ParameterHandler: {model_parameter.parameter_handler}\n"
-                             )
-        name = model_parameter.name
-        if name in self._model_parameters_mapping.keys():
-            raise RuntimeError(f"The model parameter with the name {name} already exists!\n"
-                               f"It has the following properties:\n"
-                               f"{self._model_parameters[self._model_parameters_mapping[name]].as_string()}")
-
-        model_index = len(self._model_parameters)
-        self._model_parameters.append(model_parameter)
-        self._model_parameters_mapping.update({name: model_index})
-
-        return model_index
-
     def _check_model_parameter_registration(self, model_parameter: ModelParameter):
         if model_parameter.parameter_handler is not self._params:
             raise ValueError(f"The model parameter you are trying to register uses a different ParameterHandler "
