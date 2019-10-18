@@ -6,14 +6,30 @@ import logging
 import numpy as np
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Tuple, Dict
+from typing import Optional, Union, List, Tuple, Dict, NamedTuple
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = ["ParameterHandler", "TemplateParameter", "ModelParameter"]
 
 
-# TODO: Needs rework!
+class ParameterInfo(NamedTuple):
+    index: int
+    name: str
+    parameter_type: str
+    floating: bool
+    initial_value: float
+
+    def info_as_string_list(self) -> List[str]:
+        return [
+            f"index: {self.index}",
+            f"name: {self.name}",
+            f"parameter_type: {self.parameter_type}",
+            f"floating: {self.floating}",
+            f"initial_value: {self.initial_value}",
+        ]
+
+
 class ParameterHandler:
     yield_parameter_type = "yield"
     fraction_parameter_type = "fraction"
@@ -29,6 +45,7 @@ class ParameterHandler:
         self._np_pars = np.array([])
         self._pars_dict = {}
         self._inverted_pars_dict = None
+        self._parameter_infos = []
 
     def add_parameter(
             self,
@@ -37,37 +54,66 @@ class ParameterHandler:
             floating: bool,
             initial_value: float
     ):
-        pass
-        # TODO: Implement!
-
-    def add_parameters(self, pars: Union[np.ndarray, List[float]], names: List[str]) -> List[int]:
-        self._check_input_pars_and_names(pars=pars, names=names)
-
-        indices = []
-        for name, parameter in zip(names, pars):
-            index = self.add_parameter(parameter=parameter, name=name, update=False)
-            indices.append(index)
-
-        assert len(indices) == len(pars)
-        self._np_pars = np.array(self._pars)
-
-        return indices
-
-    # TODO: replace by new function with same name above!
-    def add_parameter(self, parameter: float, name: str, update: bool = True) -> int:
-        assert name not in self._pars_dict.keys(), (name, self._pars_dict.keys())
+        if name in self._pars_dict:
+            raise ValueError(f"Trying to register new parameter with name {name} in ParameterHandler, \n"
+                             f"but a parameter with this name is already registered with the following properties:\n"
+                             f"\t-" + "\n\t-".join(self._parameter_infos[self._pars_dict[name]].info_as_string_list()))
+        self._check_parameter_types(parameter_types=[parameter_type])
 
         parameter_index = len(self._pars)
-        self._pars.append(parameter)
-
         assert parameter_index not in self._pars_dict.values(), (parameter_index, self._pars_dict.values())
+
+        parameter_info = ParameterInfo(
+            index=parameter_index,
+            name=name,
+            parameter_type=parameter_type,
+            floating=floating,
+            initial_value=initial_value
+        )
+
+        self._pars.append(initial_value)
+        self._np_pars = np.array(self._pars)
+        assert len(self._pars) == len(self._np_pars), (len(self._pars), len(self._np_pars))
         self._pars_dict[name] = parameter_index
         self._inverted_pars_dict = None
-
-        if update:
-            self._np_pars = np.array(self._pars)
+        assert len(self._pars) == len(self._pars_dict), (len(self._pars), len(self._pars_dict))
+        self._parameter_infos.append(parameter_info)
+        assert len(self._pars) == len(self._parameter_infos), (len(self._pars), len(self._parameter_infos))
 
         return parameter_index
+
+    def add_parameters(
+            self,
+            names: List[str],
+            parameter_types: Union[str, List[str]],
+            floating: List[bool],
+            initial_values: Union[np.ndarray, List[float]]
+    ) -> List[int]:
+        self._check_parameters_input(
+            names=names,
+            parameter_types=parameter_types,
+            floating=floating,
+            initial_values=initial_values
+        )
+
+        if isinstance(parameter_types, str):
+            self._check_parameter_types(parameter_types=[parameter_types])
+            types_list = [parameter_types] * len(names)
+        else:
+            self._check_parameter_types(parameter_types=parameter_types)
+            types_list = parameter_types
+
+        indices = []
+        for name, p_type, flt, initial_val in zip(names, types_list, floating, initial_values):
+            index = self.add_parameter(
+                name=name,
+                parameter_type=p_type,
+                floating=flt,
+                initial_value=initial_val
+            )
+            indices.append(index)
+
+        return indices
 
     def get_index(self, name: str) -> int:
         return self._pars_dict[name]
@@ -100,25 +146,43 @@ class ParameterHandler:
                              f"does not match the length of the existing parameter array (= {len(self._np_pars)})")
         self._np_pars[:] = pars
 
-    def set_parameters_and_names(self, pars: np.ndarray, names: List[str]) -> None:
-        self._check_input_pars_and_names(pars=pars, names=names)
-        self._np_pars[:] = pars
-        self._pars_dict = {name: index for index, name in enumerate(names)}
-        self._inverted_pars_dict = None
+    @staticmethod
+    def _check_parameters_input(
+            names: List[str],
+            parameter_types: Union[str, List[str]],
+            floating: List[bool],
+            initial_values: Union[np.ndarray, List[float]]
+    ) -> None:
+        if isinstance(initial_values, np.ndarray) and len(initial_values.shape) != 1:
+            raise ValueError(f"Parameter 'initial_values' must be 1 dimensional, "
+                             f"but has shape {initial_values.shape}...")
+        if isinstance(initial_values, list):
+            if not all(isinstance(value, float) for value in initial_values):
+                raise ValueError(f"Parameter'initial_values' must be list of floats or 1 dimensional numpy array!")
+
+        if not len(names) == len(initial_values):
+            raise ValueError(f"The provided number of 'inital_values' (= {len(initial_values)}) and number of 'names'"
+                             f" (= {len(names)}) does not match! Must be of same length!")
+        if not len(floating) == len(initial_values):
+            raise ValueError(f"The provided number of 'initial_values' (= {len(initial_values)}) and number of "
+                             f"'floating' (= {len(floating)}) does not match! Must be of same length!")
+        if not len(parameter_types) == len(initial_values) or len(parameter_types) == 1:
+            raise ValueError(f"The provided number of 'initial_values' (= {len(initial_values)}) and number of "
+                             f"'parameter_types' (= {len(parameter_types)}) does not match!\n"
+                             f"The 'parameter_types' must be a list of same length as the other arguments,\n"
+                             f"or a single string which will be used for all parameters!")
+        if not len(names) == len(set(names)):
+            raise ValueError(f"Entries of 'names' should each be unique! You provided:\n{names}")
 
     @staticmethod
-    def _check_input_pars_and_names(pars: Union[np.ndarray, List[float]], names: List[str]) -> None:
-        if isinstance(pars, np.ndarray) and len(pars.shape) != 1:
-            raise ValueError(f"Parameter 'pars' must be 1 dimensional, but has shape {pars.shape}...")
-        if not len(pars) == len(names):
-            raise ValueError(f"Length of 'pars' and 'names' should be the same, but is {len(pars)} != {len(names)}!")
-        if not len(names) == len(set(names)):
-            raise ValueError(f"Entries of 'names' should be unique! You provided:\n{names}")
+    def _check_parameter_types(parameter_types: List[str]):
+        for parameter_type in parameter_types:
+            raise ValueError(f"Trying to add new parameter with unknown parameter_type {parameter_type}!\n"
+                             f"Parameter_type must be one of {ParameterHandler.parameter_types}!")
 
 
 class Parameter(ABC):
     # TODO: Maybe allow to temporarily overwrite the parameter for tests/plotting or whatever.
-
     def __init__(
             self,
             name: str,
@@ -179,12 +243,12 @@ class Parameter(ABC):
         return None
 
     def as_string(self) -> str:
-        output = f"{self.__class__.__name__}\n" \
-                 f"\tname: {self._name}\n" \
-                 f"\tparameter type: {self._parameter_type}\n" \
-                 f"\tindex: {self._index}\n" \
-                 f"\tfloating: {self._floating}\n" \
-                 f"\tinitial value: {self._initial_value}\n"
+        output = f"{self.__class__.__name__}" \
+                 f"\n\tname: {self._name}" \
+                 f"\n\tparameter type: {self._parameter_type}" \
+                 f"\n\tindex: {self._index}" \
+                 f"\n\tfloating: {self._floating}" \
+                 f"\n\tinitial value: {self._initial_value}"
         if self._additional_info is not None:
             output += self._additional_info
         return output
@@ -234,7 +298,7 @@ class TemplateParameter(Parameter):
         self._base_model_parameter = base_model_parameter
 
     def _additional_info(self) -> Optional[str]:
-        return f"base model parameter index: {self._base_model_parameter.model_index}"
+        return f"\n\tbase model parameter index: {self._base_model_parameter.model_index}"
 
 
 class ModelParameter(Parameter):
@@ -291,4 +355,4 @@ class ModelParameter(Parameter):
         return [serial_number for _, serial_number in self._usage_list]
 
     def _additional_info(self) -> Optional[str]:
-        return f"\tused by templates with the serial numbers: {self.usage_serial_number_list}\n"
+        return f"\n\tused by templates with the serial numbers: {self.usage_serial_number_list}"

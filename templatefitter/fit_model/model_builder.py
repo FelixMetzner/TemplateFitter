@@ -24,12 +24,6 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = ["ModelBuilder"]
 
 
-class FractionConversionInfo(NamedTuple):
-    needed: bool
-    conversion_matrix: np.ndarray
-    conversion_vector: np.ndarray
-
-
 # TODO: Not yet considered are Yield Ratios:
 #       We could add a ratio parameter instead of a yield parameter for components for which
 #       the ratio of two yields should be fitted.
@@ -41,11 +35,22 @@ class FractionConversionInfo(NamedTuple):
 #           ratio = yield_2 / yield_1 -> yield_2 = ratio * yield_1
 #           => (yield_i, yield_1, yield_1, yield_j, ...)^T * (1, 1, ratio, 1, ...)^T
 
-# TODO: Checks that can be imposed in parameters:
+# TODO: Checks that can be imposed 0n parameters:
 #           - number of efficiency parameters: number_of_templates * number_of_channels,
 #             as efficiency is different for each template and each channel
 #           - number of fraction_parameters: Depends on the components. Can be the same for each channel
 #           - number of yield_parameters: number_of_independent_components of ONE channel. Are shared by all channel.
+
+# TODO: Possible checks before using fit model:
+#           - Check that every template of a model uses the same ParameterHandler instance!
+#           - For first call of expected_events_per_bin: Check if template indices are ordered correctly.
+
+
+class FractionConversionInfo(NamedTuple):
+    needed: bool
+    conversion_matrix: np.ndarray
+    conversion_vector: np.ndarray
+
 
 class ModelBuilder:
     def __init__(
@@ -91,9 +96,6 @@ class ModelBuilder:
         # self._dim = None
         # self.shape = ()
 
-    # TODO: Check that every template of a model uses the same ParameterHandler instance!
-    # TODO: Possible Check: For first call of expected_events_per_bin: Check if template indices are ordered correctly.
-
     def add_model_parameter(
             self,
             name: str,
@@ -105,8 +107,8 @@ class ModelBuilder:
             raise RuntimeError(f"The model parameter with the name {name} already exists!\n"
                                f"It has the following properties:\n"
                                f"{self._model_parameters[self._model_parameters_mapping[name]].as_string()}")
-        model_index = len(self._model_parameters)
 
+        model_index = len(self._model_parameters)
         model_parameter = ModelParameter(
             name=name,
             parameter_handler=self._params,
@@ -118,6 +120,37 @@ class ModelBuilder:
         self._model_parameters.append(model_parameter)
         self._model_parameters_mapping.update({name: model_index})
         return model_index, model_parameter
+
+    def register_existing_model_parameter(self, model_parameter: ModelParameter) -> int:
+        if not model_parameter.parameter_handler is self._params:
+            raise ValueError(f"The model parameter you are trying to register uses a different ParameterHandler "
+                             f"than the model you are trying to register it to!\n"
+                             f"\tModel's ParameterHandler: {self._params}\n"
+                             f"\tModelParameters's ParameterHandler: {model_parameter.parameter_handler}\n"
+                             )
+        name = model_parameter.name
+        if name in self._model_parameters_mapping.keys():
+            raise RuntimeError(f"The model parameter with the name {name} already exists!\n"
+                               f"It has the following properties:\n"
+                               f"{self._model_parameters[self._model_parameters_mapping[name]].as_string()}")
+
+        model_index = len(self._model_parameters)
+        self._model_parameters.append(model_parameter)
+        self._model_parameters_mapping.update({name: model_index})
+
+        return model_index
+
+    def _check_model_parameter_registration(self, model_parameter: ModelParameter):
+        if model_parameter.parameter_handler is not self._params:
+            raise ValueError(f"The model parameter you are trying to register uses a different ParameterHandler "
+                             f"than the model you are trying to register it to!\n"
+                             f"\tModel's ParameterHandler: {self._params}\n"
+                             f"\tModelParameters's ParameterHandler: {model_parameter.parameter_handler}\n"
+                             )
+        if model_parameter.name not in self._model_parameters_mapping.keys():
+            raise RuntimeError(f"The model parameter you provided is not registered to the model you are "
+                               f"trying to use it in.\nYour model parameter has the following properties:\n"
+                               f"{model_parameter.as_string()}\n")
 
     def add_template(
             self,
@@ -132,8 +165,8 @@ class ModelBuilder:
         if isinstance(yield_parameter, str):
             yield_model_parameter = self.get_model_parameter(name_or_index=yield_parameter)
         elif isinstance(yield_parameter, ModelParameter):
+            self._check_model_parameter_registration(model_parameter=yield_parameter)
             yield_model_parameter = yield_parameter
-            # TODO: Check if model_parameter is registered, if not: call add_model_parameter!
         else:
             raise ValueError(f"Expected to receive object of type string or ModelParameter "
                              f"for argument yield_parameter, but you provided object of type {type(yield_parameter)}!")
@@ -252,8 +285,8 @@ class ModelBuilder:
                 if isinstance(fraction_parameter, str):
                     fraction_model_parameter = self.get_model_parameter(name_or_index=fraction_parameter)
                 elif isinstance(fraction_parameter, ModelParameter):
+                    self._check_model_parameter_registration(model_parameter=fraction_parameter)
                     fraction_model_parameter = fraction_parameter
-                    # TODO: Check if model_parameter is registered, if not: call add_model_parameter!
                 else:
                     raise ValueError(f"Encountered unexpected type {type(fraction_parameter)} "
                                      f"in the provided fraction_parameters")
@@ -340,8 +373,8 @@ class ModelBuilder:
             if isinstance(efficiency_parameter, str):
                 efficiency_model_parameter = self.get_model_parameter(name_or_index=efficiency_parameter)
             elif isinstance(efficiency_parameter, ModelParameter):
+                self._check_model_parameter_registration(model_parameter=efficiency_parameter)
                 efficiency_model_parameter = efficiency_parameter
-                # TODO: Check if model_parameter is registered, if not: call add_model_parameter!
             else:
                 raise ValueError(f"Encountered unexpected type {type(efficiency_parameter)} "
                                  f"in the provided efficiency_parameters")
