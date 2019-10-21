@@ -112,13 +112,11 @@ class Template(BinnedDistribution):
     def efficiency_parameter(self, efficiency_parameter: TemplateParameter) -> None:
         if self._efficiency_parameter is not None:
             raise RuntimeError(f"Trying to reset efficiency_parameter of template {self.name}.")
-        if not isinstance(efficiency_parameter, TemplateParameter):
-            raise ValueError(f"The efficiency_parameter can only be set to a TemplateParameter. "
-                             f"You provided an object of type {type(efficiency_parameter)}!")
-        if efficiency_parameter.parameter_type != ParameterHandler.efficiency_parameter_type:
-            raise ValueError(f"The efficiency_parameter can only be set to a TemplateParameter "
-                             f"of type {ParameterHandler.efficiency_parameter_type}. However, the provided "
-                             f"TemplateParameter is of parameter_type {efficiency_parameter.parameter_type}...")
+        self._template_parameter_setter_check(
+            input_parameter=efficiency_parameter,
+            parameter_type=ParameterHandler.efficiency_parameter_type,
+            parameter_name="efficiency_parameter"
+        )
         self._efficiency_parameter = efficiency_parameter
 
     @property
@@ -135,14 +133,29 @@ class Template(BinnedDistribution):
     def fraction_parameter(self, fraction_parameter: TemplateParameter) -> None:
         if self._fraction_parameter is not None:
             raise RuntimeError(f"Trying to reset fraction parameter of template {self.name}.")
-        if not isinstance(fraction_parameter, TemplateParameter):
-            raise ValueError(f"The fraction_parameter can only be set to a TemplateParameter. "
-                             f"You provided an object of type {type(fraction_parameter)}!")
-        if fraction_parameter.parameter_type != ParameterHandler.fraction_parameter_type:
-            raise ValueError(f"The fraction_parameter can only be set to a TemplateParameter "
-                             f"of type {ParameterHandler.fraction_parameter_type}. However, the provided "
-                             f"TemplateParameter is of parameter_type {fraction_parameter.parameter_type}...")
+        self._template_parameter_setter_check(
+            input_parameter=fraction_parameter,
+            parameter_type=ParameterHandler.fraction_parameter_type,
+            parameter_name="fraction_parameter"
+        )
         self._fraction_parameter = fraction_parameter
+
+    @staticmethod
+    def _template_parameter_setter_check(
+            input_parameter: TemplateParameter,
+            parameter_type: str,
+            parameter_name: str
+    ) -> None:
+        assert parameter_type in ParameterHandler.parameter_types, \
+            f"parameter_type must be one of {ParameterHandler.parameter_types}, you provided {parameter_type}!"
+
+        if not isinstance(input_parameter, TemplateParameter):
+            raise ValueError(f"The {parameter_name} can only be set to a TemplateParameter. "
+                             f"You provided an object of type {type(input_parameter)}!")
+        if input_parameter.parameter_type != parameter_type:
+            raise ValueError(f"The {parameter_name} can only be set to a TemplateParameter of type {parameter_type}."
+                             f"However, the provided TemplateParameter is of parameter_type "
+                             f"{input_parameter.parameter_type}...")
 
     @property
     def fraction_index(self) -> Optional[int]:
@@ -214,6 +227,10 @@ class Template(BinnedDistribution):
         return self._params
 
     # TODO: Needs work...
+    def expected_bin_counts(self):
+        pass
+        # TODO!
+
     def fractions(self):
         # TODO: Should be able to calculate its own bin yields from parameters for plotting and so on...
         #       So maybe adapt this method to achieve this.
