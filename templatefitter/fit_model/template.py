@@ -32,7 +32,7 @@ class Template(BinnedDistribution):
         self._component_serial_number = None
 
         self._yield_parameter = None
-        self._bin_parameters = None
+        self._bin_uncert_parameters = None
         self._efficiency_parameter = None
         self._fraction_parameter = None
 
@@ -40,12 +40,14 @@ class Template(BinnedDistribution):
         self._component_index = None
         self._channel_index = None
 
-    # TODO: Needs rework
     def initialize_parameters(
             self,
             yield_parameter: TemplateParameter,
-            bin_parameter_indices: List[int]  # TODO!
+            bin_uncert_parameters: List[TemplateParameter]
     ):
+        if self._yield_parameter is not None or self._bin_uncert_parameters is not None:
+            raise RuntimeError(f"Trying to reset template's "
+                               f"{'yield_parameter' if self._yield_parameter is None else 'bin_uncert_parameter'}...")
         if not isinstance(yield_parameter, TemplateParameter):
             raise ValueError(f"Argument 'yield_parameter' must be of type TemplateParameter!\n"
                              f"You provided an object of type {type(yield_parameter)}...")
@@ -54,7 +56,20 @@ class Template(BinnedDistribution):
                              f"but received one with parameter_type {yield_parameter.parameter_type}!")
         self._yield_parameter = yield_parameter
 
-        self.bin_parameter_indices = bin_parameter_indices
+        if not (isinstance(bin_uncert_parameters, list) and len(bin_uncert_parameters) == self.num_bins_total):
+            raise ValueError(f"The argument 'bin_uncert_parameters' must be a list with {self.num_bins_total} "
+                             f"TemplateParameters of type {ParameterHandler.bin_uncert_parameter_type}, but "
+                             + f"is an object of type {type(bin_uncert_parameters)}."
+                             if not isinstance(bin_uncert_parameters, list)
+                             else f" has only {len(bin_uncert_parameters)} elements while the template has "
+                                  f"{self.num_bins_total} bins.")
+        if not all(isinstance(p, TemplateParameter) for p in bin_uncert_parameters):
+            raise ValueError("The parameter bin_uncert_parameters must be a list of TemplateParameters, "
+                             "but some elements are not TemplateParameters.")
+        if not all(p.parameter_type == ParameterHandler.bin_uncert_parameter_type for p in bin_uncert_parameters):
+            raise ValueError(f"The parameter bin_uncert_parameters must be a list of TemplateParameters of type "
+                             f"{ParameterHandler.bin_uncert_parameter_type}.")
+        self._bin_uncert_parameters = bin_uncert_parameters
 
     @property
     def serial_number(self) -> int:
@@ -136,22 +151,14 @@ class Template(BinnedDistribution):
         return self._fraction_parameter.index
 
     @property
-    def bin_parameters(self) -> List[Optional[TemplateParameter]]:
-        return self._bin_parameters
+    def bin_uncert_parameters(self) -> Optional[List[TemplateParameter]]:
+        return self._bin_uncert_parameters
 
     @property
-    def bin_parameter_indices(self) -> List[Optional[int]]:
-        return [None if bin_param is None else bin_param.index for bin_param in self._bin_parameters]
-
-    @bin_parameter_indices.setter
-    def bin_parameter_indices(self, indices: List[int]) -> None:
-        if not (isinstance(indices, list) and all(isinstance(i, int) for i in indices)):
-            raise ValueError("Expected list of integers...")
-        assert len(indices) == self.num_bins_total, (len(indices), self.num_bins_total)
-        assert len(indices) == len(self._bin_parameters), (len(indices), len(self._bin_parameters))
-        for i, (bin_param, index) in enumerate(zip(self._bin_parameters, indices)):
-            self._parameter_setter_checker(parameter=bin_param, parameter_name=f"bin_parameter_index_{i}")
-            bin_param.index = index
+    def bin_uncert_parameter_indices(self) -> Optional[List[int]]:
+        if self._bin_uncert_parameters is None:
+            return None
+        return [bin_uncert_param.index for bin_uncert_param in self._bin_uncert_parameters]
 
     @property
     def global_template_identifier(self) -> Tuple[int, int, int]:
@@ -206,6 +213,7 @@ class Template(BinnedDistribution):
     def params(self) -> ParameterHandler:
         return self._params
 
+    # TODO: Needs work...
     def fractions(self):
         # TODO: Should be able to calculate its own bin yields from parameters for plotting and so on...
         #       So maybe adapt this method to achieve this.

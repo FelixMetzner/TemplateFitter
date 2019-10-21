@@ -137,11 +137,23 @@ class ModelBuilder:
             self,
             template: Template,
             yield_parameter: Union[ModelParameter, str],
-            bin_parameters  # TODO!
+            bin_uncert_parameters: List[Union[ModelParameter, str]]
     ) -> int:
         if template.name in self._templates_mapping.keys():
             raise RuntimeError(f"The template with the name {template.name} is already registered!\n"
                                f"It has the index {self._templates_mapping[template.name]}\n")
+
+        if not isinstance(bin_uncert_parameters, list):
+            raise ValueError(f"Expected to get list of strings or ModuleParameters for argument "
+                             f"'bin_uncert_parameters', but received object of type {type(bin_uncert_parameters)}.")
+        if not all(isinstance(e, ModelParameter) or isinstance(e, str) for e in bin_uncert_parameters):
+            raise ValueError(f"Expected to get list of strings or ModuleParameters for argument "
+                             f"'bin_uncert_parameters', but received a list containing the following types:\n"
+                             f"{[type(e) for e in bin_uncert_parameters]}.")
+        if not len(bin_uncert_parameters) == template.num_bins_total:
+            raise ValueError(f"The list of 'bin_uncert_parameters' must have the same number of elements as the "
+                             f"number of bins of the template, however, it has {len(bin_uncert_parameters)} elements "
+                             f"and the template as {template.num_bins_total} bins...")
 
         if isinstance(yield_parameter, str):
             yield_model_parameter = self.get_model_parameter(name_or_index=yield_parameter)
@@ -171,9 +183,38 @@ class ModelBuilder:
 
         yield_model_parameter.used_by(template_parameter=yield_param, template_serial_number=serial_number)
 
+        bin_uncert_paras = []
+        for i, bin_uncert_param in enumerate(bin_uncert_parameters):
+            if isinstance(bin_uncert_param, ModelParameter):
+                self._check_model_parameter_registration(model_parameter=bin_uncert_param)
+                bin_uncert_model_param = bin_uncert_param
+            elif isinstance(bin_uncert_param, str):
+                bin_uncert_model_param = self.get_model_parameter(name_or_index=bin_uncert_param)
+            else:
+                raise ValueError("Encountered unexpected type in the provided 'bin_uncert_parameters'...")
+
+            if bin_uncert_model_param.parameter_type != ParameterHandler.bin_uncert_parameter_type:
+                raise RuntimeError(f"The ModelParameters provided via bin_uncert_parameters must be of "
+                                   f"parameter_type 'bin_uncert', however, the {i + 1}th ModelParameter you "
+                                   f"provided is of parameter_type '{bin_uncert_model_param.parameter_type}'...")
+
+            bin_uncert_parameter = TemplateParameter(
+                name=f"{template.name}_{bin_uncert_model_param.name}",
+                parameter_handler=self._params,
+                parameter_type=bin_uncert_model_param.parameter_type,
+                floating=bin_uncert_model_param.floating,
+                initial_value=bin_uncert_model_param.initial_value,
+                index=bin_uncert_model_param.index,
+            )
+            bin_uncert_paras.append(bin_uncert_parameter)
+            bin_uncert_model_param.used_by(
+                template_parameter=bin_uncert_parameter,
+                template_serial_number=serial_number
+            )
+
         template.initialize_parameters(
             yield_parameter=yield_param,
-            bin_parameter_indices=  # TODO
+            bin_uncert_parameters=bin_uncert_paras
         )
 
         self._templates.append(template)

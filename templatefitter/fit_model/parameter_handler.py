@@ -34,10 +34,12 @@ class ParameterHandler:
     yield_parameter_type = "yield"
     fraction_parameter_type = "fraction"
     efficiency_parameter_type = "efficiency"
+    bin_uncert_parameter_type = "bin_uncert"
     parameter_types = [
         yield_parameter_type,
         fraction_parameter_type,
-        efficiency_parameter_type
+        efficiency_parameter_type,
+        bin_uncert_parameter_type
     ]
 
     def __init__(self):
@@ -53,7 +55,7 @@ class ParameterHandler:
             parameter_type: str,
             floating: bool,
             initial_value: float
-    ):
+    ) -> int:
         if name in self._pars_dict:
             raise ValueError(f"Trying to register new parameter with name {name} in ParameterHandler, \n"
                              f"but a parameter with this name is already registered with the following properties:\n"
