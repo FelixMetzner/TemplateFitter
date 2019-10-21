@@ -183,34 +183,13 @@ class ModelBuilder:
 
         yield_model_parameter.used_by(template_parameter=yield_param, template_serial_number=serial_number)
 
-        bin_uncert_paras = []
-        for i, bin_uncert_param in enumerate(bin_uncert_parameters):
-            if isinstance(bin_uncert_param, ModelParameter):
-                self._check_model_parameter_registration(model_parameter=bin_uncert_param)
-                bin_uncert_model_param = bin_uncert_param
-            elif isinstance(bin_uncert_param, str):
-                bin_uncert_model_param = self.get_model_parameter(name_or_index=bin_uncert_param)
-            else:
-                raise ValueError("Encountered unexpected type in the provided 'bin_uncert_parameters'...")
-
-            if bin_uncert_model_param.parameter_type != ParameterHandler.bin_uncert_parameter_type:
-                raise RuntimeError(f"The ModelParameters provided via bin_uncert_parameters must be of "
-                                   f"parameter_type 'bin_uncert', however, the {i + 1}th ModelParameter you "
-                                   f"provided is of parameter_type '{bin_uncert_model_param.parameter_type}'...")
-
-            bin_uncert_parameter = TemplateParameter(
-                name=f"{template.name}_{bin_uncert_model_param.name}",
-                parameter_handler=self._params,
-                parameter_type=bin_uncert_model_param.parameter_type,
-                floating=bin_uncert_model_param.floating,
-                initial_value=bin_uncert_model_param.initial_value,
-                index=bin_uncert_model_param.index,
-            )
-            bin_uncert_paras.append(bin_uncert_parameter)
-            bin_uncert_model_param.used_by(
-                template_parameter=bin_uncert_parameter,
-                template_serial_number=serial_number
-            )
+        bin_uncert_paras = self._get_list_of_template_params(
+            input_params=bin_uncert_parameters,
+            serial_numbers=serial_number,
+            container_name=template.name,
+            parameter_type=ParameterHandler.bin_uncert_parameter_type,
+            input_parameter_list_name="bin_uncert_parameters"
+        )
 
         template.initialize_parameters(
             yield_parameter=yield_param,
@@ -298,29 +277,14 @@ class ModelBuilder:
                 raise ValueError(f"Expected to receive list of string or ModelParameters for argument "
                                  f"fraction_parameters, but you provided a list containing objects of the types "
                                  f"{[type(p) for p in fraction_parameters]}!")
-            fraction_params = []
-            for fraction_parameter, temp_serial_number in zip(fraction_parameters, component.template_serial_numbers):
-                if isinstance(fraction_parameter, str):
-                    fraction_model_parameter = self.get_model_parameter(name_or_index=fraction_parameter)
-                elif isinstance(fraction_parameter, ModelParameter):
-                    self._check_model_parameter_registration(model_parameter=fraction_parameter)
-                    fraction_model_parameter = fraction_parameter
-                else:
-                    raise ValueError(f"Encountered unexpected type {type(fraction_parameter)} "
-                                     f"in the provided fraction_parameters")
-                fraction_param = TemplateParameter(
-                    name=f"{component.name}_{fraction_model_parameter.name}",
-                    parameter_handler=self._params,
-                    parameter_type=fraction_model_parameter.parameter_type,
-                    floating=fraction_model_parameter.floating,
-                    initial_value=fraction_model_parameter.initial_value,
-                    index=fraction_model_parameter.index,
-                )
-                fraction_model_parameter.used_by(
-                    template_parameter=fraction_param,
-                    template_serial_number=temp_serial_number
-                )
-                fraction_params.append(fraction_param)
+
+            fraction_params = self._get_list_of_template_params(
+                input_params=fraction_parameters,
+                serial_numbers=component.template_serial_numbers,
+                container_name=component.name,
+                parameter_type=ParameterHandler.fraction_parameter_type,
+                input_parameter_list_name="fraction_parameters"
+            )
 
         serial_number = len(self._components)
         component.serial_number = serial_number
@@ -386,29 +350,14 @@ class ModelBuilder:
         if not len(efficiency_parameters) == channel.required_efficiency_parameters:
             raise ValueError(f"The channel requires {channel.required_efficiency_parameters} efficiency parameters, "
                              f"but you provided {len(efficiency_parameters)}!")
-        efficiency_params = []
-        for efficiency_parameter, temp_serial_number in zip(efficiency_parameters, channel.template_serial_numbers):
-            if isinstance(efficiency_parameter, str):
-                efficiency_model_parameter = self.get_model_parameter(name_or_index=efficiency_parameter)
-            elif isinstance(efficiency_parameter, ModelParameter):
-                self._check_model_parameter_registration(model_parameter=efficiency_parameter)
-                efficiency_model_parameter = efficiency_parameter
-            else:
-                raise ValueError(f"Encountered unexpected type {type(efficiency_parameter)} "
-                                 f"in the provided efficiency_parameters")
-            efficiency_param = TemplateParameter(
-                name=f"{channel.name}_{efficiency_model_parameter.name}",
-                parameter_handler=self._params,
-                parameter_type=efficiency_model_parameter.parameter_type,
-                floating=efficiency_model_parameter.floating,
-                initial_value=efficiency_model_parameter.initial_value,
-                index=efficiency_model_parameter.index,
-            )
-            efficiency_model_parameter.used_by(
-                template_parameter=efficiency_param,
-                template_serial_number=temp_serial_number
-            )
-            efficiency_params.append(efficiency_param)
+
+        efficiency_params = self._get_list_of_template_params(
+            input_params=efficiency_parameters,
+            serial_numbers=channel.template_serial_numbers,
+            container_name=channel.name,
+            parameter_type=ParameterHandler.efficiency_parameter_type,
+            input_parameter_list_name="efficiency_parameters"
+        )
 
         channel.initialize_parameters(efficiency_parameters=efficiency_params)
         channel_serial_number = self._channels.add_channel(channel=channel)
@@ -596,6 +545,61 @@ class ModelBuilder:
         else:
             raise ValueError(f"Expected string or integer for argument 'name_or_index'\n"
                              f"However, {name_or_index} of type {type(name_or_index)} was provided!")
+
+    def _get_list_of_template_params(
+            self,
+            input_params: List[Union[ModelParameter, str]],
+            serial_numbers: Union[Tuple[int, ...], List[int], int],
+            container_name: str,
+            parameter_type: str,
+            input_parameter_list_name: str
+    ):
+        assert parameter_type in ParameterHandler.parameter_types, \
+            f"parameter_type must be one of {ParameterHandler.parameter_types}, you provided {parameter_type}!"
+
+        if isinstance(serial_numbers, int):
+            if not parameter_type == ParameterHandler.bin_uncert_parameter_type:
+                raise ValueError(f"For model parameters of a different type than "
+                                 f"parameter_type '{ParameterHandler.bin_uncert_parameter_type}', a list or tuple of"
+                                 f"serial numbers must be provided via the argument 'serial_numbers'!")
+            serial_numbers = [serial_numbers] * len(input_params)
+        else:
+            if len(serial_numbers) != len(input_params):
+                raise ValueError(f"Length of 'serial_numbers' (={len(serial_numbers)}) must be the same as length"
+                                 f"of 'input_params' (={len(input_params)})!")
+
+        template_params = []
+        for i, (input_parameter, temp_serial_number) in enumerate(zip(input_params, serial_numbers)):
+            if isinstance(input_parameter, str):
+                model_parameter = self.get_model_parameter(name_or_index=input_parameter)
+            elif isinstance(input_parameter, ModelParameter):
+                self._check_model_parameter_registration(model_parameter=input_parameter)
+                model_parameter = input_parameter
+            else:
+                raise ValueError(f"Encountered unexpected type {type(input_parameter)} "
+                                 f"in the provided {input_parameter_list_name}")
+
+            if model_parameter.parameter_type != parameter_type:
+                raise RuntimeError(f"The ModelParameters provided via {input_parameter_list_name} must be of "
+                                   f"parameter_type '{parameter_type}', however, the {i + 1}th ModelParameter you "
+                                   f"provided is of parameter_type '{model_parameter.parameter_type}'...")
+
+            template_param = TemplateParameter(
+                name=f"{container_name}_{model_parameter.name}",
+                parameter_handler=self._params,
+                parameter_type=model_parameter.parameter_type,
+                floating=model_parameter.floating,
+                initial_value=model_parameter.initial_value,
+                index=model_parameter.index,
+            )
+
+            template_params.append(template_param)
+            model_parameter.used_by(
+                template_parameter=template_param,
+                template_serial_number=temp_serial_number
+            )
+
+        return template_params
 
     # TODO: The following stuff is not adapted, yet...
 
