@@ -93,16 +93,24 @@ class Template(BinnedDistribution):
     def efficiency_parameter(self) -> Optional[TemplateParameter]:
         return self._efficiency_parameter
 
-    @property
-    def efficiency_index(self) -> int:
-        return self._efficiency_parameter.index
+    @efficiency_parameter.setter
+    def efficiency_parameter(self, efficiency_parameter: TemplateParameter) -> None:
+        if self._efficiency_parameter is not None:
+            raise RuntimeError(f"Trying to reset efficiency_parameter of template {self.name}.")
+        if not isinstance(efficiency_parameter, TemplateParameter):
+            raise ValueError(f"The efficiency_parameter can only be set to a TemplateParameter. "
+                             f"You provided an object of type {type(efficiency_parameter)}!")
+        if efficiency_parameter.parameter_type != ParameterHandler.efficiency_parameter_type:
+            raise ValueError(f"The efficiency_parameter can only be set to a TemplateParameter "
+                             f"of type {ParameterHandler.efficiency_parameter_type}. However, the provided "
+                             f"TemplateParameter is of parameter_type {efficiency_parameter.parameter_type}...")
+        self._efficiency_parameter = efficiency_parameter
 
-    @efficiency_index.setter
-    def efficiency_index(self, index: int) -> None:
-        if not isinstance(index, int):
-            raise ValueError("Expected integer...")
-        self._parameter_setter_checker(parameter=self._efficiency_parameter.index, parameter_name="efficiency_index")
-        self._efficiency_parameter.index = index
+    @property
+    def efficiency_index(self) -> Optional[int]:
+        if self._efficiency_parameter is None:
+            return None
+        return self._efficiency_parameter.index
 
     @property
     def fraction_parameter(self) -> Optional[TemplateParameter]:

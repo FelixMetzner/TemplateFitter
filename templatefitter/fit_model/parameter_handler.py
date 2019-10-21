@@ -260,6 +260,8 @@ class Parameter(ABC):
             return False
         if not self.initial_value == other.initial_value:
             return False
+        if not self.parameter_type == other.parameter_type:
+            return False
         if self.parameter_handler is not other.parameter_handler:
             return False
 

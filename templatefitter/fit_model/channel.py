@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Sequence
 from typing import Optional, List, Dict, Tuple
 
+from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
@@ -84,8 +85,27 @@ class Channel(Sequence):
             self,
             efficiency_parameters: List[TemplateParameter]
     ) -> None:
-        # TODO!
-        pass
+        if not isinstance(efficiency_parameters, List):
+            raise ValueError(f"Expecting list of TemplateParameters as input for for argument 'efficiency_parameters', "
+                             f"but you provided an object of type {efficiency_parameters}")
+
+        if not all(isinstance(eff_par, TemplateParameter) for eff_par in efficiency_parameters):
+            raise ValueError(f"Argument 'efficiency_parameters' must be a list containing objects of type "
+                             f"TemplateParameter!\nYou provided a list containing the types "
+                             f"{[type(eff_par) for eff_par in efficiency_parameters]}...")
+
+        if not len(efficiency_parameters) == self.required_efficiency_parameters:
+            raise ValueError(f"Argument 'efficiency_parameters' must be a list of {self.required_efficiency_parameters}"
+                             f" TemplateParameters, but the provided list has {len(efficiency_parameters)} elements!")
+
+        if not all(p.parameter_type == ParameterHandler.efficiency_parameter_type for p in efficiency_parameters):
+            raise ValueError(f"Expected list of TemplateParameters of parameter_type "
+                             f"'{ParameterHandler.efficiency_parameter_type}' for argument 'efficiency_parameters', "
+                             f"but received the parameter_types {[p.parameter_type for p in efficiency_parameters]}!")
+
+        self._efficiency_parameters = efficiency_parameters
+        for template, efficiency_parameter in zip(self.sub_templates, efficiency_parameters):
+            template.efficiency_parameter = efficiency_parameter
 
     @property
     def name(self) -> str:
@@ -159,6 +179,10 @@ class Channel(Sequence):
     @property
     def template_serial_numbers(self) -> Tuple[int, ...]:
         return tuple(tsn for c in self._channel_components for tsn in c.template_serial_numbers)
+
+    @property
+    def sub_templates(self) -> List[Template]:
+        return [t for c in self._channel_components for t in c.sub_templates]
 
     @property
     def required_efficiency_parameters(self) -> int:

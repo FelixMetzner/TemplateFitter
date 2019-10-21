@@ -189,10 +189,6 @@ class ModelBuilder:
             templates: Optional[List[Union[int, str, Template]]] = None,
             shared_yield: Optional[bool] = None,
     ) -> Union[int, Tuple[int, Component]]:
-
-        # TODO: If fractions are used: Check that each template has the same yield parameter!
-        #       Vice versa: If shared_yield is false: Check that each of the used templates has another yield parameter!
-
         creates_new_component = False
         component_input_error_text = "You can either add an already prepared component or create a new one.\n" \
                                      "For the first option, the argument 'component' must be used;\n" \
@@ -373,9 +369,7 @@ class ModelBuilder:
             )
             efficiency_params.append(efficiency_param)
 
-        # TODO: implement channel.initialize_parameters
         channel.initialize_parameters(efficiency_parameters=efficiency_params)
-
         channel_serial_number = self._channels.add_channel(channel=channel)
 
         if creates_new_channel:

@@ -82,6 +82,7 @@ class Component:
         else:
             self._shared_yield = shared_yield
             if shared_yield:
+                self.check_template_yield_indices()
                 self._has_fractions = True
                 self._required_fraction_parameters = self.number_of_subcomponents - 1
             else:
@@ -199,7 +200,21 @@ class Component:
     def required_fraction_parameters(self) -> int:
         return self._required_fraction_parameters
 
+    @property
+    def sub_templates(self) -> Tuple[Template]:
+        return self._templates
+
     def _parameter_setter_checker(self, parameter, parameter_name) -> None:
         if parameter is not None:
             name_info = "" if self.name is None else f" with name '{self.name}'"
             raise RuntimeError(f"Trying to reset {parameter_name} for component{name_info}.")
+
+    def check_template_yield_indices(self):
+        first_model_param = self._templates[0].yield_parameter.base_model_parameter
+        if not all(first_model_param is t.yield_parameter.base_model_parameter for t in self._templates):
+            raise RuntimeError(f"Trying to setup a component from multiple templates which should share their "
+                               f"yield parameter for templates which do not have the same yield parameter!\n"
+                               f"The used templates use the following yield model parameters:\n"
+                               + "\n".join([f"{t.name}\n{t.yield_parameter.base_model_parameter.as_string()}"
+                                            for t in self._templates])
+                               )
