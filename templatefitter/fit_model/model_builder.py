@@ -8,7 +8,7 @@ from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
 
-from typing import Optional, Union, List, Tuple, NamedTuple
+from typing import Optional, Union, List, Tuple, Dict, NamedTuple
 
 from templatefitter.utility import xlogyx
 from templatefitter.plotter import old_plotting
@@ -16,7 +16,8 @@ from templatefitter.plotter import old_plotting
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.binning import Binning
-from templatefitter.fit_model.channel import ChannelContainer, Channel
+from templatefitter.binned_distributions.binned_distribution import InputDataType
+from templatefitter.fit_model.channel import ChannelContainer, Channel, DataChannelContainer
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -55,10 +56,8 @@ class FractionConversionInfo(NamedTuple):
 class ModelBuilder:
     def __init__(
             self,
-            data,  # TODO: Type hint
             parameter_handler: ParameterHandler,
     ):
-        self._data = data  # TODO: not used, yet!
         self._params = parameter_handler
 
         self._model_parameters = []
@@ -73,9 +72,12 @@ class ModelBuilder:
 
         self._channels = ChannelContainer()
 
+        self._data_channels = DataChannelContainer()
+
         self._fraction_conversion = None
 
         self._is_checked = False
+        self._has_data = False
 
         # TODO:
         # self.yield_indices = []
@@ -103,6 +105,8 @@ class ModelBuilder:
             floating: bool,
             initial_value: float
     ) -> Tuple[int, ModelParameter]:
+        self._check_has_data(adding="model parameter")
+
         if name in self._model_parameters_mapping.keys():
             raise RuntimeError(f"The model parameter with the name {name} already exists!\n"
                                f"It has the following properties:\n"
@@ -139,6 +143,8 @@ class ModelBuilder:
             yield_parameter: Union[ModelParameter, str],
             bin_uncert_parameters: List[Union[ModelParameter, str]]
     ) -> int:
+        self._check_has_data(adding="template")
+
         if template.name in self._templates_mapping.keys():
             raise RuntimeError(f"The template with the name {template.name} is already registered!\n"
                                f"It has the index {self._templates_mapping[template.name]}\n")
@@ -216,6 +222,8 @@ class ModelBuilder:
                                      "'shared_yield' as you would when creating a new Component object.\n" \
                                      "In the latter case, the templates can also be provided via their name or " \
                                      "serial_number es defined for this model."
+
+        self._check_has_data(adding="component")
 
         if (component is None and templates is None) or (component is not None and templates is not None):
             raise ValueError(component_input_error_text)
@@ -314,6 +322,8 @@ class ModelBuilder:
                            "\t- a list of components (directly, via their names or via their serial_numbers)\n" \
                            "\t  and a name for the channel, using the arguments 'components' and 'name', respectively."
 
+        self._check_has_data(adding="channel")
+
         if channel is not None and components is not None:
             raise ValueError(input_error_text)
         elif channel is not None:
@@ -366,6 +376,30 @@ class ModelBuilder:
             return channel_serial_number, channel
         else:
             return channel_serial_number
+
+    def add_data(self, channels: Dict[str, InputDataType]):
+        assert self._data_channels.is_empty
+        if self._has_data is True:
+            raise RuntimeError("Data has already been added to this model!\nThe following channels are registered:\n\t-"
+                               + "\n\t-".join(self._data_channels.data_channel_names))
+        if not len(channels) == len(self._channels):
+            raise ValueError(f"You provided data for {len(channels)} channels, "
+                             f"but the model has {len(self._channels)} channels defined!")
+        if not all(ch.name in channels.keys() for ch in self._channels):
+            raise ValueError(f"The provided data channels do not match the ones defined in the model:"
+                             f"Defined channels: \n\t-" + "\n\t-".join([c.name for c in self._channels])
+                             + "\nProvided channels: \n\t-" + "\n\t-".join([c for c in channels.keys()])
+                             )
+
+        for channel_name, channel_data in channels.items():
+            mc_channel = self._channels.get_channel_by_name(name=channel_name)
+            self._data_channels.add_channel(
+                channel_name=channel_name,
+                channel_data=channel_data,
+                binning=mc_channel.binning,
+                column_names=mc_channel.data_column_names
+            )
+        self._has_data = True
 
     def setup_model(self, channels: ChannelContainer):
         if not all(c.params is self._params for c in channels):
@@ -600,6 +634,11 @@ class ModelBuilder:
             )
 
         return template_params
+
+    def _check_has_data(self, adding: str) -> None:
+        if self._has_data is True:
+            raise RuntimeError(f"Trying to add new {adding} after adding the data to the model!\n"
+                               f"All {adding}s have to be added before 'add_data' is called!")
 
     # TODO: The following stuff is not adapted, yet...
 

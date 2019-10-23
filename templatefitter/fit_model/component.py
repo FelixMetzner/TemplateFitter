@@ -58,6 +58,11 @@ class Component:
                                  + "\n\t-".join([str(type(t)) for t in templates]))
             if not all(t.binning == templates[0].binning for t in templates):
                 raise ValueError("All templates of a component must have the same binning.")
+            if not all((t.data_column_names == templates[0].data_column_names if t.data_column_names is not None
+                        else t.data_column_names is templates[0].data_column_names) for t in templates):
+                raise RuntimeError("The data_column_names of the templates you are trying to combine in this component"
+                                   " are not consistent:\n\t"
+                                   + "\n\t".join([f"{t.name}: {t.data_column_names}" for t in templates]))
             self._templates = tuple(t for t in templates)
             for template_index, template in enumerate(templates):
                 template.template_index = template_index
@@ -203,6 +208,15 @@ class Component:
     @property
     def sub_templates(self) -> Tuple[Template]:
         return self._templates
+
+    @property
+    def data_column_names(self) -> Optional[List[str]]:
+        if not all(t.data_column_names == self._templates[0].data_column_names if t.data_column_names is not None
+                   else t.data_column_names is self._templates[0].data_column_names
+                   for t in self._templates):
+            raise RuntimeError(f"Inconsistency in data_column_names of component {self.name}:\n\t-"
+                               + "\n\t-".join([f"{t.name}: {t.data_column_names}" for t in self._templates]))
+        return self._templates[0].data_column_names
 
     def _parameter_setter_checker(self, parameter, parameter_name) -> None:
         if parameter is not None:

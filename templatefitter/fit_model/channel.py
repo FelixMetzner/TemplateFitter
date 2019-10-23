@@ -14,10 +14,12 @@ from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
+from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, InputDataType, \
+    DataColumnNamesInput
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["Channel", "ChannelContainer"]
+__all__ = ["Channel", "ChannelContainer", "DataChannelContainer"]
 
 
 class Channel(Sequence):
@@ -53,6 +55,13 @@ class Channel(Sequence):
         if component.params is not self._params:
             raise RuntimeError("The used ParameterHandler instances are not the same!")
 
+        # This assignment already checks the consistency of data_column_names of the new component.
+        new_data_column_names = component.data_column_names
+        if self.number_of_components > 0:
+            if not (new_data_column_names is self.data_column_names or new_data_column_names == self.data_column_names):
+                raise RuntimeError(f"Inconsistency in data_column_names of\n\tnew component: {new_data_column_names}\n"
+                                   f"and\n\tthis channel: {self.data_column_names}")
+
         component_index = self.__len__()
         self._channel_components.append(component)
         component.component_index = component_index
@@ -67,6 +76,19 @@ class Channel(Sequence):
         else:
             if not self._binning == components[0].binning:
                 raise ValueError("All components of a channel must have the same binning.")
+
+        # This assignment already checks the consistency of data_column_names of the new components.
+        new_data_column_names_list = [c.data_column_names for c in components]
+        if self.number_of_components > 0:
+            all_data_column_names_list = new_data_column_names_list.append(self.data_column_names)
+        else:
+            all_data_column_names_list = new_data_column_names_list
+        if not all(c == all_data_column_names_list[0] if c is not None else c is all_data_column_names_list[0]
+                   for c in all_data_column_names_list):
+            raise RuntimeError(f"Inconsistency in data_column_names of new components:\n\t-"
+                               + "\n\t-".join([f"{c.name}: {c.data_column_names}" for c in components])
+                               + "" if self.number_of_components == 0
+                               else f"\nand channel's data_column_names: {self.data_column_names}")
 
         if not all(c.params is self._params for c in components):
             raise RuntimeError("The used ParameterHandler instances are not the same!")
@@ -142,6 +164,18 @@ class Channel(Sequence):
         self._channel_index = index
         for component in self._channel_components:
             component.channel_index = self._channel_index
+
+    @property
+    def data_column_names(self) -> Optional[List[str]]:
+        if self.number_of_components == 0:
+            return None
+        if not all(c.data_column_names == self._channel_components[0].data_column_names
+                   if c.data_column_names is not None
+                   else c.data_column_names is self._channel_components[0].data_column_names
+                   for c in self._channel_components):
+            raise RuntimeError(f"Inconsistency in data_column_names of channel {self.name}:\n\t-"
+                               + "\n\t-".join([f"{c.name}: {c.data_column_names}" for c in self._channel_components]))
+        return self._channel_components[0].data_column_names
 
     def _parameter_setter_checker(self, parameter, parameter_name):
         if parameter is not None:
@@ -280,8 +314,113 @@ class ChannelContainer(Sequence):
         assert len(self.channel_mapping) == len(self._channels), (len(self.channel_mapping), len(self._channels))
         return self._channels_mapping
 
+    def get_channel_by_name(self, name: str) -> Channel:
+        if name not in self._channels_mapping.keys():
+            raise ValueError(f"A channel with the name {name} is not registered in the ChannelContainer.")
+        return self._channels[self.channel_mapping[name]]
+
     def __getitem__(self, i) -> Optional[Channel]:
         return self._channels[i]
 
     def __len__(self) -> int:
         return len(self._channels)
+
+
+class DataChannelContainer(Sequence):
+    def __init__(
+            self,
+            channel_names: Optional[List[str]] = None,
+            channel_data: Optional[List[InputDataType]] = None,
+            binning: Optional[List[Binning]] = None,
+            column_names: Optional[Tuple[DataColumnNamesInput]] = None
+    ):
+        self._channel_distributions = []
+        self._channels_mapping = {}
+        if channel_names is not None:
+            self.add_channels(
+                channel_names=channel_names,
+                channel_data=channel_data,
+                binning=binning,
+                column_names=column_names
+            )
+
+        super().__init__()
+
+    def add_channels(
+            self,
+            channel_names: List[str],
+            channel_data: List[InputDataType],
+            binning: List[Binning],
+            column_names: Tuple[DataColumnNamesInput]
+    ) -> List[int]:
+        if not len(channel_names) == len(channel_data):
+            raise ValueError(f"You must provide a channel_name for each channel_data set, "
+                             f"but provided {len(channel_names)} names and {len(channel_data)} data sets.")
+        if not len(channel_data) == len(binning):
+            raise ValueError(f"You must provide a binning definition for each channel_data set, "
+                             f"but provided {len(binning)} Binning objects and {len(channel_data)} data sets.")
+        if not len(channel_data) == len(column_names):
+            raise ValueError(f"You must provide a set of column_names for each channel_data set, "
+                             f"but provided {len(column_names)} column_name sets and {len(channel_data)} data sets.")
+        if not all(name not in self._channels_mapping.keys() for name in channel_names):
+            raise ValueError(f"Data channels with the name(s) "
+                             f"{[c for c in channel_names if c in self._channels_mapping]} have already been "
+                             f"registered to the DataChannelContainer with the indices "
+                             f"{[self._channels_mapping[c] for c in channel_names if c in self._channels_mapping]}.")
+        if not len(set(channel_names)) == len(channel_names):
+            raise ValueError(f"The channel_names must be unique, but the provided list is not:\n\t{channel_names}")
+
+        channel_indices = []
+
+        for name, data, binning, cols in zip(channel_names, channel_data, binning, column_names):
+            channel_index = self.add_channel(
+                channel_name=name,
+                channel_data=data,
+                binning=binning,
+                column_names=cols
+            )
+            channel_indices.append(channel_index)
+        assert len(set(channel_indices)) == len(channel_indices), channel_indices
+        assert len(channel_names) == len(channel_indices), (len(channel_names), len(channel_indices))
+
+        return channel_indices
+
+    def add_channel(
+            self,
+            channel_name: str,
+            channel_data: InputDataType,
+            binning: Binning,
+            column_names: DataColumnNamesInput
+    ) -> int:
+        if channel_name in self._channels_mapping.keys():
+            raise RuntimeError(f"Trying to add channel with name '{channel_name}' that is already assigned to the "
+                               f"{self._channels_mapping[channel_name]}th channel in the DataChannelContainer.")
+
+        channel_index = self.__len__()
+        channel_distribution = BinnedDistribution(
+            bins=binning.bin_edges,
+            dimensions=binning.dimensions,
+            scope=binning.range,
+            name=f"data_channel_{channel_index}_{channel_name}",
+            data_column_names=column_names
+        )
+        channel_distribution.fill(input_data=channel_data, weights=None, systematics=None)
+
+        self._channel_distributions.append(channel_distribution)
+        self._channels_mapping.update({channel_name: channel_index})
+
+        return channel_index
+
+    @property
+    def data_channel_names(self) -> List[str]:
+        return [str(name) for name in self._channels_mapping.keys()]
+
+    @property
+    def is_empty(self) -> bool:
+        return len(self._channel_distributions) == 0
+
+    def __getitem__(self, i) -> Optional[Channel]:
+        return self._channel_distributions[i]
+
+    def __len__(self) -> int:
+        return len(self._channel_distributions)
