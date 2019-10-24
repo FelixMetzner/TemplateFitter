@@ -223,6 +223,20 @@ class Channel(Sequence):
         # As efficiencies are different for each template, we need as many efficiency parameters as templates.
         return self.total_number_of_templates
 
+    @property
+    def required_fraction_parameters(self) -> Tuple[int, ...]:
+        return tuple([c.required_fraction_parameters for c in self._channel_components])
+
+    @property
+    def fractions_mask(self) -> Tuple[bool, ...]:
+        mask = []
+        for c_fractions in self.required_fraction_parameters:
+            if c_fractions == 0:
+                mask.append(False)
+            else:
+                mask.extend([True] * c_fractions)
+        return tuple(mask)
+
     def __getitem__(self, i) -> Optional[Component]:
         return self._channel_components[i]
 
@@ -247,6 +261,7 @@ class ChannelContainer(Sequence):
             if self._channels[0].params is not channel.params:
                 raise RuntimeError("The used ParameterHandler instances are not the same!")
             self._check_channel_names(channels=[channel])
+            self._check_channel_components(channels=[channel])
 
         channel_index = self.__len__()
         self._channels.append(channel)
@@ -280,6 +295,7 @@ class ChannelContainer(Sequence):
         if not all(c.params is channels[0].params for c in channels):
             raise RuntimeError("The used ParameterHandler instances are not the same!")
         self._check_channel_names(channels=channels)
+        self._check_channel_components(channels=channels)
 
     def _check_channel_names(self, channels: List[Channel]) -> None:
         if any(channel.name in self._channels_mapping.keys() for channel in channels):
@@ -291,6 +307,31 @@ class ChannelContainer(Sequence):
             name_duplicates = [name for name, counter in Counter([c.name for c in channels]).items() if counter > 1]
             raise ValueError(f"Trying to add new channels with same name channel container. "
                              f"The respective channel names are {name_duplicates}.")
+
+    def _check_channel_components(self, channels: List[Channel]) -> None:
+        assert isinstance(channels, list), type(channels)
+        if self.__len__() > 0:
+            base_req_fractions = self._channels[0].required_fraction_parameters
+            base_fractions_mask = self._channels[0].fractions_mask
+        else:
+            base_req_fractions = channels[0].required_fraction_parameters
+            base_fractions_mask = channels[0].fractions_mask
+
+        if not all(c.required_fraction_parameters == base_req_fractions for c in channels):
+            raise ValueError("You are trying to add channels with different numbers of fraction parameters as "
+                             "required due to their components.\n"
+                             + (f"The current channels have required_fraction_parameters = \n\t"
+                                f"{self._channels[0].required_fraction_parameters}\n" if self.__len__() > 0 else "\n")
+                             + "The new channel(s) you are trying to add have required_fraction_parameters = \n\t"
+                             + "\n\t".join([f"{c.required_fraction_parameters}" for c in channels])
+                             )
+        if not all(c.fractions_mask == base_fractions_mask for c in channels):
+            raise ValueError("You are trying to add channels with different fraction masks given by their components.\n"
+                             + (f"The current channels have the fraction mask = \n\t"
+                                f"{self._channels[0].fractions_mask}\n" if self.__len__() > 0 else "\n")
+                             + "The new channel(s) you are trying to add have the fraction masks = \n\t"
+                             + "\n\t".join([f"{c.fractions_mask}" for c in channels])
+                             )
 
     def _check_number_of_components(self, new_channels: List[Channel]) -> None:
         assert isinstance(new_channels, list), type(new_channels)

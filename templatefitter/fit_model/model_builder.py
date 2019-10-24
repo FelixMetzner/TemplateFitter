@@ -53,6 +53,10 @@ class FractionConversionInfo(NamedTuple):
     conversion_vector: np.ndarray
 
 
+# TODO: Maybe the ModelBuilder could produce a Model object, which is a container that holds all
+#       the necessary information and can do the calculations in the end.
+
+
 class ModelBuilder:
     def __init__(
             self,
@@ -76,12 +80,20 @@ class ModelBuilder:
 
         self._fraction_conversion = None
 
-        self._is_checked = False
         self._has_data = False
+        self._is_initialized = False
+        self._is_checked = False
+
+        self._yield_indices = None
+        self._yields_checked = False
+
+        self._fraction_indices = None  # TODO: Use this!
+        self._fractions_checked = None  # TODO: Use this!
+
+        self._efficiency_indices = None  # TODO: Use this!
+        self._efficiencies_checked = None  # TODO: Use this!
 
         # TODO:
-        # self.yield_indices = []
-
         # self.subfraction_indices = []
         # self.num_fractions = 0
 
@@ -401,36 +413,32 @@ class ModelBuilder:
             )
         self._has_data = True
 
+    def finalize_model(self):
+        if not self._has_data:
+            raise RuntimeError("You have not added data, yet, so the model can not be finalized, yet!\n"
+                               "Please use the 'add_data' method to add data for all defined channels:\n\t"
+                               + "\n\t".join(f"{i}. {c.name}" for i, c in enumerate(self._channels)))
+
+        self._initialize_fraction_conversion()
+        self._check_fraction_conversion()
+
+        self._check_yield_parameters()
+
+        self._is_initialized = True
+
+    # TODO: Requires rework! This should allow to setup a model from a prepared model_container...
     def setup_model(self, channels: ChannelContainer):
         if not all(c.params is self._params for c in channels):
             raise RuntimeError("The used ParameterHandler instances are not the same!")
 
-        # TODO: Needs rework, as self._channels is now initialized as empty ChannelContainer
-        if self._channels is not None:
+        if len(self._channels) > 0:
             raise RuntimeError("Model already has channels defined!")
 
         self._channels = channels
 
-        # TODO: Initialize parameters...
-        #           - set indices,
-        #           - identify floating parameters and fixed ones,
-        #           - differentiate between different parameter types in ParameterHandler? -> would probably be better,
-
-        self._initialize_fraction_conversion()
+        self.finalize_model()
 
         # TODO: Complete Model setup
-
-    def get_yields_vector(self):
-        # TODO: Yields are provided by parameter handler...
-        # TODO: number of yields = number of components
-        # TODO: Vector or matrix? <-> Use additional dimension for channels?
-        pass
-
-    def get_fractions_vector(self):
-        # TODO: Fractions are provided by parameter handler...
-        # TODO: Number of fractions = number of templates - number of multi template components
-        # TODO: Are NOT DIFFERENT for different channels
-        pass
 
     def _initialize_fraction_conversion(self):
         # Fraction conversion matrix and vector should be equal in all channels.
@@ -469,6 +477,107 @@ class ModelBuilder:
             conversion_vector=conversion_vectors[0]
         )
 
+    def _check_fraction_conversion(self):
+        if self._check_if_fractions_are_needed():
+            assert self._fraction_conversion.needed is True
+            assert np.any(self._fraction_conversion.conversion_vector != 1), self._fraction_conversion.conversion_vector
+            assert np.any(self._fraction_conversion.conversion_matrix != 0), self._fraction_conversion.conversion_matrix
+            assert len(self._fraction_conversion.conversion_vector.shape) == 1, \
+                self._fraction_conversion.conversion_vector.shape
+            assert self._fraction_conversion.conversion_vector.shape[0] == max(self.number_of_templates), \
+                (self._fraction_conversion.conversion_vector.shape[0],
+                 max(self.number_of_templates), self.number_of_templates)
+            assert len(self._fraction_conversion.conversion_matrix.shape) == 2, \
+                self._fraction_conversion.conversion_matrix.shape
+            assert self._fraction_conversion.conversion_matrix.shape[0] == max(self.number_of_templates), \
+                (self._fraction_conversion.conversion_matrix.shape[0],
+                 max(self.number_of_templates), self.number_of_templates)
+            assert self._fraction_conversion.conversion_matrix.shape[1] == len(self._channels[0].fractions_mask), \
+                (self._fraction_conversion.conversion_matrix.shape[1], len(self._channels[0].fractions_mask),
+                 self._channels[0].fractions_mask)
+        else:
+            logging.info("Fraction parameters are not used, as no templates of the same channel share "
+                         "a common yield parameter.")
+            assert self._fraction_conversion.needed is False
+            assert np.all(self._fraction_conversion.conversion_vector == 1), self._fraction_conversion.conversion_vector
+            assert np.all(self._fraction_conversion.conversion_matrix == 0), self._fraction_conversion.conversion_matrix
+
+    def get_yields_vector(self) -> np.ndarray:
+        if self._yield_indices is not None:
+            return self._params.get_parameters_by_index(indices=self._yield_indices)
+
+        indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.yield_parameter_type)
+
+        if not self._yields_checked:
+            self._check_yield_parameters()
+
+        self._yield_indices = indices
+        return self._params.get_parameters_by_index(indices=indices)
+
+    def _check_yield_parameters(self) -> None:
+        self._check_is_initialized()
+        indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.yield_parameter_type)
+        # Check number of yield parameters
+        if not len(indices) == self.number_of_expected_independent_yields:
+            raise RuntimeError(f"Number of yield parameters does not agree with the number of expected independent "
+                               f"yields for the model:\n\tnumber of"
+                               f"expected independent yields = {self.number_of_expected_independent_yields}\n\t"
+                               f"number of yield parameters: {len(indices)}\n\tnumber"
+                               f" of independent templates per channel: {self.number_of_independent_templates}"
+                               f"\n Defined yield parameters:\n"
+                               + "\n\n".join([p.to_string() for p in self._model_parameters
+                                              if p.parameter_type == ParameterHandler.yield_parameter_type])
+                               + "\n\nYield parameters registered in Parameter Handler:\n"
+                               + "\n\n".join([i.as_string()
+                                              for i in self._params.get_parameter_infos_by_index(indices=indices)])
+                               )
+        # Check order of yield parameters:
+        yield_parameter_infos = self._params.get_parameter_infos_by_index(indices=indices)
+        used_model_parameter_indices = []
+        template_serial_numbers_list = []
+        channel_orders = []
+        for yield_param_info in yield_parameter_infos:
+            model_parameter_index = yield_param_info.model_index
+            assert model_parameter_index not in used_model_parameter_indices, \
+                (model_parameter_index, used_model_parameter_indices)
+            used_model_parameter_indices.append(model_parameter_index)
+            model_parameter = self._model_parameters[model_parameter_index]
+            template_serial_numbers = model_parameter.usage_serial_number_list
+            template_serial_numbers_list.append(template_serial_numbers)
+            if len(template_serial_numbers) == 0:
+                raise RuntimeError(f"Yield ModelParameter {yield_param_info.name} is not used!")
+
+            channel_order = [c.channel_index for t in template_serial_numbers for c in self._channels
+                             if t in c.template_serial_numbers]
+
+            channel_orders.append(channel_order)
+
+            if len(template_serial_numbers) < len(self._channels):
+                logging.warning(f"Yield ModelParameter {model_parameter.name} is used for less templates "
+                                f"{len(template_serial_numbers)} than channels defined in the "
+                                f"model {len(self._channels)}!")
+
+        # Check order of channels:
+        min_ind = self.min_number_of_independent_yields
+        if not all(list(dict.fromkeys(channel_orders[0]))[:min_ind] == list(dict.fromkeys(co)[:min_ind])
+                   for co in channel_orders):
+            raise RuntimeError(
+                "Channel order differs for different yield model parameters.\n\tParameter Name: Channel Order\n\t"
+                + "\n\t".join([f"{p.name}: co" for co, p in zip(channel_orders, yield_parameter_infos)])
+            )
+
+        self._yields_checked = True
+
+    def get_fractions_vector(self):
+        # TODO: Fractions are provided by parameter handler...
+        # TODO: Number of fractions = number of templates - number of multi template components
+        # TODO: Are NOT DIFFERENT for different channels
+
+        # TODO: Remember: fraction_parameters are None for last template in a component with shared yields
+        #  and always None for components with no shared yields.
+
+        pass
+
     def get_efficiency_vector(self):
         # TODO: Efficiencies are provided by parameter handler...
         # TODO: Number of efficiencies = number of templates
@@ -494,9 +603,11 @@ class ModelBuilder:
             # TODO: Check shapes!
 
         # TODO: Define remaining variables
+        yield_parameters = self.get_yields_vector()
+        fraction_parameters = 1
+        normed_efficiency_parameters = 1
 
-        # TODO: Remember: fraction_parameters are None for last template in a component with shared yields
-        #  and always None for components with no shared yields.
+        normed_templates = 1
 
         if self._fraction_conversion.needed:
             bin_count = yield_parameters * (
@@ -539,6 +650,14 @@ class ModelBuilder:
             sum([1 if comp.shared_yield else comp.number_of_subcomponents for comp in ch.components])
             for ch in self._channels
         )
+
+    @property
+    def number_of_expected_independent_yields(self) -> int:
+        return max(self.number_of_independent_templates)
+
+    @property
+    def min_number_of_independent_yields(self) -> int:
+        return min(self.number_of_independent_templates)
 
     @property
     def number_of_fraction_parameters(self) -> Tuple[int, ...]:
@@ -639,6 +758,17 @@ class ModelBuilder:
         if self._has_data is True:
             raise RuntimeError(f"Trying to add new {adding} after adding the data to the model!\n"
                                f"All {adding}s have to be added before 'add_data' is called!")
+
+    def _check_is_initialized(self):
+        if not self._is_initialized:
+            raise RuntimeError(
+                "The model is not finalized, yet!\nPlease use the 'finalize_model' method to finalize the model setup!"
+            )
+
+    def _check_if_fractions_are_needed(self) -> bool:
+        assert all([n_it <= n_t for n_it, n_t in zip(self.number_of_independent_templates, self.number_of_templates)]), \
+            "\n".join([f"{i}] <= {t}" for i, t in zip(self.number_of_independent_templates, self.number_of_templates)])
+        return not (self.number_of_independent_templates == self.number_of_templates)
 
     # TODO: The following stuff is not adapted, yet...
 

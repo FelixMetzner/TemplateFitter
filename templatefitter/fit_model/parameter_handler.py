@@ -16,6 +16,7 @@ __all__ = ["ParameterHandler", "TemplateParameter", "ModelParameter"]
 class ParameterInfo(NamedTuple):
     index: int
     name: str
+    model_index: int
     parameter_type: str
     floating: bool
     initial_value: float
@@ -24,10 +25,15 @@ class ParameterInfo(NamedTuple):
         return [
             f"index: {self.index}",
             f"name: {self.name}",
+            f"model_index: {self.model_index}",
             f"parameter_type: {self.parameter_type}",
             f"floating: {self.floating}",
             f"initial_value: {self.initial_value}",
         ]
+
+    def as_string(self) -> str:
+        info_list = self.info_as_string_list()
+        return f"Parameter {info_list[0]}:\n" + f"\n\t".join(info_list)
 
 
 class ParameterHandler:
@@ -48,10 +54,12 @@ class ParameterHandler:
         self._pars_dict = {}
         self._inverted_pars_dict = None
         self._parameter_infos = []
+        self._parameters_by_type = {k: [] for k in ParameterHandler.parameter_types}
 
     def add_parameter(
             self,
             name: str,
+            model_index: int,
             parameter_type: str,
             floating: bool,
             initial_value: float
@@ -64,10 +72,13 @@ class ParameterHandler:
 
         parameter_index = len(self._pars)
         assert parameter_index not in self._pars_dict.values(), (parameter_index, self._pars_dict.values())
+        assert parameter_index not in self._parameters_by_type[parameter_type], \
+            (parameter_type, parameter_index, self._parameters_by_type[parameter_type], self._parameters_by_type)
 
         parameter_info = ParameterInfo(
             index=parameter_index,
             name=name,
+            model_index=model_index,
             parameter_type=parameter_type,
             floating=floating,
             initial_value=initial_value
@@ -81,18 +92,23 @@ class ParameterHandler:
         assert len(self._pars) == len(self._pars_dict), (len(self._pars), len(self._pars_dict))
         self._parameter_infos.append(parameter_info)
         assert len(self._pars) == len(self._parameter_infos), (len(self._pars), len(self._parameter_infos))
+        self._parameters_by_type[parameter_type].append(parameter_index)
+        assert sum(len(values) for values in self._parameters_by_type.values()) == len(self._pars), \
+            (sum(len(values) for values in self._parameters_by_type.values()), len(self._pars))
 
         return parameter_index
 
     def add_parameters(
             self,
             names: List[str],
+            model_indices: List[int],
             parameter_types: Union[str, List[str]],
             floating: List[bool],
             initial_values: Union[np.ndarray, List[float]]
     ) -> List[int]:
         self._check_parameters_input(
             names=names,
+            model_indices=model_indices,
             parameter_types=parameter_types,
             floating=floating,
             initial_values=initial_values
@@ -106,9 +122,10 @@ class ParameterHandler:
             types_list = parameter_types
 
         indices = []
-        for name, p_type, flt, initial_val in zip(names, types_list, floating, initial_values):
+        for name, m_index, p_type, flt, initial_val in zip(names, model_indices, types_list, floating, initial_values):
             index = self.add_parameter(
                 name=name,
+                model_index=m_index,
                 parameter_type=p_type,
                 floating=flt,
                 initial_value=initial_val
@@ -131,6 +148,20 @@ class ParameterHandler:
     def get_parameters_by_index(self, indices: Union[int, List[int]]) -> Union[np.ndarray, float]:
         return self._np_pars[indices]
 
+    def get_parameter_infos_by_index(self, indices: Union[int, List[int]]) -> List[ParameterInfo]:
+        if isinstance(indices, list):
+            return [self._parameter_infos[i] for i in indices]
+        elif isinstance(indices, int):
+            return [self._parameter_infos[indices]]
+        else:
+            raise ValueError(f"Expecting integer or list of integers for argument 'indices'!\nYou provided {indices}")
+
+    def get_parameter_indices_for_type(self, parameter_type: str) -> List[int]:
+        if parameter_type not in ParameterHandler.parameter_types:
+            raise ValueError(f"Trying to get indices for unknown parameter_type {parameter_type}!\n"
+                             f"Parameter_type must be one of {ParameterHandler.parameter_types}!")
+        return self._parameters_by_type[parameter_type]
+
     def get_parameter_dictionary(self) -> Dict[str, int]:
         return self._pars_dict
 
@@ -151,6 +182,7 @@ class ParameterHandler:
     @staticmethod
     def _check_parameters_input(
             names: List[str],
+            model_indices: List[int],
             parameter_types: Union[str, List[str]],
             floating: List[bool],
             initial_values: Union[np.ndarray, List[float]]
@@ -164,6 +196,9 @@ class ParameterHandler:
 
         if not len(names) == len(initial_values):
             raise ValueError(f"The provided number of 'inital_values' (= {len(initial_values)}) and number of 'names'"
+                             f" (= {len(names)}) does not match! Must be of same length!")
+        if not len(names) == len(model_indices):
+            raise ValueError(f"The provided number of 'model_indices' (= {len(model_indices)}) and number of 'names'"
                              f" (= {len(names)}) does not match! Must be of same length!")
         if not len(floating) == len(initial_values):
             raise ValueError(f"The provided number of 'initial_values' (= {len(initial_values)}) and number of "
@@ -334,6 +369,7 @@ class ModelParameter(Parameter):
     def _register_in_parameter_handler(self) -> None:
         index = self._params.add_parameter(
             name=self.name,
+            model_index=self.model_index,
             parameter_type=self.parameter_type,
             floating=self.floating,
             initial_value=self.initial_value

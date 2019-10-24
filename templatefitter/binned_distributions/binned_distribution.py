@@ -296,7 +296,6 @@ class BinnedDistribution:
     #
     #     return np.amin(min_vals), np.amax(max_vals)
 
-
     # def _get_bin_edges(self) -> Tuple[np.ndarray, np.ndarray, float]:
     #     """
     #     Calculates the bin edges for the histogram.
