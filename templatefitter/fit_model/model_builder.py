@@ -605,8 +605,10 @@ class ModelBuilder:
         # Check that fraction parameters are the same for each channel
         assert all(nf == self.number_of_fraction_parameters[0] for nf in self.number_of_fraction_parameters), \
             self.number_of_fraction_parameters
-        # Check order of processes
+        # Check order of processes  # TODO: Maybe add process name to templates...
+        # TODO!
         # Check order of channels
+        # TODO!
 
         # TODO: Remember: fraction_parameters are None for last template in a component with shared yields
         #  and always None for components with no shared yields.
