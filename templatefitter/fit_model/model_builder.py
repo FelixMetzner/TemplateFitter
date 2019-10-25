@@ -87,11 +87,11 @@ class ModelBuilder:
         self._yield_indices = None
         self._yields_checked = False
 
-        self._fraction_indices = None  # TODO: Use this!
-        self._fractions_checked = None  # TODO: Use this!
+        self._fraction_indices = None
+        self._fractions_checked = False
 
-        self._efficiency_indices = None  # TODO: Use this!
-        self._efficiencies_checked = None  # TODO: Use this!
+        self._efficiency_indices = None
+        self._efficiencies_checked = False
 
         # TODO:
         # self.subfraction_indices = []
@@ -423,6 +423,10 @@ class ModelBuilder:
         self._check_fraction_conversion()
 
         self._check_yield_parameters()
+        self._check_fraction_parameters()
+        self._check_efficiency_parameters()
+
+        # TODO: Is a sorting or something similar of the parameters necessary/useful?
 
         self._is_initialized = True
 
@@ -502,6 +506,12 @@ class ModelBuilder:
             assert np.all(self._fraction_conversion.conversion_vector == 1), self._fraction_conversion.conversion_vector
             assert np.all(self._fraction_conversion.conversion_matrix == 0), self._fraction_conversion.conversion_matrix
 
+            assert all(sum(c.required_fraction_parameters) == 0 for c in self._channels), \
+                "\n".join([f"{c.name}: {c.required_fraction_parameters}" for c in self._channels])
+            yields_i = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.yield_parameter_type)
+            assert all(len(yields_i) >= c.total_number_of_templates for c in self._channels), \
+                f"{len(yields_i)}\n" + "\n".join([f"{c.name}: {c.total_number_of_templates}" for c in self._channels])
+
     def get_yields_vector(self) -> np.ndarray:
         if self._yield_indices is not None:
             return self._params.get_parameters_by_index(indices=self._yield_indices)
@@ -568,24 +578,62 @@ class ModelBuilder:
 
         self._yields_checked = True
 
-    def get_fractions_vector(self):
-        # TODO: Fractions are provided by parameter handler...
-        # TODO: Number of fractions = number of templates - number of multi template components
-        # TODO: Are NOT DIFFERENT for different channels
+    def get_fractions_vector(self) -> np.ndarray:
+        if self._fraction_indices is not None:
+            return self._params.get_parameters_by_index(indices=self._fraction_indices)
+
+        indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.fraction_parameter_type)
+
+        if not self._fractions_checked:
+            self._check_fraction_parameters()
+
+        self._fraction_indices = indices
+        return self._params.get_parameters_by_index(indices=indices)
+
+    def _check_fraction_parameters(self) -> None:
+        self._check_is_initialized()
+
+        # Check number of fraction parameters
+        assert self.number_of_dependent_templates == self.number_of_fraction_parameters, \
+            (self.number_of_dependent_templates, self.number_of_fraction_parameters)
+        frac_i = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.fraction_parameter_type)
+        assert max(self.number_of_dependent_templates) == len(frac_i), f"Required fraction_parameters = " \
+                                                                       f"{max(self.number_of_dependent_templates)}\n" \
+                                                                       f"Registered fraction model parameters = " \
+                                                                       f"{len(frac_i)}"
+
+        # Check that fraction parameters are the same for each channel
+        assert all(nf == self.number_of_fraction_parameters[0] for nf in self.number_of_fraction_parameters), \
+            self.number_of_fraction_parameters
+        # Check order of processes
+        # Check order of channels
 
         # TODO: Remember: fraction_parameters are None for last template in a component with shared yields
         #  and always None for components with no shared yields.
+        self._fractions_checked = True
 
-        pass
+    def get_efficiencies_vector(self) -> np.ndarray:
+        # TODO: Should be normalized to 1 over all channels? Can not be done when set to be floating
+        # TODO: Would benefit from allowing constrains, e.g. let them float around MC expectation
+        if self._efficiency_indices is not None:
+            return self._params.get_parameters_by_index(indices=self._efficiency_indices)
 
-    def get_efficiency_vector(self):
-        # TODO: Efficiencies are provided by parameter handler...
+        indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.efficiency_parameter_type)
+
+        if not self._efficiencies_checked:
+            self._check_efficiency_parameters()
+
+        self._efficiency_indices = indices
+        return self._params.get_parameters_by_index(indices=indices)
+
+    def _check_efficiency_parameters(self) -> None:
+        self._check_is_initialized()
+
         # TODO: Number of efficiencies = number of templates
         # TODO: Are DIFFERENT for different channels
         # TODO: Might be fixed (extracted from simulation) or floating
-        # TODO: Should be normalized to 1 over all channels? Can not be done when set to be floating
-        # TODO: Would benefit from allowing constrains, e.g. let them float around MC expectation
-        pass
+
+        self._efficiencies_checked = True
 
     def get_template_bin_counts(self):
         # TODO: Get initial (not normed) shapes from templates
@@ -604,8 +652,8 @@ class ModelBuilder:
 
         # TODO: Define remaining variables
         yield_parameters = self.get_yields_vector()
-        fraction_parameters = 1
-        normed_efficiency_parameters = 1
+        fraction_parameters = self.get_fractions_vector()
+        normed_efficiency_parameters = self.get_efficiencies_vector()
 
         normed_templates = 1
 
@@ -650,6 +698,10 @@ class ModelBuilder:
             sum([1 if comp.shared_yield else comp.number_of_subcomponents for comp in ch.components])
             for ch in self._channels
         )
+
+    @property
+    def number_of_dependent_templates(self) -> Tuple[int, ...]:
+        return tuple([t - it for t, it in zip(self.number_of_templates, self.number_of_independent_templates)])
 
     @property
     def number_of_expected_independent_yields(self) -> int:
