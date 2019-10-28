@@ -640,6 +640,7 @@ class ModelBuilder:
         fraction_parameter_infos = self._params.get_parameter_infos_by_index(indices=frac_i)
         fraction_model_parameters = [self._model_parameters[fpi.model_index] for fpi in fraction_parameter_infos]
 
+        # Check order and consistency of fraction parameters
         for channel in self._channels:
             par_i = 0
             comps_and_temps = [(c, t) for c in channel.components for t in c.sub_templates]
@@ -683,6 +684,8 @@ class ModelBuilder:
     def get_efficiencies_vector(self) -> np.ndarray:
         # TODO: Should be normalized to 1 over all channels? Can not be done when set to be floating
         # TODO: Would benefit from allowing constrains, e.g. let them float around MC expectation
+        #       -> implement add_constrains method!
+        # TODO: Add constraint which ensures that they are normalized?
         if self._efficiency_indices is not None:
             return self._params.get_parameters_by_index(indices=self._efficiency_indices)
 
@@ -697,9 +700,25 @@ class ModelBuilder:
     def _check_efficiency_parameters(self) -> None:
         self._check_is_initialized()
 
-        # TODO: Number of efficiencies = number of templates
-        # TODO: Are DIFFERENT for different channels
-        # TODO: Might be fixed (extracted from simulation) or floating
+        eff_i = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.efficiency_parameter_type)
+
+        # Check the number of efficiency parameters, should be the same as the number of templates.
+        assert len(eff_i) == self.total_number_of_templates, (len(eff_i), self.total_number_of_templates)
+
+        efficiency_parameter_infos = self._params.get_parameter_infos_by_index(indices=eff_i)
+        efficiency_model_parameters = [self._model_parameters[epi.model_index] for epi in efficiency_parameter_infos]
+
+        # Check that the efficiency parameters are only used for one template each:
+        templates_list = []
+        for eff_param in efficiency_model_parameters:
+            assert len(eff_param.usage_serial_number_list) == 1, eff_param.as_string()
+            templates_list.append(eff_param.usage_serial_number_list[0])
+        assert len(set(templates_list)) == len(templates_list), \
+            f"{len(set(templates_list))}, {len(templates_list)}\n\n {templates_list}"
+
+        # Check order of efficiency parameters:
+        template_serial_numbers = [t for ch in self._channels for t in ch.template_serial_numbers]
+        assert templates_list == template_serial_numbers, (templates_list, template_serial_numbers)
 
         self._efficiencies_checked = True
 
@@ -757,6 +776,11 @@ class ModelBuilder:
         return tuple(len(channel) for channel in self._channels)
 
     @property
+    def total_number_of_templates(self) -> int:
+        return sum([c.total_number_of_templates for c in self._channels])
+
+    @property
+    # Number of templates per channel
     def number_of_templates(self) -> Tuple[int, ...]:
         return tuple(sum([comp.number_of_subcomponents for comp in ch.components]) for ch in self._channels)
 
