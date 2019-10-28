@@ -394,5 +394,9 @@ class ModelParameter(Parameter):
     def usage_serial_number_list(self) -> List[int]:
         return [serial_number for _, serial_number in self._usage_list]
 
+    @property
+    def usage_template_parameter_list(self) -> List[TemplateParameter]:
+        return [template_param for template_param, _ in self._usage_list]
+
     def _additional_info(self) -> Optional[str]:
         return f"\n\tused by templates with the serial numbers: {self.usage_serial_number_list}"

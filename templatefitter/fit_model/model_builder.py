@@ -435,14 +435,19 @@ class ModelBuilder:
         logging.info(self._model_setup_as_string())
 
     def _check_model_setup(self) -> None:
+        info_text = f"For consistency,\n" \
+                    f"\t- the order of the templates/processes has to be the same in each channel, and\n" \
+                    f"\t- Composition of all components has to be the same in each channel.\n" \
+                    f"{self._model_setup_as_string()}"
+
         if not all(ch.process_names == self._channels[0].process_names for ch in self._channels):
-            raise RuntimeError(f"The order of processes per channel, which make up the model is inconsistent!\n"
-                               f"{self._model_setup_as_string()}")
+            raise RuntimeError("The order of processes per channel, which make up the model is inconsistent!\n"
+                               + info_text)
 
         if not all(ch.process_names_per_component == self._channels[0].process_names_per_component
                    for ch in self._channels):
             raise RuntimeError("The order of channel components, which make up the model is inconsistent!\n"
-                               f"{self._model_setup_as_string()}")
+                               + info_text)
 
     def _model_setup_as_string(self) -> str:
         output_string = ""
@@ -631,13 +636,48 @@ class ModelBuilder:
         # Check that fraction parameters are the same for each channel
         assert all(nf == self.number_of_fraction_parameters[0] for nf in self.number_of_fraction_parameters), \
             self.number_of_fraction_parameters
-        # Check order of processes  # TODO: Maybe add process name to templates...
-        # TODO!
-        # Check order of channels
-        # TODO!
 
-        # TODO: Remember: fraction_parameters are None for last template in a component with shared yields
-        #  and always None for components with no shared yields.
+        fraction_parameter_infos = self._params.get_parameter_infos_by_index(indices=frac_i)
+        fraction_model_parameters = [self._model_parameters[fpi.model_index] for fpi in fraction_parameter_infos]
+
+        for channel in self._channels:
+            par_i = 0
+            comps_and_temps = [(c, t) for c in channel.components for t in c.sub_templates]
+
+            assert len(comps_and_temps) == channel.total_number_of_templates, \
+                (len(comps_and_temps), channel.total_number_of_templates)
+            assert len(channel.fractions_mask) == channel.total_number_of_templates, \
+                (len(channel.fractions_mask), channel.total_number_of_templates)
+
+            last_mask_value = False
+            for counter, ((component, template), mask_value) in enumerate(zip(comps_and_temps, channel.fractions_mask)):
+                if mask_value:
+                    assert component.has_fractions
+                    assert fraction_parameter_infos[par_i].parameter_type == ParameterHandler.fraction_parameter_type, \
+                        (par_i, fraction_parameter_infos[par_i].as_string())
+                    temp_serial_num = fraction_model_parameters[par_i].usage_serial_number_list[channel.channel_index]
+                    assert temp_serial_num == template.serial_number, (temp_serial_num, template.serial_number)
+                    temp_param = fraction_model_parameters[par_i].usage_template_parameter_list[channel.channel_index]
+                    assert template.fraction_parameter == temp_param, \
+                        (template.fraction_parameter.as_string(), temp_param.as_string())
+
+                elif (not mask_value) and last_mask_value:
+                    assert component.has_fractions
+                    assert component.template_serial_numbers[-1] == template.serial_number, \
+                        (component.template_serial_numbers[-1], template.serial_number)
+                    assert template.fraction_parameter is None
+                    par_i += 1
+                    assert par_i <= len(fraction_parameter_infos), (par_i, len(fraction_parameter_infos))
+                else:
+                    assert (not mask_value) and (not last_mask_value), (mask_value, last_mask_value)
+                    assert not component.has_fractions
+                    assert template.fraction_parameter is None
+
+                if counter == len(comps_and_temps) - 1:
+                    assert par_i == len(fraction_parameter_infos), (counter, par_i, len(fraction_parameter_infos))
+
+                last_mask_value = mask_value
+
         self._fractions_checked = True
 
     def get_efficiencies_vector(self) -> np.ndarray:
