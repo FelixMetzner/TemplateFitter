@@ -182,21 +182,21 @@ class Channel(Sequence):
             name_info = "" if self.name is None else f" with name '{self.name}'"
             raise RuntimeError(f"Trying to reset {parameter_name} for channel{name_info}.")
 
-    @staticmethod
-    def _check_components_input(components: List[Component]):
-        if not isinstance(components, list):
-            raise ValueError(f"The parameter 'components' must either be a list of Components or None!\n"
-                             f"You provided an object of type {type(components)}.")
-        if not all(isinstance(c, Component) for c in components):
-            raise ValueError(f"The parameter 'components' must either be a list of Components or None!\n"
-                             f"The list you provided contained the following types:\n\t-"
-                             + "\n\t-".join([str(type(c)) for c in components]))
-        if not all(c.binning == components[0].binning for c in components):
-            raise ValueError("All components of a channel must have the same binning.")
-
     @property
     def number_of_components(self) -> int:
         return self.__len__()
+
+    @property
+    def process_names(self) -> List[str]:
+        return [pn for c in self._channel_components for pn in c.process_names]
+
+    @property
+    def process_names_per_component(self) -> List[List[str]]:
+        return [c.process_names for c in self._channel_components]
+
+    @property
+    def component_names(self) -> List[str]:
+        return [c.name for c in self._channel_components]
 
     @property
     def component_serial_numbers(self) -> Tuple[int, ...]:
@@ -242,6 +242,18 @@ class Channel(Sequence):
 
     def __len__(self) -> int:
         return len(self._channel_components)
+
+    @staticmethod
+    def _check_components_input(components: List[Component]):
+        if not isinstance(components, list):
+            raise ValueError(f"The parameter 'components' must either be a list of Components or None!\n"
+                             f"You provided an object of type {type(components)}.")
+        if not all(isinstance(c, Component) for c in components):
+            raise ValueError(f"The parameter 'components' must either be a list of Components or None!\n"
+                             f"The list you provided contained the following types:\n\t-"
+                             + "\n\t-".join([str(type(c)) for c in components]))
+        if not all(c.binning == components[0].binning for c in components):
+            raise ValueError("All components of a channel must have the same binning.")
 
 
 class ChannelContainer(Sequence):

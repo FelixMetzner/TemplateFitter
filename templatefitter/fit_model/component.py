@@ -151,6 +151,10 @@ class Component:
         return self._has_fractions
 
     @property
+    def process_names(self) -> List[str]:
+        return [t.process_name for t in self._templates]
+
+    @property
     def component_serial_number(self) -> int:
         assert self._component_serial_number is not None
         return self._component_serial_number

@@ -419,6 +419,8 @@ class ModelBuilder:
                                "Please use the 'add_data' method to add data for all defined channels:\n\t"
                                + "\n\t".join(f"{i}. {c.name}" for i, c in enumerate(self._channels)))
 
+        self._check_model_setup()
+
         self._initialize_fraction_conversion()
         self._check_fraction_conversion()
 
@@ -429,6 +431,30 @@ class ModelBuilder:
         # TODO: Is a sorting or something similar of the parameters necessary/useful?
 
         self._is_initialized = True
+
+        logging.info(self._model_setup_as_string())
+
+    def _check_model_setup(self) -> None:
+        if not all(ch.process_names == self._channels[0].process_names for ch in self._channels):
+            raise RuntimeError(f"The order of processes per channel, which make up the model is inconsistent!\n"
+                               f"{self._model_setup_as_string()}")
+
+        if not all(ch.process_names_per_component == self._channels[0].process_names_per_component
+                   for ch in self._channels):
+            raise RuntimeError("The order of channel components, which make up the model is inconsistent!\n"
+                               f"{self._model_setup_as_string()}")
+
+    def _model_setup_as_string(self) -> str:
+        output_string = ""
+        for channel in self._channels:
+            output_string += f"Channel {channel.channel_index}: '{channel.name}\n"
+            for component in channel:
+                output_string += f"\tComponent {component.component_index}: '{component.name}\n"
+                for template in component.sub_templates:
+                    output_string += f"\t\tTemplate {template.template_index}: '{template.name} " \
+                                     f"(Process: {template.process_name})\n"
+
+        return output_string
 
     # TODO: Requires rework! This should allow to setup a model from a prepared model_container...
     def setup_model(self, channels: ChannelContainer):

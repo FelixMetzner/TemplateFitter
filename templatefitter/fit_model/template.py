@@ -20,6 +20,7 @@ class Template(BinnedDistribution):
     def __init__(
             self,
             name: str,
+            process_name: str,
             dimensions: int,
             bins: BinsInputType,
             scope: ScopeInputType,
@@ -28,6 +29,7 @@ class Template(BinnedDistribution):
     ):
         super().__init__(bins=bins, dimensions=dimensions, scope=scope, name=name, data_column_names=data_column_names)
         self._params = params
+        self._process_name = process_name
         self._serial_number = None
         self._component_serial_number = None
 
@@ -70,6 +72,10 @@ class Template(BinnedDistribution):
             raise ValueError(f"The parameter bin_uncert_parameters must be a list of TemplateParameters of type "
                              f"{ParameterHandler.bin_uncert_parameter_type}.")
         self._bin_uncert_parameters = bin_uncert_parameters
+
+    @property
+    def process_name(self) -> str:
+        return self._process_name
 
     @property
     def serial_number(self) -> int:
