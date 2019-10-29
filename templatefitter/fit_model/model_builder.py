@@ -93,6 +93,9 @@ class ModelBuilder:
         self._efficiency_indices = None
         self._efficiencies_checked = False
 
+        self._template_bin_counts = None
+        self._template_shapes_checked = False
+
         # TODO:
         # self.subfraction_indices = []
         # self.num_fractions = 0
@@ -428,8 +431,6 @@ class ModelBuilder:
         self._check_fraction_parameters()
         self._check_efficiency_parameters()
 
-        # TODO: Is a sorting or something similar of the parameters necessary/useful?
-
         self._is_initialized = True
 
         logging.info(self._model_setup_as_string())
@@ -557,6 +558,8 @@ class ModelBuilder:
 
     def _check_yield_parameters(self) -> None:
         self._check_is_initialized()
+        # TODO: IMPORTANT: GET YIELD INDICES VIA LOOP OVER TEMPLATES OR CREATE MATRIX, WHICH TRANSFORMS THE YIELDS AS
+        #                  REQUIRED FOR COMPONENTS WITH SHARED YIELDS!
         indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.yield_parameter_type)
         # Check number of yield parameters
         if not len(indices) == self.number_of_expected_independent_yields:
@@ -723,45 +726,141 @@ class ModelBuilder:
         self._efficiencies_checked = True
 
     def get_template_bin_counts(self):
-        # TODO: Get initial (not normed) shapes from templates
-        pass
+        if self._template_bin_counts is not None:
+            return self._template_bin_counts
 
-    def create_templates(self):
+        bin_counts_per_channel = [np.stack([tmp.bin_counts.flatten() for tmp in ch.templates]) for ch in self._channels]
+        padded_bin_counts_per_channel = self._apply_padding_to_templates(bin_counts_per_channel=bin_counts_per_channel)
+        template_bin_counts = np.stack(padded_bin_counts_per_channel)
+
+        if not self._template_shapes_checked:
+            self._check_template_shapes(template_bin_counts=template_bin_counts)
+
+        self._template_bin_counts = template_bin_counts
+        return self._template_bin_counts
+
+    def _apply_padding_to_templates(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
+        max_n_bins = max([bc.shape[1] for bc in bin_counts_per_channel])
+
+        if not self._template_shapes_checked:
+            assert all([bc.shape[1] == ch.binning.num_bins_total()
+                        for bc, ch in zip(bin_counts_per_channel, self._channels)]), "\t" + "\n\t".join(
+                [f"{bc.shape[1]} : {ch.binning.num_bins_total()}"
+                 for bc, ch in zip(bin_counts_per_channel, self._channels)]
+            )
+
+        if all(bc.shape[1] == max_n_bins for bc in bin_counts_per_channel):
+            return bin_counts_per_channel
+        else:
+            pad_widths = self._pad_widths_per_channel()
+            return [
+                np.pad(bc, pad_width=pad_width, mode='constant', constant_values=0)
+                for bc, pad_width in zip(bin_counts_per_channel, pad_widths)
+            ]
+
+    def _pad_widths_per_channel(self) -> List[List[Tuple[int, int]]]:
+        max_n_bins = max([ch.binning.num_bins_total() for ch in self._channels])
+        if not self._is_checked:
+            assert max_n_bins == self.max_number_of_bins_flattened, (max_n_bins, self.max_number_of_bins_flattened)
+        return [[(0, 0), (0, max_n_bins - ch.binning.num_bins_total())] for ch in self._channels]
+
+    def _check_template_shapes(self, template_bin_counts: np.ndarray) -> None:
+        # Check order of processes in channels:
+        assert all(ch.process_names == self._channels[0].process_names for ch in self._channels), \
+            [ch.process_names for ch in self._channels]
+
+        # Check shape of template_bin_counts
+        assert len(template_bin_counts.shape) == 3, (len(template_bin_counts.shape), template_bin_counts.shape)
+        assert template_bin_counts.shape[0] == self.number_of_channels, \
+            (template_bin_counts.shape, template_bin_counts.shape[0], self.number_of_channels)
+        assert all(template_bin_counts.shape[1] == ts_in_ch for ts_in_ch in self.number_of_templates), \
+            (template_bin_counts.shape, template_bin_counts.shape[1], [t_ch for t_ch in self.number_of_templates])
+        assert template_bin_counts.shape[2] == self.max_number_of_bins_flattened, \
+            (template_bin_counts.shape, template_bin_counts.shape[2], self.max_number_of_bins_flattened)
+
+        self._template_shapes_checked = True
+
+    def get_templates(self) -> np.ndarray:
+        template_bin_counts = self.get_template_bin_counts()
+        # TODO: Apply smearing based on bin_uncertainties.
         # TODO: Are normed after application of corrections, but this should be done in calculate_bin_count!
-        # TODO: Based on template bin counts
-        pass
+        normed_smeared_templates = template_bin_counts
+        return normed_smeared_templates
 
     def calculate_bin_count(self):
         if not self._is_checked:
             assert self._fraction_conversion is not None
             assert isinstance(self._fraction_conversion, FractionConversionInfo), type(self._fraction_conversion)
-            # TODO: Check shapes!
 
-        # TODO: Define remaining variables
         yield_parameters = self.get_yields_vector()
         fraction_parameters = self.get_fractions_vector()
-        normed_efficiency_parameters = self.get_efficiencies_vector()
+        efficiency_parameters = self.get_efficiencies_vector()
+        normed_efficiency_parameters = efficiency_parameters  # TODO: Implement normalization of efficiencies!
 
-        normed_templates = 1
+        normed_templates = self.get_templates()
+
+        self._check_matrix_shapes(
+            yield_params=yield_parameters,
+            fraction_params=fraction_parameters,
+            efficiency_params=normed_efficiency_parameters,
+            templates=normed_templates
+        )
 
         if self._fraction_conversion.needed:
-            bin_count = yield_parameters * (
+            bin_count = ((yield_parameters * (
                     self._fraction_conversion.conversion_matrix * fraction_parameters
                     + self._fraction_conversion.conversion_vector
-            ) * normed_efficiency_parameters * normed_templates
+            ) * normed_efficiency_parameters.T) * normed_templates.T).T
         else:
-            bin_count = yield_parameters * (
-                    self._fraction_conversion.conversion_matrix * fraction_parameters
-                    + self._fraction_conversion.conversion_vector
-            ) * normed_efficiency_parameters * normed_templates
+            bin_count = ((yield_parameters * normed_efficiency_parameters.T) * normed_templates.T).T
+
+        if self.number_of_channels > 1:
+            bin_count = np.sum(bin_count, axis=1)
 
         if not self._is_checked:
             assert bin_count is not None
-            # TODO: Check output shape!
+            # Checking output shape:
+            assert len(bin_count.shape) == 2, bin_count.shape
+            assert bin_count.shape[0] == self.number_of_channels, \
+                (bin_count.shape, bin_count.shape[0], self.number_of_channels)
+            assert bin_count.shape[1] == self.max_number_of_bins_flattened, \
+                (bin_count.shape, bin_count.shape[1], self.max_number_of_bins_flattened)
 
             self._is_checked = True
 
         return bin_count
+
+    def _check_matrix_shapes(
+            self,
+            yield_params: np.ndarray,
+            fraction_params: np.ndarray,
+            efficiency_params: np.ndarray,
+            templates: np.ndarray,
+    ) -> None:
+        if self._is_checked:
+            return
+
+        assert len(yield_params.shape) == 1, (len(yield_params.shape), yield_params.shape)
+        assert len(efficiency_params.shape) == 2, (len(efficiency_params.shape), efficiency_params.shape)
+
+        assert yield_params.shape[0] == efficiency_params.shape[1], \
+            (yield_params.shape[0], efficiency_params.shape[1])
+
+        assert efficiency_params.shape[0] == templates.shape[0], (efficiency_params.shape[0], templates.shape[0])
+        assert efficiency_params.shape[1] == templates.shape[1], (efficiency_params.shape[1], templates.shape[1])
+
+        if self._fraction_conversion.needed:
+            assert len(fraction_params.shape) == 1, (len(fraction_params.shape), fraction_params.shape)
+            assert len(self._fraction_conversion.conversion_vector.shape) == 1, \
+                self._fraction_conversion.conversion_vector.shape
+            assert len(self._fraction_conversion.conversion_matrix.shape) == 2, \
+                self._fraction_conversion.conversion_matrix.shape
+            assert yield_params.shape[0] == len(self._fraction_conversion.conversion_vector), \
+                (yield_params.shape[0], len(self._fraction_conversion.conversion_vector))
+            assert self._fraction_conversion.conversion_matrix.shape[0] == yield_params.shape[0], \
+                (self._fraction_conversion.conversion_matrix.shape[0], yield_params.shape[0])
+            assert self._fraction_conversion.conversion_matrix.shape[1] == fraction_params.shape[0], \
+                (self._fraction_conversion.conversion_matrix.shape[1], fraction_params.shape[0])
 
     @property
     def number_of_channels(self) -> int:
@@ -770,6 +869,10 @@ class ModelBuilder:
     @property
     def binning(self) -> Tuple[Binning, ...]:
         return tuple(channel.binning for channel in self._channels)
+
+    @property
+    def max_number_of_bins_flattened(self) -> int:
+        return max(ch_binning.num_bins_total() for ch_binning in self.binning)
 
     @property
     def number_of_components(self) -> Tuple[int, ...]:

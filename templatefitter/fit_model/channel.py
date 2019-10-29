@@ -187,6 +187,10 @@ class Channel(Sequence):
         return self.__len__()
 
     @property
+    def templates(self) -> Tuple[Template, ...]:
+        return tuple([tmp for comp in self._channel_components for tmp in comp.sub_templates])
+
+    @property
     def process_names(self) -> List[str]:
         return [pn for c in self._channel_components for pn in c.process_names]
 
