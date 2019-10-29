@@ -36,16 +36,6 @@ __all__ = ["ModelBuilder"]
 #           ratio = yield_2 / yield_1 -> yield_2 = ratio * yield_1
 #           => (yield_i, yield_1, yield_1, yield_j, ...)^T * (1, 1, ratio, 1, ...)^T
 
-# TODO: Checks that can be imposed 0n parameters:
-#           - number of efficiency parameters: number_of_templates * number_of_channels,
-#             as efficiency is different for each template and each channel
-#           - number of fraction_parameters: Depends on the components. Can be the same for each channel
-#           - number of yield_parameters: number_of_independent_components of ONE channel. Are shared by all channel.
-
-# TODO: Possible checks before using fit model:
-#           - Check that every template of a model uses the same ParameterHandler instance!
-#           - For first call of expected_events_per_bin: Check if template indices are ordered correctly.
-
 
 class FractionConversionInfo(NamedTuple):
     needed: bool
