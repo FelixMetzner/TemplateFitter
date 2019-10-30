@@ -3,6 +3,7 @@ Class which defines the fit model by combining templates and handles the computa
 """
 
 import logging
+import operator
 import numpy as np
 from numba import jit
 from scipy.linalg import block_diag
@@ -417,7 +418,7 @@ class ModelBuilder:
         self._initialize_fraction_conversion()
         self._check_fraction_conversion()
 
-        self._check_yield_parameters()
+        self._check_yield_parameters(yield_parameter_indices=None)
         self._check_fraction_parameters()
         self._check_efficiency_parameters()
 
@@ -538,19 +539,32 @@ class ModelBuilder:
         if self._yield_indices is not None:
             return self._params.get_parameters_by_index(indices=self._yield_indices)
 
-        indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.yield_parameter_type)
+        indices_from_temps = self._get_yield_parameter_indices()
 
         if not self._yields_checked:
-            self._check_yield_parameters()
+            self._check_yield_parameters(yield_parameter_indices=indices_from_temps)
 
-        self._yield_indices = indices
-        return self._params.get_parameters_by_index(indices=indices)
+        self._yield_indices = indices_from_temps
+        return self._params.get_parameters_by_index(indices=indices_from_temps)
 
-    def _check_yield_parameters(self) -> None:
+    def _get_yield_parameter_indices(self) -> List[int]:
+        channel_with_max, max_number_of_templates = self._get_channel_with_max_number_of_templates()
+        return [t.yield_parameter.index for t in self._channels[channel_with_max].templates]
+
+    def _check_yield_parameters(self, yield_parameter_indices: Optional[List[int]]) -> None:
         self._check_is_initialized()
-        # TODO: IMPORTANT: GET YIELD INDICES VIA LOOP OVER TEMPLATES OR CREATE MATRIX, WHICH TRANSFORMS THE YIELDS AS
-        #                  REQUIRED FOR COMPONENTS WITH SHARED YIELDS!
+
         indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.yield_parameter_type)
+
+        if yield_parameter_indices is None:
+            yield_parameter_indices = self._get_yield_parameter_indices()
+
+        # Compare number of yield parameters in parameter handler, with what is used in the model
+        if self._fraction_conversion.needed:
+            assert len(yield_parameter_indices) >= len(indices), (len(yield_parameter_indices), len(indices))
+        else:
+            assert len(yield_parameter_indices) == len(indices), (len(yield_parameter_indices), len(indices))
+
         # Check number of yield parameters
         if not len(indices) == self.number_of_expected_independent_yields:
             raise RuntimeError(f"Number of yield parameters does not agree with the number of expected independent "
@@ -565,6 +579,27 @@ class ModelBuilder:
                                + "\n\n".join([i.as_string()
                                               for i in self._params.get_parameter_infos_by_index(indices=indices)])
                                )
+
+        channel_with_max, max_number_of_templates = self._get_channel_with_max_number_of_templates()
+        assert len(yield_parameter_indices) == max_number_of_templates, \
+            (len(yield_parameter_indices), max_number_of_templates)
+
+        for channel in self._channels:
+            assert channel.total_number_of_templates <= len(yield_parameter_indices), \
+                (channel.total_number_of_templates, len(yield_parameter_indices))
+            for count, (yield_parameter_index, template) in enumerate(zip(
+                    yield_parameter_indices[:channel.total_number_of_templates], channel.templates)):
+                yield_parameter_info = self._params.get_parameter_infos_by_index(indices=yield_parameter_index)[0]
+                model_parameter = self._model_parameters[yield_parameter_info.model_index]
+
+                serial_number_index = sum(
+                    [c.total_number_of_templates for c in self._channels[:channel.channel_index]])
+                serial_number_index += count
+                template_serial_number = model_parameter.usage_serial_number_list[serial_number_index]
+                assert template.serial_number == template_serial_number, \
+                    (template.serial_number, template_serial_number)
+
+        # Beginning of OLD Checks
         # Check order of yield parameters:
         yield_parameter_infos = self._params.get_parameter_infos_by_index(indices=indices)
         used_model_parameter_indices = []
@@ -599,6 +634,7 @@ class ModelBuilder:
                 "Channel order differs for different yield model parameters.\n\tParameter Name: Channel Order\n\t"
                 + "\n\t".join([f"{p.name}: co" for co, p in zip(channel_orders, yield_parameter_infos)])
             )
+        # End of OLD Checks
 
         self._yields_checked = True
 
@@ -674,13 +710,14 @@ class ModelBuilder:
 
         self._fractions_checked = True
 
-    def get_efficiencies_vector(self) -> np.ndarray:
+    def get_efficiencies_matrix(self) -> np.ndarray:
         # TODO: Should be normalized to 1 over all channels? Can not be done when set to be floating
         # TODO: Would benefit from allowing constrains, e.g. let them float around MC expectation
         #       -> implement add_constrains method!
         # TODO: Add constraint which ensures that they are normalized?
+
         if self._efficiency_indices is not None:
-            return self._params.get_parameters_by_index(indices=self._efficiency_indices)
+            return self._get_shaped_efficiency_parameters(indices=self._efficiency_indices)
 
         indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.efficiency_parameter_type)
 
@@ -688,7 +725,38 @@ class ModelBuilder:
             self._check_efficiency_parameters()
 
         self._efficiency_indices = indices
-        return self._params.get_parameters_by_index(indices=indices)
+        return self._get_shaped_efficiency_parameters(indices=indices)
+
+    def _get_shaped_efficiency_parameters(self, indices: List[int]) -> np.ndarray:
+        ntpc = self.number_of_templates  # ntpc = Number of templates per channel
+        indices_per_channel = [
+            indices[sum(ntpc[:channel_index]):sum(ntpc[:channel_index]) + number_of_temps] if channel_index > 0
+            else indices[:number_of_temps]
+            for channel_index, number_of_temps in enumerate(ntpc)
+        ]
+
+        eff_params_per_ch = [self._params.get_parameters_by_index(indices=indices) for indices in indices_per_channel]
+        max_params = max([len(params_array) for params_array in eff_params_per_ch])
+        if not self._efficiencies_checked:
+            assert max_params == max(self.number_of_templates), (max_params, max(self.number_of_templates))
+
+        if all([len(params_array) == max_params for params_array in eff_params_per_ch]):
+            shaped_effs = np.stack(eff_params_per_ch)
+        else:
+            # Requires padding
+            shaped_effs = np.stack(
+                [np.pad(effs, pad_width=(0, max_params - len(effs)), mode='constant', constant_values=0)
+                 for effs in eff_params_per_ch]
+            )
+
+        if not self._efficiencies_checked:
+            assert len(shaped_effs.shape) == 2, (len(shaped_effs.shape), shaped_effs.shape)
+            assert shaped_effs.shape[0] == self.number_of_channels, \
+                (shaped_effs.shape, shaped_effs.shape[0], self.number_of_channels)
+            assert shaped_effs.shape[1] == max(self.number_of_templates), \
+                (shaped_effs.shape, shaped_effs.shape[1], max(self.number_of_templates))
+
+        return shaped_effs
 
     def _check_efficiency_parameters(self) -> None:
         self._check_is_initialized()
@@ -777,6 +845,8 @@ class ModelBuilder:
         normed_smeared_templates = template_bin_counts
         return normed_smeared_templates
 
+    # TODO: This function must also take a parameter_vector like self._params._np_pars as argument,
+    #       which is used instead of self._params._np_pars...
     def calculate_bin_count(self):
         if not self._is_checked:
             assert self._fraction_conversion is not None
@@ -784,7 +854,7 @@ class ModelBuilder:
 
         yield_parameters = self.get_yields_vector()
         fraction_parameters = self.get_fractions_vector()
-        efficiency_parameters = self.get_efficiencies_vector()
+        efficiency_parameters = self.get_efficiencies_matrix()
         normed_efficiency_parameters = efficiency_parameters  # TODO: Implement normalization of efficiencies!
 
         normed_templates = self.get_templates()
@@ -899,6 +969,10 @@ class ModelBuilder:
     @property
     def number_of_fraction_parameters(self) -> Tuple[int, ...]:
         return tuple(sum([comp.required_fraction_parameters for comp in ch.components]) for ch in self._channels)
+
+    def _get_channel_with_max_number_of_templates(self) -> Tuple[int, int]:
+        channel_with_max, max_number_of_templates = max(enumerate(self.number_of_templates), key=operator.itemgetter(1))
+        return channel_with_max, max_number_of_templates
 
     def get_model_parameter(self, name_or_index: Union[str, int]) -> ModelParameter:
         if isinstance(name_or_index, int):
