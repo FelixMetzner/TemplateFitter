@@ -68,6 +68,8 @@ class ModelBuilder:
         self._channels = ChannelContainer()
 
         self._data_channels = DataChannelContainer()
+        self._data_bin_counts = None
+        self._data_bin_count_checked = False
 
         self._fraction_conversion = None
 
@@ -88,9 +90,6 @@ class ModelBuilder:
         self._template_shapes_checked = False
 
         # TODO:
-        # self.subfraction_indices = []
-        # self.num_fractions = 0
-
         # self.constrain_indices = []
         # self.constrain_value = np.array([])
         # self.constrain_sigma = np.array([])
@@ -100,9 +99,6 @@ class ModelBuilder:
 
         # self._inv_corr = np.array([])
         # self.bin_par_slice = (0, 0)
-
-        # self._dim = None
-        # self.shape = ()
 
     def add_model_parameter(
             self,
@@ -798,14 +794,14 @@ class ModelBuilder:
         return self._template_bin_counts
 
     def _apply_padding_to_templates(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
-        max_n_bins = max([bc.shape[1] for bc in bin_counts_per_channel])
-
         if not self._template_shapes_checked:
             assert all([bc.shape[1] == ch.binning.num_bins_total()
                         for bc, ch in zip(bin_counts_per_channel, self._channels)]), "\t" + "\n\t".join(
                 [f"{bc.shape[1]} : {ch.binning.num_bins_total()}"
                  for bc, ch in zip(bin_counts_per_channel, self._channels)]
             )
+
+        max_n_bins = max([bc.shape[1] for bc in bin_counts_per_channel])
 
         if all(bc.shape[1] == max_n_bins for bc in bin_counts_per_channel):
             return bin_counts_per_channel
@@ -847,6 +843,7 @@ class ModelBuilder:
 
     # TODO: This function must also take a parameter_vector like self._params._np_pars as argument,
     #       which is used instead of self._params._np_pars...
+    # TODO: Use this function in Likelihood calculation!
     def calculate_bin_count(self):
         if not self._is_checked:
             assert self._fraction_conversion is not None
@@ -878,17 +875,18 @@ class ModelBuilder:
             bin_count = np.sum(bin_count, axis=1)
 
         if not self._is_checked:
-            assert bin_count is not None
-            # Checking output shape:
-            assert len(bin_count.shape) == 2, bin_count.shape
-            assert bin_count.shape[0] == self.number_of_channels, \
-                (bin_count.shape, bin_count.shape[0], self.number_of_channels)
-            assert bin_count.shape[1] == self.max_number_of_bins_flattened, \
-                (bin_count.shape, bin_count.shape[1], self.max_number_of_bins_flattened)
-
+            self._bin_count_shape_check(bin_count=bin_count, where="calculate_bin_count")
             self._is_checked = True
 
         return bin_count
+
+    def _bin_count_shape_check(self, bin_count: np.ndarray, where: str) -> None:
+        assert bin_count is not None, where
+        assert len(bin_count.shape) == 2, (where, bin_count.shape, len(bin_count.shape))
+        assert bin_count.shape[0] == self.number_of_channels, \
+            (where, bin_count.shape, bin_count.shape[0], self.number_of_channels)
+        assert bin_count.shape[1] == self.max_number_of_bins_flattened, \
+            (where, bin_count.shape, bin_count.shape[1], self.max_number_of_bins_flattened)
 
     def _check_matrix_shapes(
             self,
@@ -921,6 +919,43 @@ class ModelBuilder:
                 (self._fraction_conversion.conversion_matrix.shape[0], yield_params.shape[0])
             assert self._fraction_conversion.conversion_matrix.shape[1] == fraction_params.shape[0], \
                 (self._fraction_conversion.conversion_matrix.shape[1], fraction_params.shape[0])
+
+    # TODO: Use this function in Likelihood calculation!
+    def get_flattened_data_bin_counts(self) -> np.array:
+        if self._data_bin_counts is not None:
+            return self._data_bin_counts
+
+        flat_data_bin_counts = [data_channel.bin_counts.flatten() for data_channel in self._data_channels]
+        padded_flat_data_bin_counts = self._apply_padding_to_data_bin_count(bin_counts_per_channel=flat_data_bin_counts)
+        data_bin_count_matrix = np.stack(padded_flat_data_bin_counts)
+
+        if not self._data_bin_count_checked:
+            self._bin_count_shape_check(bin_count=data_bin_count_matrix, where="get_flattened_data_bin_counts")
+            self._data_bin_count_checked = True
+
+        self._data_bin_counts = data_bin_count_matrix
+        return data_bin_count_matrix
+
+    def _apply_padding_to_data_bin_count(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
+        if not self._data_bin_count_checked:
+            assert all(len(bc.shape) == 1 for bc in bin_counts_per_channel), [bc.shape for bc in bin_counts_per_channel]
+            assert all(len(bc) == b.num_bins_total for bc, b in zip(bin_counts_per_channel, self.binning)), \
+                "\n".join([f"{ch.name}: data_bins = {len(bc)} --- template_bins = {b.num_bins_total}"
+                           for ch, bc, b in zip(self._channels, bin_counts_per_channel, self.binning)])
+
+        max_n_bins = max([len(bc) for bc in bin_counts_per_channel])
+
+        if not self._data_bin_count_checked:
+            assert max_n_bins == self.max_number_of_bins_flattened, (max_n_bins, self.max_number_of_bins_flattened)
+
+        if all(len(bc) == max_n_bins for bc in bin_counts_per_channel):
+            return bin_counts_per_channel
+        else:
+            pad_widths = [(0, max_n_bins - ch.binning.num_bins_total()) for ch in self._channels]
+            return [
+                np.pad(bc, pad_width=pad_width, mode='constant', constant_values=0)
+                for bc, pad_width in zip(bin_counts_per_channel, pad_widths)
+            ]
 
     @property
     def number_of_channels(self) -> int:
