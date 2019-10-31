@@ -191,6 +191,8 @@ class ModelBuilder:
 
         yield_model_parameter.used_by(template_parameter=yield_param, template_serial_number=serial_number)
 
+        # TODO: Use bin uncertainties!
+        # TODO: Add them automatically?!?
         bin_uncert_paras = self._get_list_of_template_params(
             input_params=bin_uncert_parameters,
             serial_numbers=serial_number,
@@ -418,6 +420,8 @@ class ModelBuilder:
         self._check_fraction_parameters()
         self._check_efficiency_parameters()
 
+        self._params.finalize()
+
         self._is_initialized = True
 
         logging.info(self._model_setup_as_string())
@@ -531,9 +535,12 @@ class ModelBuilder:
             assert all(len(yields_i) >= c.total_number_of_templates for c in self._channels), \
                 f"{len(yields_i)}\n" + "\n".join([f"{c.name}: {c.total_number_of_templates}" for c in self._channels])
 
-    def get_yields_vector(self) -> np.ndarray:
+    def get_yields_vector(self, parameter_vector: np.ndarray) -> np.ndarray:
         if self._yield_indices is not None:
-            return self._params.get_parameters_by_index(indices=self._yield_indices)
+            return self._params.get_combined_parameters_by_index(
+                parameter_vector=parameter_vector,
+                indices=self._yield_indices
+            )
 
         indices_from_temps = self._get_yield_parameter_indices()
 
@@ -541,7 +548,10 @@ class ModelBuilder:
             self._check_yield_parameters(yield_parameter_indices=indices_from_temps)
 
         self._yield_indices = indices_from_temps
-        return self._params.get_parameters_by_index(indices=indices_from_temps)
+        return self._params.get_combined_parameters_by_index(
+            parameter_vector=parameter_vector,
+            indices=indices_from_temps
+        )
 
     def _get_yield_parameter_indices(self) -> List[int]:
         channel_with_max, max_number_of_templates = self._get_channel_with_max_number_of_templates()
@@ -634,9 +644,12 @@ class ModelBuilder:
 
         self._yields_checked = True
 
-    def get_fractions_vector(self) -> np.ndarray:
+    def get_fractions_vector(self, parameter_vector: np.ndarray) -> np.ndarray:
         if self._fraction_indices is not None:
-            return self._params.get_parameters_by_index(indices=self._fraction_indices)
+            return self._params.get_combined_parameters_by_index(
+                parameter_vector=parameter_vector,
+                indices=self._fraction_indices
+            )
 
         indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.fraction_parameter_type)
 
@@ -644,7 +657,7 @@ class ModelBuilder:
             self._check_fraction_parameters()
 
         self._fraction_indices = indices
-        return self._params.get_parameters_by_index(indices=indices)
+        return self._params.get_combined_parameters_by_index(parameter_vector=parameter_vector, indices=indices)
 
     def _check_fraction_parameters(self) -> None:
         self._check_is_initialized()
@@ -706,14 +719,17 @@ class ModelBuilder:
 
         self._fractions_checked = True
 
-    def get_efficiencies_matrix(self) -> np.ndarray:
+    def get_efficiencies_matrix(self, parameter_vector: np.ndarray) -> np.ndarray:
         # TODO: Should be normalized to 1 over all channels? Can not be done when set to be floating
         # TODO: Would benefit from allowing constrains, e.g. let them float around MC expectation
         #       -> implement add_constrains method!
         # TODO: Add constraint which ensures that they are normalized?
 
         if self._efficiency_indices is not None:
-            return self._get_shaped_efficiency_parameters(indices=self._efficiency_indices)
+            return self._get_shaped_efficiency_parameters(
+                parameter_vector=parameter_vector,
+                indices=self._efficiency_indices
+            )
 
         indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.efficiency_parameter_type)
 
@@ -721,9 +737,10 @@ class ModelBuilder:
             self._check_efficiency_parameters()
 
         self._efficiency_indices = indices
-        return self._get_shaped_efficiency_parameters(indices=indices)
+        return self._get_shaped_efficiency_parameters(parameter_vector=parameter_vector, indices=indices)
 
-    def _get_shaped_efficiency_parameters(self, indices: List[int]) -> np.ndarray:
+    # TODO: Rework this function: Padding should be done by via matrix multiplications to avoid loops!
+    def _get_shaped_efficiency_parameters(self, parameter_vector: np.ndarray, indices: List[int]) -> np.ndarray:
         ntpc = self.number_of_templates  # ntpc = Number of templates per channel
         indices_per_channel = [
             indices[sum(ntpc[:channel_index]):sum(ntpc[:channel_index]) + number_of_temps] if channel_index > 0
@@ -731,7 +748,10 @@ class ModelBuilder:
             for channel_index, number_of_temps in enumerate(ntpc)
         ]
 
-        eff_params_per_ch = [self._params.get_parameters_by_index(indices=indices) for indices in indices_per_channel]
+        eff_params_per_ch = [
+            self._params.get_combined_parameters_by_index(parameter_vector=parameter_vector, indices=indices)
+            for indices in indices_per_channel
+        ]
         max_params = max([len(params_array) for params_array in eff_params_per_ch])
         if not self._efficiencies_checked:
             assert max_params == max(self.number_of_templates), (max_params, max(self.number_of_templates))
@@ -841,17 +861,15 @@ class ModelBuilder:
         normed_smeared_templates = template_bin_counts
         return normed_smeared_templates
 
-    # TODO: This function must also take a parameter_vector like self._params._np_pars as argument,
-    #       which is used instead of self._params._np_pars...
     # TODO: Use this function in Likelihood calculation!
-    def calculate_bin_count(self):
+    def calculate_bin_count(self, parameter_vector: np.ndarray):
         if not self._is_checked:
             assert self._fraction_conversion is not None
             assert isinstance(self._fraction_conversion, FractionConversionInfo), type(self._fraction_conversion)
 
-        yield_parameters = self.get_yields_vector()
-        fraction_parameters = self.get_fractions_vector()
-        efficiency_parameters = self.get_efficiencies_matrix()
+        yield_parameters = self.get_yields_vector(parameter_vector=parameter_vector)
+        fraction_parameters = self.get_fractions_vector(parameter_vector=parameter_vector)
+        efficiency_parameters = self.get_efficiencies_matrix(parameter_vector=parameter_vector)
         normed_efficiency_parameters = efficiency_parameters  # TODO: Implement normalization of efficiencies!
 
         normed_templates = self.get_templates()
