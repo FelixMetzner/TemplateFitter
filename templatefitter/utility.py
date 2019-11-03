@@ -104,16 +104,6 @@ def xlogyx(x, y):
         return x * np.log1p((y - x) / x)
     else:
         return -x * np.log1p((x - y) / y)
-    # result = np.zeros_like(x)
-    #
-    # for i in range(x.shape[0]):
-    #     if x[i] < 1e-100:
-    #         result[i] = 0
-    #     elif x[i] < y[i]:
-    #         result[i] = x[i] * np.log1p((y[i] - x[i])/x[i])
-    #     else:
-    #         result[i] = -x[i] * np.log1p((x[i] - y[i])/y[i])
-    # return result
 
 
 def get_systematic_cov_mat(hup, hdown):

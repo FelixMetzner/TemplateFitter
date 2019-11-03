@@ -381,6 +381,12 @@ class ModelBuilder:
         else:
             return channel_serial_number
 
+    # TODO: Needs work!
+    def add_constraint(self, name: str, value: float, sigma: float) -> None:
+        self.constrain_indices.append(self._params.get_index(name))
+        self.constrain_value = np.append(self.constrain_value, value)
+        self.constrain_sigma = np.append(self.constrain_sigma, sigma)
+
     def add_data(self, channels: Dict[str, InputDataType]):
         assert self._data_channels.is_empty
         if self._has_data is True:
@@ -860,7 +866,6 @@ class ModelBuilder:
         normed_smeared_templates = template_bin_counts
         return normed_smeared_templates
 
-    # TODO: Use this function in Likelihood calculation!
     def calculate_expected_bin_count(self, parameter_vector: np.ndarray):
         if not self._is_checked:
             assert self._fraction_conversion is not None
@@ -937,7 +942,6 @@ class ModelBuilder:
             assert self._fraction_conversion.conversion_matrix.shape[1] == fraction_params.shape[0], \
                 (self._fraction_conversion.conversion_matrix.shape[1], fraction_params.shape[0])
 
-    # TODO: Use this function in Likelihood calculation!
     def get_flattened_data_bin_counts(self) -> np.array:
         if self._data_bin_counts is not None:
             return self._data_bin_counts
@@ -952,6 +956,10 @@ class ModelBuilder:
 
         self._data_bin_counts = data_bin_count_matrix
         return data_bin_count_matrix
+
+    # TODO: Needs work
+    def get_data_errors(self) -> np.ndarray:
+        return np.zeros(self.get_flattened_data_bin_counts().shape)
 
     def _apply_padding_to_data_bin_count(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
         if not self._data_bin_count_checked:
@@ -1133,6 +1141,42 @@ class ModelBuilder:
             "\n".join([f"{i}] <= {t}" for i, t in zip(self.number_of_independent_templates, self.number_of_templates)])
         return not (self.number_of_independent_templates == self.number_of_templates)
 
+    # TODO: Needs work
+    @jit
+    def _gauss_term(self, bin_pars: np.ndarray) -> float:
+        return bin_pars @ self._inv_corr @ bin_pars
+
+    # TODO: Needs work
+    def _constrain_term(self) -> float:
+        constrain_pars = self._params.get_parameters_by_index(self.constrain_indices)
+        return np.sum(((self.constrain_value - constrain_pars) / self.constrain_sigma) ** 2)
+
+    @jit
+    def chi2(self, parameter_vector: np.ndarray) -> float:
+        chi2_data_term = np.sum(
+            (self.calculate_expected_bin_count(parameter_vector=parameter_vector)
+             - self.get_flattened_data_bin_counts()) ** 2 / (2 * self.get_data_errors() ** 2),
+            axis=None
+        )
+
+        return chi2_data_term + self._gauss_term() + self._constrain_term()
+
+    def nll(self, parameter_vector: np.ndarray) -> float:
+        exp_evts_per_bin = self.calculate_expected_bin_count(parameter_vector=parameter_vector)
+        poisson_term = np.sum(
+            exp_evts_per_bin - self.get_flattened_data_bin_counts()
+            - xlogyx(self.get_flattened_data_bin_counts(), exp_evts_per_bin),
+            axis=None
+        )
+
+        return poisson_term + (self._gauss_term() + self._constrain_term()) / 2.
+
+    def create_nll(self) -> "CostFunction":
+        return NLLCostFunction(self, parameter_handler=self._params)
+
+    def create_chi2(self) -> "CostFunction":
+        return Chi2CostFunction(self, parameter_handler=self._params)
+
     # TODO: The following stuff is not adapted, yet...
 
     def relative_error_matrix(self):
@@ -1168,11 +1212,6 @@ class ModelBuilder:
         # normalised expected corrected fractions
         # determine expected amount of events in each bin
 
-    def add_constraint(self, name: str, value: float, sigma: float) -> None:
-        self.constrain_indices.append(self._params.get_index(name))
-        self.constrain_value = np.append(self.constrain_value, value)
-        self.constrain_sigma = np.append(self.constrain_sigma, sigma)
-
     def x_expected(self) -> np.ndarray:
         yields = self._params.get_parameters_by_index(self.yield_indices)
         fractions_per_template = np.array([template.fractions() for template in self.templates.values()])
@@ -1184,49 +1223,6 @@ class ModelBuilder:
     def _create_block_diag_inv_corr_mat(self) -> None:
         inv_corr_mats = [template.inv_corr_mat() for template in self.templates.values()]
         self._inv_corr = block_diag(*inv_corr_mats)
-
-    def _constrain_term(self) -> float:
-        constrain_pars = self._params.get_parameters_by_index(self.constrain_indices)
-        chi2constrain = np.sum(((self.constrain_value - constrain_pars) / self.constrain_sigma) ** 2)
-        assert isinstance(chi2constrain, float), type(chi2constrain)  # TODO: Remove this assertion for speed-up!
-        return chi2constrain
-
-    @jit
-    def _gauss_term(self, bin_pars: np.ndarray) -> float:
-        return bin_pars @ self._inv_corr @ bin_pars
-
-    @jit
-    def chi2(self, pars: np.ndarray) -> float:
-        self._params.set_parameters(pars)
-
-        yields = self._params.get_parameters_by_index(self.yield_indices).reshape(self.num_templates, 1)
-        sub_pars = self._params.get_parameters_by_index(self.subfraction_indices).reshape(self.num_fractions, 1)
-        bin_pars = self._params.get_parameters_by_slice(self.bin_par_slice)
-
-        chi2 = self.chi2_compute(bin_pars, yields, sub_pars)
-        return chi2
-
-    @jit
-    def chi2_compute(self, bin_pars: np.ndarray, yields: np.ndarray, sub_pars: np.ndarray) -> float:
-        chi2data = np.sum(
-            (self.expected_events_per_bin(bin_pars.reshape(self.shape), yields, sub_pars) - self.x_obs) ** 2
-            / (2 * self.x_obs_errors ** 2)
-        )
-
-        assert isinstance(chi2data, float), type(chi2data)  # TODO: Remove this assertion for speed-up!
-
-        chi2 = chi2data + self._gauss_term(bin_pars)  # + self._constrain_term()  # TODO: Check this
-        return chi2
-
-    def nll(self, pars: np.ndarray) -> float:
-        self._params.set_parameters(pars)
-
-        exp_evts_per_bin = self.x_expected()
-        poisson_term = np.sum(exp_evts_per_bin - self.x_obs - xlogyx(self.x_obs, exp_evts_per_bin))
-        assert isinstance(poisson_term, float), type(poisson_term)  # TODO: Remove this assertion for speed-up!
-
-        nll = poisson_term + (self._gauss_term() + self._constrain_term()) / 2.
-        return nll
 
     @staticmethod
     def _get_projection(ax: str, bc: np.ndarray) -> np.ndarray:
@@ -1252,13 +1248,7 @@ class ModelBuilder:
         )
         return old_plotting.plot_stacked_on(plot_info=plot_info, ax=ax, plot_all=plot_all, **kwargs)
 
-    # TODO: Problematic; At the moment some sort of forward declaration is necessary for type hint...
-    def create_nll(self) -> "CostFunction":
-        return CostFunction(self, parameter_handler=self._params)
 
-
-# TODO: Maybe relocate cost functions into separate sub-package;
-#  however: CostFunction depends on ModelBuilder and vice versa ...
 class AbstractTemplateCostFunction(ABC):
     """
     Abstract base class for all cost function to estimate yields using the template method.
@@ -1280,9 +1270,17 @@ class AbstractTemplateCostFunction(ABC):
         raise NotImplementedError(f"{self.__class__.__name__} is an abstract base class.")
 
 
-class CostFunction(AbstractTemplateCostFunction):
+class Chi2CostFunction(AbstractTemplateCostFunction):
     def __init__(self, model: ModelBuilder, parameter_handler: ParameterHandler) -> None:
         super().__init__(model=model, parameter_handler=parameter_handler)
 
     def __call__(self, x) -> float:
         return self._model.chi2(x)
+
+
+class NLLCostFunction(AbstractTemplateCostFunction):
+    def __init__(self, model: ModelBuilder, parameter_handler: ParameterHandler) -> None:
+        super().__init__(model=model, parameter_handler=parameter_handler)
+
+    def __call__(self, x) -> float:
+        return self._model.nll(x)
