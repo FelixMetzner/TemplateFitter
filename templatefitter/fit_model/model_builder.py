@@ -9,6 +9,7 @@ from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
 
+from keras.preprocessing.sequence import pad_sequences
 from typing import Optional, Union, List, Tuple, Dict, NamedTuple
 
 from templatefitter.utility import xlogyx
@@ -30,13 +31,12 @@ __all__ = ["ModelBuilder"]
 #       We could add a ratio parameter instead of a yield parameter for components for which
 #       the ratio of two yields should be fitted.
 #       This would require an additional parameter type and an additional vector in the
-#       calculation in calculate_bin_count:
+#       calculation in calculate_expected_bin_count:
 #           yield_vector * ratio_vector
 #       where ratio vector holds ones except for the row of the component which is related to another component
 #       via the ratio. For this component the respective yield must stand at the place of its own yield value, e.g.:
 #           ratio = yield_2 / yield_1 -> yield_2 = ratio * yield_1
 #           => (yield_i, yield_1, yield_1, yield_j, ...)^T * (1, 1, ratio, 1, ...)^T
-
 
 class FractionConversionInfo(NamedTuple):
     needed: bool
@@ -46,7 +46,6 @@ class FractionConversionInfo(NamedTuple):
 
 # TODO: Maybe the ModelBuilder could produce a Model object, which is a container that holds all
 #       the necessary information and can do the calculations in the end.
-
 
 class ModelBuilder:
     def __init__(
@@ -58,7 +57,6 @@ class ModelBuilder:
         self._model_parameters = []
         self._model_parameters_mapping = {}
 
-        # TODO: Maybe define also dedicated containers for templates, model_parameters and components, as for channels!
         self._templates = []
         self._templates_mapping = {}
 
@@ -84,6 +82,8 @@ class ModelBuilder:
         self._fractions_checked = False
 
         self._efficiency_indices = None
+        self._efficiency_reshaping_indices = None
+        self._efficiency_padding_required = True
         self._efficiencies_checked = False
 
         self._template_bin_counts = None
@@ -732,47 +732,46 @@ class ModelBuilder:
             )
 
         indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.efficiency_parameter_type)
+        shaped_efficiency_matrix = self._get_shaped_efficiency_parameters(
+            parameter_vector=parameter_vector,
+            indices=indices
+        )
 
         if not self._efficiencies_checked:
             self._check_efficiency_parameters()
 
         self._efficiency_indices = indices
-        return self._get_shaped_efficiency_parameters(parameter_vector=parameter_vector, indices=indices)
+        return shaped_efficiency_matrix
 
-    # TODO: Rework this function: Padding should be done by via matrix multiplications to avoid loops!
     def _get_shaped_efficiency_parameters(self, parameter_vector: np.ndarray, indices: List[int]) -> np.ndarray:
-        ntpc = self.number_of_templates  # ntpc = Number of templates per channel
-        indices_per_channel = [
-            indices[sum(ntpc[:channel_index]):sum(ntpc[:channel_index]) + number_of_temps] if channel_index > 0
-            else indices[:number_of_temps]
-            for channel_index, number_of_temps in enumerate(ntpc)
-        ]
+        eff_params_array = self._params.get_combined_parameters_by_index(
+            parameter_vector=parameter_vector,
+            indices=indices
+        )
 
-        eff_params_per_ch = [
-            self._params.get_combined_parameters_by_index(parameter_vector=parameter_vector, indices=indices)
-            for indices in indices_per_channel
-        ]
-        max_params = max([len(params_array) for params_array in eff_params_per_ch])
-        if not self._efficiencies_checked:
-            assert max_params == max(self.number_of_templates), (max_params, max(self.number_of_templates))
+        if self._efficiency_reshaping_indices is None:
+            ntpc = self.number_of_templates  # ntpc = Number of templates per channel
+            self._efficiency_padding_required = not all(nt == ntpc[0] for nt in ntpc)
+            self._efficiency_reshaping_indices = [sum([len(temps_in_ch) for temps_in_ch in ntpc[:i + 1]])
+                                                  for i in range(len(ntpc) - 1)]
 
-        if all([len(params_array) == max_params for params_array in eff_params_per_ch]):
-            shaped_effs = np.stack(eff_params_per_ch)
+        eff_params_array_list = np.split(eff_params_array, self._efficiency_reshaping_indices)
+
+        if self._efficiency_padding_required:
+            shaped_effs_matrix = pad_sequences(eff_params_array_list, padding='post')
         else:
-            # Requires padding
-            shaped_effs = np.stack(
-                [np.pad(effs, pad_width=(0, max_params - len(effs)), mode='constant', constant_values=0)
-                 for effs in eff_params_per_ch]
-            )
+            shaped_effs_matrix = np.stack(eff_params_array_list)
 
         if not self._efficiencies_checked:
-            assert len(shaped_effs.shape) == 2, (len(shaped_effs.shape), shaped_effs.shape)
-            assert shaped_effs.shape[0] == self.number_of_channels, \
-                (shaped_effs.shape, shaped_effs.shape[0], self.number_of_channels)
-            assert shaped_effs.shape[1] == max(self.number_of_templates), \
-                (shaped_effs.shape, shaped_effs.shape[1], max(self.number_of_templates))
+            assert all(len(effs) == nt for effs, nt in zip(eff_params_array_list, self.number_of_templates)), \
+                (eff_params_array_list, [len(effs) for effs in eff_params_array_list], self.number_of_templates)
+            assert len(shaped_effs_matrix.shape) == 2, (len(shaped_effs_matrix.shape), shaped_effs_matrix.shape)
+            assert shaped_effs_matrix.shape[0] == self.number_of_channels, \
+                (shaped_effs_matrix.shape, shaped_effs_matrix.shape[0], self.number_of_channels)
+            assert shaped_effs_matrix.shape[1] == max(self.number_of_templates), \
+                (shaped_effs_matrix.shape, shaped_effs_matrix.shape[1], max(self.number_of_templates))
 
-        return shaped_effs
+        return shaped_effs_matrix
 
     def _check_efficiency_parameters(self) -> None:
         self._check_is_initialized()
@@ -857,12 +856,12 @@ class ModelBuilder:
     def get_templates(self) -> np.ndarray:
         template_bin_counts = self.get_template_bin_counts()
         # TODO: Apply smearing based on bin_uncertainties.
-        # TODO: Are normed after application of corrections, but this should be done in calculate_bin_count!
+        # TODO: Are normed after application of corrections, but this should be done in calculate_expected_bin_count!
         normed_smeared_templates = template_bin_counts
         return normed_smeared_templates
 
     # TODO: Use this function in Likelihood calculation!
-    def calculate_bin_count(self, parameter_vector: np.ndarray):
+    def calculate_expected_bin_count(self, parameter_vector: np.ndarray):
         if not self._is_checked:
             assert self._fraction_conversion is not None
             assert isinstance(self._fraction_conversion, FractionConversionInfo), type(self._fraction_conversion)
@@ -893,12 +892,12 @@ class ModelBuilder:
             bin_count = np.sum(bin_count, axis=1)
 
         if not self._is_checked:
-            self._bin_count_shape_check(bin_count=bin_count, where="calculate_bin_count")
+            self._check_bin_count_shape(bin_count=bin_count, where="calculate_expected_bin_count")
             self._is_checked = True
 
         return bin_count
 
-    def _bin_count_shape_check(self, bin_count: np.ndarray, where: str) -> None:
+    def _check_bin_count_shape(self, bin_count: np.ndarray, where: str) -> None:
         assert bin_count is not None, where
         assert len(bin_count.shape) == 2, (where, bin_count.shape, len(bin_count.shape))
         assert bin_count.shape[0] == self.number_of_channels, \
@@ -948,7 +947,7 @@ class ModelBuilder:
         data_bin_count_matrix = np.stack(padded_flat_data_bin_counts)
 
         if not self._data_bin_count_checked:
-            self._bin_count_shape_check(bin_count=data_bin_count_matrix, where="get_flattened_data_bin_counts")
+            self._check_bin_count_shape(bin_count=data_bin_count_matrix, where="get_flattened_data_bin_counts")
             self._data_bin_count_checked = True
 
         self._data_bin_counts = data_bin_count_matrix
@@ -1136,13 +1135,6 @@ class ModelBuilder:
 
     # TODO: The following stuff is not adapted, yet...
 
-    def template_matrix(self):
-        """ Creates the fixed template stack """
-        fractions_per_template = [template._flat_bin_counts for template in self.templates.values()]
-
-        self.template_fractions = np.stack(fractions_per_template)
-        self.shape = self.template_fractions.shape
-
     def relative_error_matrix(self):
         errors_per_template = [template.errors() for template
                                in self.templates.values()]
@@ -1175,30 +1167,6 @@ class ModelBuilder:
         # get sub template fractions into the correct form with the converter and additive part
         # normalised expected corrected fractions
         # determine expected amount of events in each bin
-
-    def fraction_converter(self) -> None:
-        """
-        Determines the matrices required to transform the sub-template parameters
-        """
-        arrays = []
-        additive = []
-        count = 0
-        for template in self.packed_templates.values():
-            if template._num_templates == 1:
-                arrays.append(np.zeros((1, self.num_fractions)))
-                additive.append(np.ones((1, 1)))
-            else:
-                n_fractions = template._num_templates - 1
-                array = np.identity(n_fractions)
-                array = np.vstack([array, np.full((1, n_fractions), -1.)])
-                count += n_fractions
-                array = np.pad(array, ((0, 0), (count - n_fractions, self.num_fractions - count)), mode='constant')
-                arrays.append(array)
-                additive.append(np.vstack([np.zeros((n_fractions, 1)), np.ones((1, 1))]))
-        print(arrays)
-        print(additive)
-        self.converter_matrix = np.vstack(arrays)
-        self.converter_vector = np.vstack(additive)
 
     def add_constraint(self, name: str, value: float, sigma: float) -> None:
         self.constrain_indices.append(self._params.get_index(name))
