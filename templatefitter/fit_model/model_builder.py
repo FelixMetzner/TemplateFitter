@@ -24,7 +24,7 @@ from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelPa
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["ModelBuilder"]
+__all__ = ["FitModel"]
 
 
 # TODO: Not yet considered are Yield Ratios:
@@ -44,10 +44,10 @@ class FractionConversionInfo(NamedTuple):
     conversion_vector: np.ndarray
 
 
-# TODO: Maybe the ModelBuilder could produce a Model object, which is a container that holds all
+# TODO: Maybe the FitModel could produce a Model object, which is a container that holds all
 #       the necessary information and can be used to recreate the model.
 
-class ModelBuilder:
+class FitModel:
     def __init__(
             self,
             parameter_handler: ParameterHandler,
@@ -1310,7 +1310,7 @@ class AbstractTemplateCostFunction(ABC):
     Abstract base class for all cost function to estimate yields using the template method.
     """
 
-    def __init__(self, model: ModelBuilder, parameter_handler: ParameterHandler) -> None:
+    def __init__(self, model: FitModel, parameter_handler: ParameterHandler) -> None:
         self._model = model
         self._params = parameter_handler
 
@@ -1327,7 +1327,7 @@ class AbstractTemplateCostFunction(ABC):
 
 
 class Chi2CostFunction(AbstractTemplateCostFunction):
-    def __init__(self, model: ModelBuilder, parameter_handler: ParameterHandler) -> None:
+    def __init__(self, model: FitModel, parameter_handler: ParameterHandler) -> None:
         super().__init__(model=model, parameter_handler=parameter_handler)
 
     def __call__(self, x) -> float:
@@ -1335,7 +1335,7 @@ class Chi2CostFunction(AbstractTemplateCostFunction):
 
 
 class NLLCostFunction(AbstractTemplateCostFunction):
-    def __init__(self, model: ModelBuilder, parameter_handler: ParameterHandler) -> None:
+    def __init__(self, model: FitModel, parameter_handler: ParameterHandler) -> None:
         super().__init__(model=model, parameter_handler=parameter_handler)
 
     def __call__(self, x) -> float:
