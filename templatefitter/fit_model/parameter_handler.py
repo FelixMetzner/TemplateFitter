@@ -20,6 +20,8 @@ class ParameterInfo(NamedTuple):
     parameter_type: str
     floating: bool
     initial_value: float
+    constraint_value: Optional[float]
+    constraint_sigma: Optional[float]
 
     def info_as_string_list(self) -> List[str]:
         return [
@@ -29,6 +31,8 @@ class ParameterInfo(NamedTuple):
             f"parameter_type: {self.parameter_type}",
             f"floating: {self.floating}",
             f"initial_value: {self.initial_value}",
+            f"constraint_value: {self.constraint_value}",
+            f"constraint_sigma: {self.constraint_sigma}",
         ]
 
     def as_string(self) -> str:
@@ -67,13 +71,16 @@ class ParameterHandler:
             model_index: int,
             parameter_type: str,
             floating: bool,
-            initial_value: float
+            initial_value: float,
+            constraint_value: Optional[float],
+            constraint_sigma: Optional[float]
     ) -> int:
         if name in self._pars_dict:
             raise ValueError(f"Trying to register new parameter with name {name} in ParameterHandler, \n"
                              f"but a parameter with this name is already registered with the following properties:\n"
                              f"\t-" + "\n\t-".join(self._parameter_infos[self._pars_dict[name]].info_as_string_list()))
         self._check_parameter_types(parameter_types=[parameter_type])
+        self._check_constraint_input(constraint_value=constraint_value, constraint_sigma=constraint_sigma)
 
         parameter_index = len(self._pars)
         assert parameter_index not in self._pars_dict.values(), (parameter_index, self._pars_dict.values())
@@ -86,7 +93,9 @@ class ParameterHandler:
             model_index=model_index,
             parameter_type=parameter_type,
             floating=floating,
-            initial_value=initial_value
+            initial_value=initial_value,
+            constraint_value=constraint_value,
+            constraint_sigma=constraint_sigma
         )
 
         self._pars.append(initial_value)
@@ -109,15 +118,26 @@ class ParameterHandler:
             model_indices: List[int],
             parameter_types: Union[str, List[str]],
             floating: List[bool],
-            initial_values: Union[np.ndarray, List[float]]
+            initial_values: Union[np.ndarray, List[float]],
+            constraint_values: Optional[List[Union[float, None]]],
+            constraint_sigmas: Optional[List[Union[float, None]]]
     ) -> List[int]:
         self._check_parameters_input(
             names=names,
             model_indices=model_indices,
             parameter_types=parameter_types,
             floating=floating,
-            initial_values=initial_values
+            initial_values=initial_values,
+            constraint_values=constraint_values,
+            constraint_sigmas=constraint_sigmas
         )
+        if constraint_values is None:
+            assert constraint_sigmas is None, (constraint_values, constraint_sigmas)
+            c_values = [None] * len(names)
+            c_sigmas = [None] * len(names)
+        else:
+            c_values = constraint_values
+            c_sigmas = constraint_sigmas
 
         if isinstance(parameter_types, str):
             self._check_parameter_types(parameter_types=[parameter_types])
@@ -127,13 +147,16 @@ class ParameterHandler:
             types_list = parameter_types
 
         indices = []
-        for name, m_index, p_type, flt, initial_val in zip(names, model_indices, types_list, floating, initial_values):
+        zipped_infos = zip(names, model_indices, types_list, floating, initial_values, c_values, c_sigmas)
+        for name, m_index, p_type, flt, initial_val, cv, cs in zipped_infos:
             index = self.add_parameter(
                 name=name,
                 model_index=m_index,
                 parameter_type=p_type,
                 floating=flt,
-                initial_value=initial_val
+                initial_value=initial_val,
+                constraint_value=cv,
+                constraint_sigma=cs
             )
             indices.append(index)
 
@@ -280,7 +303,9 @@ class ParameterHandler:
             model_indices: List[int],
             parameter_types: Union[str, List[str]],
             floating: List[bool],
-            initial_values: Union[np.ndarray, List[float]]
+            initial_values: Union[np.ndarray, List[float]],
+            constraint_values: Optional[List[Union[float, None]]],
+            constraint_sigmas: Optional[List[Union[float, None]]]
     ) -> None:
         if isinstance(initial_values, np.ndarray) and len(initial_values.shape) != 1:
             raise ValueError(f"Parameter 'initial_values' must be 1 dimensional, "
@@ -306,11 +331,58 @@ class ParameterHandler:
         if not len(names) == len(set(names)):
             raise ValueError(f"Entries of 'names' should each be unique! You provided:\n{names}")
 
+        if not (constraint_values is None or isinstance(constraint_values, list)):
+            raise ValueError(f"The optional argument 'constraint_values' can either be 'None' or a list of "
+                             f"floats and 'None's.\nYou provided an object of type {type(constraint_values)}")
+        if not isinstance(constraint_sigmas, type(constraint_values)):
+            raise ValueError(f"The parameter 'constraint_sigmas' must be of the same type as 'constraint_values'!\n"
+                             f"The must either be both None, or both lists containing 'None's and floats.")
+        if isinstance(constraint_values, list):
+            if not len(constraint_values) == len(names):
+                raise ValueError(f"If the parameter 'constraint_values' is provided as list, it must have the same "
+                                 f"length as the number of provided 'names', however, you provided lists of lengths"
+                                 f"{len(constraint_values)} and {len(names)}, respectively!")
+            if not all((cv is None or isinstance(cv, float)) for cv in constraint_values):
+                raise ValueError(f"If the parameter 'constraint_values' is provided as list, it must contain only "
+                                 f"'None's or floats!\nWhat you provided contained the following types:\n"
+                                 f"{[type(cv) for cv in constraint_values]}")
+            if not len(constraint_values) == len(constraint_sigmas):
+                raise ValueError(f"If the parameters 'constraint_values' and 'constraint_sigmas' are provided as lists,"
+                                 f" the must be of same length! However, the lists you provided have the lengths:\n"
+                                 f"\tlen(constraint_values) = {len(constraint_values)}\n"
+                                 f"\tlen(constraint_sigmas) = {len(constraint_sigmas)}")
+            if not all(type(cv) == type(cs) for cv, cs in zip(constraint_values, constraint_sigmas)):
+                raise ValueError(
+                    f"The types of the 'constraint_values' and 'constraint_sigmas' list elements must "
+                    f"match pairwise, however, in the lists you provided the following elements do "
+                    f"not match:\n\tindex: contraint_value --- constraint_sigma"
+                    + "\n\t".join([
+                        f"{i}: {cv} (type {type(cv)}) --- {cs} (type {type(cs)})"
+                        for i, (cv, cs) in enumerate(zip(constraint_values, constraint_sigmas))
+                    ])
+                )
+
     @staticmethod
     def _check_parameter_types(parameter_types: List[str]):
         for parameter_type in parameter_types:
             raise ValueError(f"Trying to add new parameter with unknown parameter_type {parameter_type}!\n"
                              f"Parameter_type must be one of {ParameterHandler.parameter_types}!")
+
+    @staticmethod
+    def _check_constraint_input(constraint_value: Optional[float], constraint_sigma: Optional[float]):
+        if constraint_value is None:
+            if constraint_sigma is not None:
+                raise ValueError(f"If the parameter 'constraint_value' is None, 'constraint_sigma' must be, too."
+                                 f"You provided:\n\tconstraint_value = {constraint_value}"
+                                 f"\n\tconstraint_sigma = {constraint_sigma}")
+        else:
+            if not isinstance(constraint_value, float):
+                raise ValueError(f"The parameter must be either 'None' or a float, "
+                                 f"but you provided an object of type {type(constraint_value)}")
+            if not isinstance(constraint_sigma, float):
+                raise ValueError(f"If the parameter 'constraint_value' is defined via a float, so must be the "
+                                 f"parameter 'constraint_sigma', but you provided for the latter an object of "
+                                 f"type {type(constraint_sigma)}!")
 
 
 class Parameter(ABC):
@@ -321,7 +393,9 @@ class Parameter(ABC):
             parameter_handler: ParameterHandler,
             parameter_type: str,
             floating: bool,
-            initial_value: float
+            initial_value: float,
+            constrain_to_value: Optional[float] = None,
+            constraint_sigma: Optional[float] = None
     ):
         if parameter_type not in ParameterHandler.parameter_types:
             raise ValueError(f"Parameter type must be one of {ParameterHandler.parameter_types}!\n"
@@ -331,6 +405,8 @@ class Parameter(ABC):
         self._parameter_type = parameter_type
         self._floating = floating
         self._initial_value = initial_value
+        self._constraint_value = constrain_to_value
+        self._constraint_sigma = constraint_sigma
 
         self._index = None
 
@@ -349,6 +425,14 @@ class Parameter(ABC):
     @property
     def initial_value(self) -> float:
         return self._initial_value
+
+    @property
+    def constraint_value(self) -> Optional[float]:
+        return self._constraint_value
+
+    @property
+    def constraint_sigma(self) -> Optional[float]:
+        return self._constraint_sigma
 
     @property
     def value(self) -> float:
@@ -380,7 +464,9 @@ class Parameter(ABC):
                  f"\n\tparameter type: {self._parameter_type}" \
                  f"\n\tindex: {self._index}" \
                  f"\n\tfloating: {self._floating}" \
-                 f"\n\tinitial value: {self._initial_value}"
+                 f"\n\tinitial value: {self._initial_value}" \
+                 f"\n\tconstraint value: {self._constraint_value}" \
+                 f"\n\tconstraint sigma: {self._constraint_sigma}"
         if self._additional_info is not None:
             output += self._additional_info
         return output
@@ -391,6 +477,10 @@ class Parameter(ABC):
         if not self.floating == other.floating:
             return False
         if not self.initial_value == other.initial_value:
+            return False
+        if not self.constraint_value == other.constraint_value:
+            return False
+        if not self.constraint_sigma == other.constraint_sigma:
             return False
         if not self.parameter_type == other.parameter_type:
             return False
@@ -408,14 +498,18 @@ class TemplateParameter(Parameter):
             parameter_type: str,
             floating: bool,
             initial_value: float,
-            index: Optional[int]
+            index: Optional[int],
+            constrain_to_value: Optional[float] = None,
+            constraint_sigma: Optional[float] = None
     ):
         super().__init__(
             name=name,
             parameter_handler=parameter_handler,
             parameter_type=parameter_type,
             floating=floating,
-            initial_value=initial_value
+            initial_value=initial_value,
+            constrain_to_value=constrain_to_value,
+            constraint_sigma=constraint_sigma
         )
         self._base_model_parameter = None
 
@@ -443,14 +537,18 @@ class ModelParameter(Parameter):
             parameter_type: str,
             model_index: int,
             floating: bool,
-            initial_value: float
+            initial_value: float,
+            constrain_to_value: Optional[float] = None,
+            constraint_sigma: Optional[float] = None
     ):
         super().__init__(
             name=name,
             parameter_handler=parameter_handler,
             parameter_type=parameter_type,
             floating=floating,
-            initial_value=initial_value
+            initial_value=initial_value,
+            constrain_to_value=constrain_to_value,
+            constraint_sigma=constraint_sigma
         )
         self._usage_list = []
         self._model_index = model_index
@@ -467,7 +565,9 @@ class ModelParameter(Parameter):
             model_index=self.model_index,
             parameter_type=self.parameter_type,
             floating=self.floating,
-            initial_value=self.initial_value
+            initial_value=self.initial_value,
+            constraint_value=self.constraint_value,
+            constraint_sigma=self.constraint_sigma
         )
         self.index = index
 

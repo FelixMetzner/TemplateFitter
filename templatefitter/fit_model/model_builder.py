@@ -105,7 +105,9 @@ class ModelBuilder:
             name: str,
             parameter_type: str,
             floating: bool,
-            initial_value: float
+            initial_value: float,
+            constrain_to_value: Optional[float] = None,
+            constraint_sigma: Optional[float] = None
     ) -> Tuple[int, ModelParameter]:
         self._check_has_data(adding="model parameter")
 
@@ -121,7 +123,9 @@ class ModelBuilder:
             parameter_type=parameter_type,
             model_index=model_index,
             floating=floating,
-            initial_value=initial_value
+            initial_value=initial_value,
+            constrain_to_value=constrain_to_value,
+            constraint_sigma=constraint_sigma
         )
         self._model_parameters.append(model_parameter)
         self._model_parameters_mapping.update({name: model_index})
@@ -470,8 +474,6 @@ class ModelBuilder:
         self._channels = channels
 
         self.finalize_model()
-
-        # TODO: Complete Model setup
 
     def _initialize_fraction_conversion(self):
         # Fraction conversion matrix and vector should be equal in all channels.
