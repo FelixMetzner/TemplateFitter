@@ -68,8 +68,8 @@ class FitModel:
         self._data_channels = DataChannelContainer()
         self._data_bin_counts = None
         self._data_bin_count_checked = False
-        self._data_errors = None
-        self._data_errors_checked = False
+        self._data_stat_errors_sq = None
+        self._data_stat_errors_checked = False
 
         self._fraction_conversion = None
 
@@ -992,20 +992,23 @@ class FitModel:
         self._data_bin_counts = data_bin_count_matrix
         return data_bin_count_matrix
 
-    # TODO: Needs work
-    def get_data_errors(self) -> np.ndarray:
-        if self._data_errors is not None:
-            return self._data_errors
+    def get_squared_data_stat_errors(self) -> np.ndarray:
+        if self._data_stat_errors_sq is not None:
+            return self._data_stat_errors_sq
 
-        data_errors = ...  # TODO!!!
+        flat_data_stat_errors_sq = [data_channel.bin_errors_sq.flatten() for data_channel in self._data_channels]
+        padded_flat_data_stat_errors_sq = self._apply_padding_to_data_bin_count(
+            bin_counts_per_channel=flat_data_stat_errors_sq
+        )
+        data_stat_errors_sq = np.stack(padded_flat_data_stat_errors_sq)
 
-        if not self._data_errors_checked:
-            assert data_errors.shape == self.get_flattened_data_bin_counts().shape, \
-                (data_errors.shape, self.get_flattened_data_bin_counts().shape)
-            self._data_errors_checked = True
+        if not self._data_stat_errors_checked:
+            assert data_stat_errors_sq.shape == self.get_flattened_data_bin_counts().shape, \
+                (data_stat_errors_sq.shape, self.get_flattened_data_bin_counts().shape)
+            self._data_stat_errors_checked = True
 
-        self._data_errors = data_errors
-        return data_errors
+        self._data_stat_errors_sq = data_stat_errors_sq
+        return data_stat_errors_sq
 
     def _apply_padding_to_data_bin_count(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
         if not self._data_bin_count_checked:
@@ -1211,7 +1214,7 @@ class FitModel:
     def chi2(self, parameter_vector: np.ndarray) -> float:
         chi2_data_term = np.sum(
             (self.calculate_expected_bin_count(parameter_vector=parameter_vector)
-             - self.get_flattened_data_bin_counts()) ** 2 / (2 * self.get_data_errors() ** 2),
+             - self.get_flattened_data_bin_counts()) ** 2 / (2 * self.get_squared_data_stat_errors()),
             axis=None
         )
 

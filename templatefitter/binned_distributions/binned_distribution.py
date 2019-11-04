@@ -229,6 +229,12 @@ class BinnedDistribution:
         return self._bin_errors_sq
 
     @property
+    def bin_errors(self) -> Union[None, np.ndarray]:
+        if self._bin_errors_sq is None:
+            return None
+        return np.sqrt(self._bin_errors_sq)
+
+    @property
     def is_empty(self) -> bool:
         """ Boolean indicating if the binned distribution is empty or filled """
         return self._is_empty
