@@ -49,8 +49,10 @@ class Template(BinnedDistribution):
             bin_nuisance_parameters: Optional[List[TemplateParameter]]
     ) -> None:
         if self._yield_parameter is not None or self._bin_nuisance_parameters is not None:
-            raise RuntimeError(f"Trying to reset template's "
-                               f"{'yield_parameter' if self._yield_parameter is None else 'bin_nuisance_parameters'}...")
+            raise RuntimeError(
+                f"Trying to reset template's "
+                f"{'yield_parameter' if self._yield_parameter is None else 'bin_nuisance_parameters'}..."
+            )
         if not isinstance(yield_parameter, TemplateParameter):
             raise ValueError(f"Argument 'yield_parameter' must be of type TemplateParameter!\n"
                              f"You provided an object of type {type(yield_parameter)}...")
