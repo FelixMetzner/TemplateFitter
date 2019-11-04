@@ -324,14 +324,14 @@ class FitModel:
             channel: Optional[Channel] = None,
             name: Optional[str] = None,
             components: Optional[List[Union[int, str, Component]]] = None,
-            # TODO: If we want to add templates via serial_number or name directly, we have to be able to
-            #       differentiate template names/serial_numbers from component names/serial_numbers
     ) -> Union[int, Tuple[int, Channel]]:
         self._check_is_not_finalized()
         creates_new_channel = False
         input_error_text = "A channel can either be added by providing\n" \
                            "\t- an already prepared channel via the argument 'channel'\nor\n" \
                            "\t- a list of components (directly, via their names or via their serial_numbers)\n" \
+                           "\t    (or alternatively Templates or template serial_numbers or names with a prefix " \
+                           "\t    'temp_', from which a single template component will be generated)" \
                            "\t  and a name for the channel, using the arguments 'components' and 'name', respectively."
 
         self._check_has_data(adding="channel")
@@ -347,9 +347,10 @@ class FitModel:
                                  f"already having a different name, which is {channel.name}")
         elif components is not None:
             if not (isinstance(components, list)
-                    and all(isinstance(c, Component) or isinstance(c, int) or isinstance(c, str) for c in components)):
-                raise ValueError("The argument 'components 'takes a list of Components, integers or strings, but you "
-                                 "provided "
+                    and all(isinstance(c, Component) or isinstance(c, int) or isinstance(c, str)
+                            or isinstance(c, Template) for c in components)):
+                raise ValueError("The argument 'components 'takes a list of Components, integers, strings or Templates,"
+                                 " but you provided "
                                  + f"an object of type {type(components)}" if not isinstance(components, list)
                                  else f"a list containing the types {[type(c) for c in components]}")
             if name is None:
@@ -359,8 +360,19 @@ class FitModel:
             for component in components:
                 if isinstance(component, Component):
                     component_list.append(component)
+                if isinstance(component, Template):
+                    new_component = self._create_single_template_component_from_template(template_input=component)
+                    component_list.append(new_component)
                 elif isinstance(component, int) or isinstance(component, str):
-                    component_list.append(self.get_component(name_or_index=component))
+                    if isinstance(component, str) and component.startswith("temp_"):
+                        # Handling case where a template identifier (string or index with prefix 'temp_') was provided:
+                        temp_name_or_index_str = component[len("temp_"):]
+                        new_component = self._create_single_template_component_from_template(
+                            template_input=temp_name_or_index_str
+                        )
+                        component_list.append(new_component)
+                    else:
+                        component_list.append(self.get_component(name_or_index=component))
                 else:
                     raise ValueError(f"Unexpected type {type(component)} for element of provided list of components.")
 
@@ -388,6 +400,48 @@ class FitModel:
             return channel_serial_number, channel
         else:
             return channel_serial_number
+
+    def _create_single_template_component_from_template(self, template_input: Union[str, Template]) -> Component:
+        if isinstance(template_input, Template):
+            template = template_input
+            source_info_text = "directly as template"
+            assert template in self._templates, \
+                (template.name, template.serial_number, [(t.name, t.serial_number) for t in self._templates])
+        elif isinstance(template_input, str):
+            assert not template_input.startswith("temp_"), template_input
+            if template_input.isdigit():
+                template_identifier = int(template_input)  # identifier is template serial_number
+                source_info_text = f"via the template serial number as 'temp_{template_input}'"
+            else:
+                template_identifier = template_input  # identifier is template name
+                source_info_text = f"via the template name {template_input} as 'temp_{template_input}'"
+            template = self.get_template(name_or_index=template_identifier)
+        else:
+            raise ValueError(f"The parameter 'template_input' must be either of type Template or str, "
+                             f"but you provided an object of type {type(template_input)}")
+
+        assert not any(template in comp.sub_templates for comp in self._components), "\n".join(
+            [f"{comp.name}, {comp.name}: {[t.name for t in comp.sub_templates]}"
+             for comp in self._components if template in comp.sub_templates]
+        )
+        new_component_name = f"component_from_template_{template.name}"
+        assert new_component_name not in self._components_mapping.keys(), \
+            (new_component_name, self._components_mapping.keys())
+        comp_serial_number, component = self.add_component(
+            fraction_parameters=None,
+            component=None,
+            name=new_component_name,
+            templates=[template],
+            shared_yield=None
+        )
+
+        logging.info(
+            f"New component with name {new_component_name} and serial_number {comp_serial_number} was created and "
+            f"added directly from single template (serial_number: {template.serial_number}, name: {template.name}, "
+            f"provided {source_info_text})."
+        )
+
+        return component
 
     def add_constraint(self, name: str, value: float, sigma: float) -> None:
         self._check_is_not_finalized()
@@ -1204,9 +1258,9 @@ class FitModel:
             return 0.
 
         constraint_pars = self._params.get_combined_parameters_by_index(
-                parameter_vector=parameter_vector,
-                indices=self._constraint_indices
-            )
+            parameter_vector=parameter_vector,
+            indices=self._constraint_indices
+        )
 
         return np.sum(((self._constraint_values - constraint_pars) / self._constraint_sigmas) ** 2)
 
