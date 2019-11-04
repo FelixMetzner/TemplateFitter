@@ -88,6 +88,9 @@ class FitModel:
         self._efficiency_padding_required = True
         self._efficiencies_checked = False
 
+        self._bin_nuisance_param_indices = None  # TODO: use like self.bin_par_slice
+        self._bin_nuisance_params_checked = False  # TODO: use
+
         self._constraint_indices = None
         self._constraint_values = None
         self._constraint_sigmas = None
@@ -98,7 +101,6 @@ class FitModel:
 
         # TODO:
         # self._inv_corr = np.array([])
-        # self.bin_par_slice = (0, 0)
 
     def add_model_parameter(
             self,
@@ -148,7 +150,7 @@ class FitModel:
             self,
             template: Template,
             yield_parameter: Union[ModelParameter, str],
-            bin_uncert_parameters: List[Union[ModelParameter, str]]
+            use_bin_nuisance_parameters: bool = True
     ) -> int:
         self._check_is_not_finalized()
         self._check_has_data(adding="template")
@@ -156,18 +158,6 @@ class FitModel:
         if template.name in self._templates_mapping.keys():
             raise RuntimeError(f"The template with the name {template.name} is already registered!\n"
                                f"It has the index {self._templates_mapping[template.name]}\n")
-
-        if not isinstance(bin_uncert_parameters, list):
-            raise ValueError(f"Expected to get list of strings or ModuleParameters for argument "
-                             f"'bin_uncert_parameters', but received object of type {type(bin_uncert_parameters)}.")
-        if not all(isinstance(e, ModelParameter) or isinstance(e, str) for e in bin_uncert_parameters):
-            raise ValueError(f"Expected to get list of strings or ModuleParameters for argument "
-                             f"'bin_uncert_parameters', but received a list containing the following types:\n"
-                             f"{[type(e) for e in bin_uncert_parameters]}.")
-        if not len(bin_uncert_parameters) == template.num_bins_total:
-            raise ValueError(f"The list of 'bin_uncert_parameters' must have the same number of elements as the "
-                             f"number of bins of the template, however, it has {len(bin_uncert_parameters)} elements "
-                             f"and the template as {template.num_bins_total} bins...")
 
         if isinstance(yield_parameter, str):
             yield_model_parameter = self.get_model_parameter(name_or_index=yield_parameter)
@@ -197,25 +187,55 @@ class FitModel:
 
         yield_model_parameter.used_by(template_parameter=yield_param, template_serial_number=serial_number)
 
-        # TODO: Use bin uncertainties!
-        # TODO: Add them automatically?!?
-        bin_uncert_paras = self._get_list_of_template_params(
-            input_params=bin_uncert_parameters,
-            serial_numbers=serial_number,
-            container_name=template.name,
-            parameter_type=ParameterHandler.bin_uncert_parameter_type,
-            input_parameter_list_name="bin_uncert_parameters"
-        )
+        if use_bin_nuisance_parameters:
+            bin_nuisance_paras = self._create_bin_nuisance_parameters(template=template)
+            assert len(bin_nuisance_paras) == template.num_bins_total, \
+                (len(bin_nuisance_paras), template.num_bins_total)
+        else:
+            bin_nuisance_paras = None
 
         template.initialize_parameters(
             yield_parameter=yield_param,
-            bin_uncert_parameters=bin_uncert_paras
+            bin_nuisance_parameters=bin_nuisance_paras
         )
 
         self._templates.append(template)
         self._templates_mapping.update({template.name: serial_number})
 
         return serial_number
+
+    def _create_bin_nuisance_parameters(self, template: Template) -> List[TemplateParameter]:
+        bin_nuisance_model_params = []
+        bin_nuisance_model_param_indices = []
+
+        initial_nuisance_value = 0.  # float, TODO: What is the starting value of the nuisance parameter
+
+        for counter in range(template.num_bins_total):
+            model_param_index, model_parameter = self.add_model_parameter(
+                name=f"bin_nuisance_param_{counter}_for_temp_{template.name}",
+                parameter_type=ParameterHandler.bin_nuisance_parameter_type,
+                floating=True,
+                initial_value=initial_nuisance_value,
+                constrain_to_value=None,  # TODO: Should we have a constraint on the nuisance parameter
+                constraint_sigma=None,  # TODO: Should we have a constraint on the nuisance parameter
+            )
+            bin_nuisance_model_params.append(model_parameter)
+            bin_nuisance_model_param_indices.append(model_param_index)
+
+        bin_nuisance_template_paras = self._get_list_of_template_params(
+            input_params=bin_nuisance_model_params,
+            serial_numbers=template.serial_number,
+            container_name=template.name,
+            parameter_type=ParameterHandler.bin_nuisance_parameter_type,
+            input_parameter_list_name="bin_nuisance_parameters"
+        )
+
+        logging.info(f"Created {len(bin_nuisance_model_params)} bin nuisance ModelParameters "
+                     f"for template '{template.name}' (serial no: {template.serial_number}) with "
+                     f"{template.num_bins_total} bins and shape {template.shape}.\n"
+                     f"Bin nuisance parameter indices = {bin_nuisance_model_param_indices}")
+
+        return bin_nuisance_template_paras
 
     def add_component(
             self,
@@ -1185,9 +1205,9 @@ class FitModel:
             f"parameter_type must be one of {ParameterHandler.parameter_types}, you provided {parameter_type}!"
 
         if isinstance(serial_numbers, int):
-            if not parameter_type == ParameterHandler.bin_uncert_parameter_type:
+            if not parameter_type == ParameterHandler.bin_nuisance_parameter_type:
                 raise ValueError(f"For model parameters of a different type than "
-                                 f"parameter_type '{ParameterHandler.bin_uncert_parameter_type}', a list or tuple of"
+                                 f"parameter_type '{ParameterHandler.bin_nuisance_parameter_type}', a list or tuple of"
                                  f"serial numbers must be provided via the argument 'serial_numbers'!")
             serial_numbers = [serial_numbers] * len(input_params)
         else:

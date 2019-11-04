@@ -16,6 +16,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = ["Template"]
 
 
+# TODO: Check TODOs below!
 class Template(BinnedDistribution):
     def __init__(
             self,
@@ -34,7 +35,7 @@ class Template(BinnedDistribution):
         self._component_serial_number = None
 
         self._yield_parameter = None
-        self._bin_uncert_parameters = None
+        self._bin_nuisance_parameters = None
         self._efficiency_parameter = None
         self._fraction_parameter = None
 
@@ -45,11 +46,11 @@ class Template(BinnedDistribution):
     def initialize_parameters(
             self,
             yield_parameter: TemplateParameter,
-            bin_uncert_parameters: List[TemplateParameter]
-    ):
-        if self._yield_parameter is not None or self._bin_uncert_parameters is not None:
+            bin_nuisance_parameters: Optional[List[TemplateParameter]]
+    ) -> None:
+        if self._yield_parameter is not None or self._bin_nuisance_parameters is not None:
             raise RuntimeError(f"Trying to reset template's "
-                               f"{'yield_parameter' if self._yield_parameter is None else 'bin_uncert_parameter'}...")
+                               f"{'yield_parameter' if self._yield_parameter is None else 'bin_nuisance_parameters'}...")
         if not isinstance(yield_parameter, TemplateParameter):
             raise ValueError(f"Argument 'yield_parameter' must be of type TemplateParameter!\n"
                              f"You provided an object of type {type(yield_parameter)}...")
@@ -58,20 +59,24 @@ class Template(BinnedDistribution):
                              f"but received one with parameter_type {yield_parameter.parameter_type}!")
         self._yield_parameter = yield_parameter
 
-        if not (isinstance(bin_uncert_parameters, list) and len(bin_uncert_parameters) == self.num_bins_total):
-            raise ValueError(f"The argument 'bin_uncert_parameters' must be a list with {self.num_bins_total} "
-                             f"TemplateParameters of type {ParameterHandler.bin_uncert_parameter_type}, but "
-                             + f"is an object of type {type(bin_uncert_parameters)}."
-                             if not isinstance(bin_uncert_parameters, list)
-                             else f" has only {len(bin_uncert_parameters)} elements while the template has "
+        if bin_nuisance_parameters is None:
+            self._bin_nuisance_parameters = None
+            return
+
+        if not (isinstance(bin_nuisance_parameters, list) and len(bin_nuisance_parameters) == self.num_bins_total):
+            raise ValueError(f"The argument 'bin_nuisance_parameters' must be a list with {self.num_bins_total} "
+                             f"TemplateParameters of type {ParameterHandler.bin_nuisance_parameter_type}, but "
+                             + f"is an object of type {type(bin_nuisance_parameters)}."
+                             if not isinstance(bin_nuisance_parameters, list)
+                             else f" has only {len(bin_nuisance_parameters)} elements while the template has "
                                   f"{self.num_bins_total} bins.")
-        if not all(isinstance(p, TemplateParameter) for p in bin_uncert_parameters):
-            raise ValueError("The parameter bin_uncert_parameters must be a list of TemplateParameters, "
+        if not all(isinstance(p, TemplateParameter) for p in bin_nuisance_parameters):
+            raise ValueError("The parameter bin_nuisance_parameters must be a list of TemplateParameters, "
                              "but some elements are not TemplateParameters.")
-        if not all(p.parameter_type == ParameterHandler.bin_uncert_parameter_type for p in bin_uncert_parameters):
-            raise ValueError(f"The parameter bin_uncert_parameters must be a list of TemplateParameters of type "
-                             f"{ParameterHandler.bin_uncert_parameter_type}.")
-        self._bin_uncert_parameters = bin_uncert_parameters
+        if not all(p.parameter_type == ParameterHandler.bin_nuisance_parameter_type for p in bin_nuisance_parameters):
+            raise ValueError(f"The parameter bin_nuisance_parameters must be a list of TemplateParameters of type "
+                             f"{ParameterHandler.bin_nuisance_parameter_type}.")
+        self._bin_nuisance_parameters = bin_nuisance_parameters
 
     @property
     def process_name(self) -> str:
@@ -170,14 +175,14 @@ class Template(BinnedDistribution):
         return self._fraction_parameter.index
 
     @property
-    def bin_uncert_parameters(self) -> Optional[List[TemplateParameter]]:
-        return self._bin_uncert_parameters
+    def bin_nuisance_parameters(self) -> Optional[List[TemplateParameter]]:
+        return self._bin_nuisance_parameters
 
     @property
-    def bin_uncert_parameter_indices(self) -> Optional[List[int]]:
-        if self._bin_uncert_parameters is None:
+    def bin_nuisance_parameter_indices(self) -> Optional[List[int]]:
+        if self._bin_nuisance_parameters is None:
             return None
-        return [bin_uncert_param.index for bin_uncert_param in self._bin_uncert_parameters]
+        return [bin_nuisance_param.index for bin_nuisance_param in self._bin_nuisance_parameters]
 
     @property
     def global_template_identifier(self) -> Tuple[int, int, int]:

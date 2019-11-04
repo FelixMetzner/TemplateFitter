@@ -15,6 +15,7 @@ ScopeInputType = Union[None, Tuple[float, float], Tuple[Tuple[float, float], ...
 BinEdgesType = Tuple[Tuple[float, ...]]
 
 
+# TODO: Check TODO in apply_adaptive_binning!
 class Binning:
     def __init__(
             self,

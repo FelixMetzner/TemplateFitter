@@ -44,12 +44,12 @@ class ParameterHandler:
     yield_parameter_type = "yield"
     fraction_parameter_type = "fraction"
     efficiency_parameter_type = "efficiency"
-    bin_uncert_parameter_type = "bin_uncert"
+    bin_nuisance_parameter_type = "bin_nuisance"
     parameter_types = [
         yield_parameter_type,
         fraction_parameter_type,
         efficiency_parameter_type,
-        bin_uncert_parameter_type
+        bin_nuisance_parameter_type
     ]
 
     def __init__(self):
@@ -414,7 +414,6 @@ class ParameterHandler:
 
 
 class Parameter(ABC):
-    # TODO: Maybe allow to temporarily overwrite the parameter for tests/plotting or whatever.
     def __init__(
             self,
             name: str,
@@ -435,6 +434,10 @@ class Parameter(ABC):
         self._initial_value = initial_value
         self._constraint_value = constrain_to_value
         self._constraint_sigma = constraint_sigma
+        if self._constraint_value is not None and (self._constraint_value != self._initial_value):
+            raise ValueError(f"If a constraint is defined for a parameter, the initial value of the parameter "
+                             f"should be the value the parameter is constrained to, but the input values are:\n"
+                             f"\tinitial_value = {initial_value}\n\tconstrain_to_value = {constrain_to_value}")
 
         self._index = None
 
