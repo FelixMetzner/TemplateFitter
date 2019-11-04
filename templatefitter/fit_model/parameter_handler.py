@@ -162,6 +162,17 @@ class ParameterHandler:
 
         return indices
 
+    def add_constraint_to_parameter(self, index: int, constraint_value: float, constraint_sigma: float) -> None:
+        self._check_constraint_input(constraint_value=constraint_value, constraint_sigma=constraint_sigma)
+        assert index not in [i for i, _, _ in self.get_constraint_information()]
+        assert self._parameter_infos[index].constraint_value is None, self._parameter_infos[index].constraint_value
+        assert self._parameter_infos[index].constraint_sigma is None, self._parameter_infos[index].constraint_sigma
+
+        self._parameter_infos[index].constraint_value = constraint_value
+        self._parameter_infos[index].constraint_sigma = constraint_sigma
+
+        assert index in [i for i, _, _ in self.get_constraint_information()]
+
     def finalize(self) -> None:
         assert not self._is_finalized
         assert self._floating_mask is None
@@ -296,6 +307,23 @@ class ParameterHandler:
             raise ValueError(f"Length of provided parameter array (= {len(pars)}) "
                              f"does not match the length of the existing parameter array (= {len(self._np_pars)})")
         self._np_pars[:] = pars
+
+    def get_constraint_information(self) -> Tuple[List[int], List[float], List[float]]:
+        constraint_param_indices = []
+        constraint_values = []
+        constraint_sigmas = []
+        for param_info in self._parameter_infos:
+            if param_info.constraint_value is not None:
+                constraint_param_indices.append(param_info.index)
+                constraint_values.append(param_info.constraint_value)
+                constraint_sigmas.append(param_info.constraint_sigma)
+
+        assert len(constraint_param_indices) == len(set(constraint_param_indices)), \
+            (len(constraint_param_indices), len(set(constraint_param_indices)), constraint_param_indices)
+        assert all(isinstance(cv, float) for cv in constraint_values), [type(cv) for cv in constraint_values]
+        assert all(isinstance(cs, float) for cs in constraint_sigmas), [type(cs) for cs in constraint_sigmas]
+
+        return constraint_param_indices, constraint_values, constraint_sigmas
 
     @staticmethod
     def _check_parameters_input(

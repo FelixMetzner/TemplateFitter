@@ -45,7 +45,7 @@ class FractionConversionInfo(NamedTuple):
 
 
 # TODO: Maybe the ModelBuilder could produce a Model object, which is a container that holds all
-#       the necessary information and can do the calculations in the end.
+#       the necessary information and can be used to recreate the model.
 
 class ModelBuilder:
     def __init__(
@@ -68,6 +68,8 @@ class ModelBuilder:
         self._data_channels = DataChannelContainer()
         self._data_bin_counts = None
         self._data_bin_count_checked = False
+        self._data_errors = None
+        self._data_errors_checked = False
 
         self._fraction_conversion = None
 
@@ -86,17 +88,15 @@ class ModelBuilder:
         self._efficiency_padding_required = True
         self._efficiencies_checked = False
 
+        self._constraint_indices = None
+        self._constraint_values = None
+        self._constraint_sigmas = None
+        self._has_constrained_parameters = False
+
         self._template_bin_counts = None
         self._template_shapes_checked = False
 
         # TODO:
-        # self.constrain_indices = []
-        # self.constrain_value = np.array([])
-        # self.constrain_sigma = np.array([])
-
-        # self.x_obs = data.bin_counts.flatten()
-        # self.x_obs_errors = data.bin_errors.flatten()
-
         # self._inv_corr = np.array([])
         # self.bin_par_slice = (0, 0)
 
@@ -109,6 +109,7 @@ class ModelBuilder:
             constrain_to_value: Optional[float] = None,
             constraint_sigma: Optional[float] = None
     ) -> Tuple[int, ModelParameter]:
+        self._check_is_not_finalized()
         self._check_has_data(adding="model parameter")
 
         if name in self._model_parameters_mapping.keys():
@@ -149,6 +150,7 @@ class ModelBuilder:
             yield_parameter: Union[ModelParameter, str],
             bin_uncert_parameters: List[Union[ModelParameter, str]]
     ) -> int:
+        self._check_is_not_finalized()
         self._check_has_data(adding="template")
 
         if template.name in self._templates_mapping.keys():
@@ -223,6 +225,7 @@ class ModelBuilder:
             templates: Optional[List[Union[int, str, Template]]] = None,
             shared_yield: Optional[bool] = None,
     ) -> Union[int, Tuple[int, Component]]:
+        self._check_is_not_finalized()
         creates_new_component = False
         component_input_error_text = "You can either add an already prepared component or create a new one.\n" \
                                      "For the first option, the argument 'component' must be used;\n" \
@@ -324,6 +327,7 @@ class ModelBuilder:
             # TODO: If we want to add templates via serial_number or name directly, we have to be able to
             #       differentiate template names/serial_numbers from component names/serial_numbers
     ) -> Union[int, Tuple[int, Channel]]:
+        self._check_is_not_finalized()
         creates_new_channel = False
         input_error_text = "A channel can either be added by providing\n" \
                            "\t- an already prepared channel via the argument 'channel'\nor\n" \
@@ -385,13 +389,31 @@ class ModelBuilder:
         else:
             return channel_serial_number
 
-    # TODO: Needs work!
     def add_constraint(self, name: str, value: float, sigma: float) -> None:
-        self.constrain_indices.append(self._params.get_index(name))
-        self.constrain_value = np.append(self.constrain_value, value)
-        self.constrain_sigma = np.append(self.constrain_sigma, sigma)
+        self._check_is_not_finalized()
+
+        if name not in self._model_parameters_mapping.keys():
+            raise ValueError(f"A ModelParameter with the name '{name}' was not added, yet, "
+                             f"and hus a constrained cannot be applied to it!")
+
+        model_parameter = self._model_parameters[self._model_parameters_mapping[name]]
+        if model_parameter.constraint_value is not None:
+            raise RuntimeError(f"The ModelParameter '{name}' already is constrained with the settings"
+                               f"\n\tconstraint_value = {model_parameter.constraint_value}"
+                               f"\n\tconstraint_sigma = {model_parameter.constraint_sigma}\n"
+                               f"and thus your constrained (cv = {value}, cs = {sigma}) cannot be applied!")
+
+        index = model_parameter.index
+        parameter_infos = self._params.get_parameter_infos_by_index(indices=index)[0]
+        assert parameter_infos.constraint_value == model_parameter.constraint_value, \
+            (parameter_infos.constraint_value, model_parameter.constraint_value)
+        assert parameter_infos.constraint_sigma == model_parameter.constraint_sigma, \
+            (parameter_infos.constraint_sigma, model_parameter.constraint_sigma)
+
+        self._params.add_constraint_to_parameter(index=index, constraint_value=value, constraint_sigma=sigma)
 
     def add_data(self, channels: Dict[str, InputDataType]):
+        self._check_is_not_finalized()
         assert self._data_channels.is_empty
         if self._has_data is True:
             raise RuntimeError("Data has already been added to this model!\nThe following channels are registered:\n\t-"
@@ -425,6 +447,9 @@ class ModelBuilder:
 
         self._initialize_fraction_conversion()
         self._check_fraction_conversion()
+
+        self._initialize_parameter_constraints()
+        self._check_parameter_constraints()
 
         self._check_yield_parameters(yield_parameter_indices=None)
         self._check_fraction_parameters()
@@ -463,22 +488,9 @@ class ModelBuilder:
 
         return output_string
 
-    # TODO: Requires rework! This should allow to setup a model from a prepared model_container...
-    def setup_model(self, channels: ChannelContainer):
-        if not all(c.params is self._params for c in channels):
-            raise RuntimeError("The used ParameterHandler instances are not the same!")
-
-        if len(self._channels) > 0:
-            raise RuntimeError("Model already has channels defined!")
-
-        self._channels = channels
-
-        self.finalize_model()
-
     def _initialize_fraction_conversion(self):
         # Fraction conversion matrix and vector should be equal in all channels.
         # The matrices and vectors are generated for each channel, tested for equality and then stored once.
-
         conversion_matrices = []
         conversion_vectors = []
         for channel in self._channels:
@@ -542,6 +554,27 @@ class ModelBuilder:
             yields_i = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.yield_parameter_type)
             assert all(len(yields_i) >= c.total_number_of_templates for c in self._channels), \
                 f"{len(yields_i)}\n" + "\n".join([f"{c.name}: {c.total_number_of_templates}" for c in self._channels])
+
+    def _initialize_parameter_constraints(self):
+        indices, cvs, css = self._params.get_constraint_information()
+        self._constraint_indices = indices
+        self._constraint_values = cvs
+        self._constraint_sigmas = css
+        if len(indices) > 0:
+            self._has_constrained_parameters = True
+
+    def _check_parameter_constraints(self):
+        if self._has_constrained_parameters:
+            assert len(self._constraint_indices) > 0, (self._has_constrained_parameters, self._constraint_indices)
+        else:
+            assert len(self._constraint_indices) == 0, (self._has_constrained_parameters, self._constraint_indices)
+
+        assert len(self._constraint_indices) == len(self._constraint_values), \
+            (len(self._constraint_indices), len(self._constraint_values))
+        assert len(self._constraint_indices) == len(self._constraint_sigmas), \
+            (len(self._constraint_indices), len(self._constraint_sigmas))
+
+        self._constraints_checked = True
 
     def get_yields_vector(self, parameter_vector: np.ndarray) -> np.ndarray:
         if self._yield_indices is not None:
@@ -961,7 +994,18 @@ class ModelBuilder:
 
     # TODO: Needs work
     def get_data_errors(self) -> np.ndarray:
-        return np.zeros(self.get_flattened_data_bin_counts().shape)
+        if self._data_errors is not None:
+            return self._data_errors
+
+        data_errors = ...  # TODO!!!
+
+        if not self._data_errors_checked:
+            assert data_errors.shape == self.get_flattened_data_bin_counts().shape, \
+                (data_errors.shape, self.get_flattened_data_bin_counts().shape)
+            self._data_errors_checked = True
+
+        self._data_errors = data_errors
+        return data_errors
 
     def _apply_padding_to_data_bin_count(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
         if not self._data_bin_count_checked:
@@ -1138,6 +1182,10 @@ class ModelBuilder:
                 "The model is not finalized, yet!\nPlease use the 'finalize_model' method to finalize the model setup!"
             )
 
+    def _check_is_not_finalized(self):
+        if self._is_initialized:
+            raise RuntimeError("The Model has already been finalized and cannot be altered anymore!")
+
     def _check_if_fractions_are_needed(self) -> bool:
         assert all([n_it <= n_t for n_it, n_t in zip(self.number_of_independent_templates, self.number_of_templates)]), \
             "\n".join([f"{i}] <= {t}" for i, t in zip(self.number_of_independent_templates, self.number_of_templates)])
@@ -1148,10 +1196,16 @@ class ModelBuilder:
     def _gauss_term(self, bin_pars: np.ndarray) -> float:
         return bin_pars @ self._inv_corr @ bin_pars
 
-    # TODO: Needs work
-    def _constrain_term(self) -> float:
-        constrain_pars = self._params.get_parameters_by_index(self.constrain_indices)
-        return np.sum(((self.constrain_value - constrain_pars) / self.constrain_sigma) ** 2)
+    def _constraint_term(self, parameter_vector: np.ndarray) -> float:
+        if not self._has_constrained_parameters:
+            return 0.
+
+        constraint_pars = self._params.get_combined_parameters_by_index(
+                parameter_vector=parameter_vector,
+                indices=self._constraint_indices
+            )
+
+        return np.sum(((self._constraint_values - constraint_pars) / self._constraint_sigmas) ** 2)
 
     @jit
     def chi2(self, parameter_vector: np.ndarray) -> float:
@@ -1161,7 +1215,7 @@ class ModelBuilder:
             axis=None
         )
 
-        return chi2_data_term + self._gauss_term() + self._constrain_term()
+        return chi2_data_term + self._gauss_term() + self._constraint_term(parameter_vector=parameter_vector)
 
     def nll(self, parameter_vector: np.ndarray) -> float:
         exp_evts_per_bin = self.calculate_expected_bin_count(parameter_vector=parameter_vector)
@@ -1171,7 +1225,7 @@ class ModelBuilder:
             axis=None
         )
 
-        return poisson_term + (self._gauss_term() + self._constrain_term()) / 2.
+        return poisson_term + (self._gauss_term() + self._constraint_term(parameter_vector=parameter_vector)) / 2.
 
     def create_nll(self) -> "CostFunction":
         return NLLCostFunction(self, parameter_handler=self._params)
