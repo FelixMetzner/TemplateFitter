@@ -99,6 +99,11 @@ class FitModel:
         self._template_bin_counts = None
         self._template_shapes_checked = False
 
+        self._gauss_term_checked = False
+        self._constraint_term_checked = False
+        self._chi2_calculation_checked = False
+        self._nll_calculation_checked = False
+
         # TODO:
         # self._inv_corr = np.array([])
 
@@ -913,6 +918,31 @@ class FitModel:
 
         self._efficiencies_checked = True
 
+    def get_bin_nuisance_vector(self, parameter_vector: np.ndarray) -> np.ndarray:
+        if self._bin_nuisance_param_indices is not None:
+            return self._params.get_combined_parameters_by_index(
+                parameter_vector=parameter_vector,
+                indices=self._bin_nuisance_param_indices
+            )
+
+        bin_nuisance_param_indices = self._params.get_parameter_indices_for_type(
+            parameter_type=ParameterHandler.bin_nuisance_parameter_type
+        )
+
+        if not self._bin_nuisance_params_checked:
+            self._check_bin_nuisance_parameters()
+
+        self._bin_nuisance_param_indices = bin_nuisance_param_indices
+
+        return self._params.get_combined_parameters_by_index(
+            parameter_vector=parameter_vector,
+            indices=self._bin_nuisance_param_indices
+        )
+
+    def _check_bin_nuisance_parameters(self) -> None:
+        # TODO: Do checks...
+        self._bin_nuisance_params_checked = True
+
     def get_template_bin_counts(self):
         if self._template_bin_counts is not None:
             return self._template_bin_counts
@@ -1268,11 +1298,16 @@ class FitModel:
             "\n".join([f"{i}] <= {t}" for i, t in zip(self.number_of_independent_templates, self.number_of_templates)])
         return not (self.number_of_independent_templates == self.number_of_templates)
 
-    # TODO: Needs work
     @jit
-    def _gauss_term(self, bin_pars: np.ndarray) -> float:
-        # TODO: Use bin_nuisance_parameters
-        return bin_pars @ self._inv_corr @ bin_pars
+    def _gauss_term(self, parameter_vector: np.ndarray) -> float:
+        bin_nuisance_vector = self.get_bin_nuisance_vector(parameter_vector=parameter_vector)
+
+        if not self._gauss_term_checked:
+            # TODO: Check gauss term! So, check parts of 'bin_nuisance_vector @ self._inv_corr @ bin_nuisance_vector'
+
+            self._gauss_term_checked = True
+        # TODO: Implementation of self._inv_corr
+        return bin_nuisance_vector @ self._inv_corr @ bin_nuisance_vector
 
     def _constraint_term(self, parameter_vector: np.ndarray) -> float:
         if not self._has_constrained_parameters:
@@ -1283,7 +1318,13 @@ class FitModel:
             indices=self._constraint_indices
         )
 
-        return np.sum(((self._constraint_values - constraint_pars) / self._constraint_sigmas) ** 2)
+        constraint_term = np.sum(((self._constraint_values - constraint_pars) / self._constraint_sigmas) ** 2)
+
+        if not self._constraint_term_checked:
+            assert isinstance(constraint_term, float), (constraint_term, type(constraint_term))
+            self._constraint_term_checked = True
+
+        return constraint_term
 
     @jit
     def chi2(self, parameter_vector: np.ndarray) -> float:
@@ -1293,17 +1334,27 @@ class FitModel:
             axis=None
         )
 
-        return chi2_data_term + self._gauss_term() + self._constraint_term(parameter_vector=parameter_vector)
+        if not self._chi2_calculation_checked:
+            assert isinstance(chi2_data_term, float), (chi2_data_term, type(chi2_data_term))
+            self._chi2_calculation_checked = True
+
+        return chi2_data_term + self._gauss_term(parameter_vector=parameter_vector) \
+               + self._constraint_term(parameter_vector=parameter_vector)
 
     def nll(self, parameter_vector: np.ndarray) -> float:
-        exp_evts_per_bin = self.calculate_expected_bin_count(parameter_vector=parameter_vector)
+        expected_bin_count = self.calculate_expected_bin_count(parameter_vector=parameter_vector)
         poisson_term = np.sum(
-            exp_evts_per_bin - self.get_flattened_data_bin_counts()
-            - xlogyx(self.get_flattened_data_bin_counts(), exp_evts_per_bin),
+            expected_bin_count - self.get_flattened_data_bin_counts()
+            - xlogyx(self.get_flattened_data_bin_counts(), expected_bin_count),
             axis=None
         )
 
-        return poisson_term + (self._gauss_term() + self._constraint_term(parameter_vector=parameter_vector)) / 2.
+        if not self._nll_calculation_checked:
+            assert isinstance(poisson_term, float), (poisson_term, type(poisson_term))
+            self._nll_calculation_checked = True
+
+        return poisson_term + (self._gauss_term(parameter_vector=parameter_vector)
+                               + self._constraint_term(parameter_vector=parameter_vector)) / 2.
 
     def create_nll(self) -> "CostFunction":
         return NLLCostFunction(self, parameter_handler=self._params)
