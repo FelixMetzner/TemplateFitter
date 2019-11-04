@@ -1271,6 +1271,7 @@ class FitModel:
     # TODO: Needs work
     @jit
     def _gauss_term(self, bin_pars: np.ndarray) -> float:
+        # TODO: Use bin_nuisance_parameters
         return bin_pars @ self._inv_corr @ bin_pars
 
     def _constraint_term(self, parameter_vector: np.ndarray) -> float:
