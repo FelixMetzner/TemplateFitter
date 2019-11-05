@@ -58,6 +58,7 @@ class BinnedDistribution:
         self._init_data_column_names(data_column_names=data_column_names, data=data)
 
         self._base_data = None
+        self._covariance_matrix = None
         self._is_empty = True
 
         if data is not None:
@@ -237,6 +238,32 @@ class BinnedDistribution:
     @property
     def systematics(self) -> SystematicsInfo:
         return self._base_data.systematics
+
+    @property
+    def covariance_matrix(self) -> np.ndarray:
+        if self._covariance_matrix is not None:
+            return self._covariance_matrix
+
+        assert not self.is_empty
+
+        num_bins_total = self.num_bins_total
+        cov = np.zeros((num_bins_total, num_bins_total))
+
+        # TODO: Must be applicable for multidimensional distributions, too, but sys_info.get_cov is not, yet!
+        for sys_info in self.systematics:
+            cov += sys_info.get_covariance_matrix(
+                data=self._base_data.data,
+                weights=self._base_data.weights,
+                binning=self._binning
+            )
+
+        assert len(cov.shape) == 2, cov.shape
+        assert cov.shape[0] == cov.shape[1], cov.shape
+        assert cov.shape[0] == self.num_bins_total, (cov.shape[0], self.num_bins_total)
+        assert np.allclose(cov, cov.T, rtol=1e-05, atol=1e-08), cov
+
+        self._covariance_matrix = cov
+        return cov
 
     @property
     def is_empty(self) -> bool:

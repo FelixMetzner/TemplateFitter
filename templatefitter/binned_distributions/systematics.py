@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import Union, Optional, Tuple, List
 
-from templatefitter.binned_distributions.binning import BinEdgesType
+from templatefitter.binned_distributions.binning import Binning, BinEdgesType
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -32,6 +32,7 @@ SystematicsInputType = Union[None, SingleSystematicsInputType, MultipleSystemati
 # TODO: Check bin_edges shapes
 # TODO: Check data shapes!
 
+# TODO: Use type hints!
 
 class SystematicsInfoItem(ABC):
     def __init__(self):
@@ -41,7 +42,12 @@ class SystematicsInfoItem(ABC):
         self._cov_matrix = None
 
     @abstractmethod
-    def get_cov(self, data=None, weights=None, bin_edges=None):
+    def get_covariance_matrix(
+            self,
+            data: Optional[np.ndarray] = None,
+            weights: WeightsInputType = None,
+            binning: Optional[Binning] = None
+    ):
         raise NotImplementedError()
 
     @abstractmethod
@@ -64,15 +70,15 @@ class SystematicsInfoItemFromCov(SystematicsInfoItem):
         self._sys_type = "cov_matrix"
         self._cov_matrix = cov_matrix
 
-    def get_cov(
+    def get_covariance_matrix(
             self,
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
-            bin_edges: Optional[BinEdgesType] = None
+            binning: Optional[Binning] = None
     ) -> np.ndarray:
-        assert bin_edges is not None
-        assert len(bin_edges) - 1 == self._cov_matrix.shape[0], (len(bin_edges) - 1, self._cov_matrix.shape[0])
-        assert len(bin_edges) - 1 == self._cov_matrix.shape[1], (len(bin_edges) - 1, self._cov_matrix.shape[1])
+        assert binning is not None
+        assert self._cov_matrix.shape[0] == self._cov_matrix.shape[1], self._cov_matrix.shape
+        assert binning.num_bins_total() == self._cov_matrix.shape[0], (binning.num_bins_total(), self._cov_matrix.shape)
         return self._cov_matrix
 
     def get_varied_hist(self, initial_varied_hists, data=None, weights=None, bin_edges=None):
@@ -94,11 +100,13 @@ class SystematicsInfoItemFromUpDown(SystematicsInfoItem):
         self._sys_weight = sys_weight
         self._sys_uncert = sys_uncert
 
-    def get_cov(
+    # TODO: Rework to use binning instead of bin_edges
+    # TODO: Rework to be usable for multidimensional distributions!
+    def get_covariance_matrix(
             self,
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
-            bin_edges: Optional[BinEdgesType] = None
+            binning: Optional[Binning] = None
     ) -> np.ndarray:
         varied_hists = self.get_varied_hist(initial_varied_hists=None, data=data, weights=weights, bin_edges=bin_edges)
         return self.get_cov_from_varied_hists(varied_hists=varied_hists)
@@ -152,11 +160,13 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
     def number_of_variations(self):
         return self._sys_uncert.shape[1]
 
-    def get_cov(
+    # TODO: Rework to use binning instead of bin_edges
+    # TODO: Rework to be usable for multidimensional distributions!
+    def get_covariance_matrix(
             self,
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
-            bin_edges: Optional[BinEdgesType] = None
+            binning: Optional[Binning] = None
     ) -> np.ndarray:
         varied_hists = self.get_varied_hist(initial_varied_hists=None, data=data, weights=weights, bin_edges=bin_edges)
         return self.get_cov_from_varied_hists(varied_hists=varied_hists)
