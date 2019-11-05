@@ -72,6 +72,7 @@ class FitModel:
         self._data_stat_errors_checked = False
 
         self._fraction_conversion = None
+        self._inverse_template_bin_correlation_matrix = None
 
         self._has_data = False
         self._is_initialized = False
@@ -88,8 +89,8 @@ class FitModel:
         self._efficiency_padding_required = True
         self._efficiencies_checked = False
 
-        self._bin_nuisance_param_indices = None  # TODO: use like self.bin_par_slice
-        self._bin_nuisance_params_checked = False  # TODO: use
+        self._bin_nuisance_param_indices = None
+        self._bin_nuisance_params_checked = False
 
         self._constraint_indices = None
         self._constraint_values = None
@@ -103,9 +104,6 @@ class FitModel:
         self._constraint_term_checked = False
         self._chi2_calculation_checked = False
         self._nll_calculation_checked = False
-
-        # TODO:
-        # self._inv_corr = np.array([])
 
     def add_model_parameter(
             self,
@@ -530,6 +528,9 @@ class FitModel:
         self._initialize_parameter_constraints()
         self._check_parameter_constraints()
 
+        self._initialize_template_bin_uncertainties()
+        self._check_template_bin_uncertainties()
+
         self._check_yield_parameters(yield_parameter_indices=None)
         self._check_fraction_parameters()
         self._check_efficiency_parameters()
@@ -654,6 +655,17 @@ class FitModel:
             (len(self._constraint_indices), len(self._constraint_sigmas))
 
         self._constraints_checked = True
+
+    def _initialize_template_bin_uncertainties(self) -> None:
+        # TODO: Implement new version using systematics of BinnedDistribution!
+        inv_corr_mats = [template.inv_corr_mat() for template in self.templates.values()]
+        self._inverse_template_bin_correlation_matrix = block_diag(*inv_corr_mats)
+
+    def _check_template_bin_uncertainties(self) -> None:
+        # TODO: Implement checks!
+        # TODO: Check shape of self._inverse_template_bin_correlation_matrix; must be m x m np.ndarray
+        #       with m = sum of bins of templates with uncertainty...
+        pass
 
     def get_yields_vector(self, parameter_vector: np.ndarray) -> np.ndarray:
         if self._yield_indices is not None:
@@ -940,7 +952,39 @@ class FitModel:
         )
 
     def _check_bin_nuisance_parameters(self) -> None:
-        # TODO: Do checks...
+        nu_is = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.bin_nuisance_parameter_type)
+        number_bins_with_nuisance = sum([t.num_bin_total for ch in self._channels
+                                         for t in ch.sub_templates if t.bin_nuisance_parameters is not None])
+        assert len(nu_is) == number_bins_with_nuisance, (len(nu_is), number_bins_with_nuisance)
+
+        nuisance_model_parameter_infos = self._params.get_parameter_infos_by_index(indices=nu_is)
+        assert all(param_info.name.startswith("bin_nuisance_param_")
+                   for param_info in nuisance_model_parameter_infos), \
+            (f"Parameter names of parameters registered under type {ParameterHandler.bin_nuisance_parameter_type}:\n"
+             + "\n\t".join([pi.name for pi in nuisance_model_parameter_infos]))
+
+        index_counter = 0
+        for channel in self._channels:
+            for component in channel.components:
+                for template in component.sub_templates:
+                    if template.bin_nuisance_parameters is None:
+                        assert not any(
+                            pi.name.endswith(f"_for_temp_{template.name}") for pi in nuisance_model_parameter_infos
+                        ), (template.name, [pi.name for pi in nuisance_model_parameter_infos
+                                            if pi.name.endswith(f"_for_temp_{template.name}")]
+                            )
+                    else:
+                        n_bins = template.num_bins_total
+                        current_bin_nu_pars = nuisance_model_parameter_infos[index_counter:index_counter + n_bins]
+                        assert all(pi.name.endswith(f"_for_temp_{template.name}") for pi in current_bin_nu_pars), \
+                            (template.name, n_bins, [pi.name for pi in current_bin_nu_pars])
+                        assert all(pi.index == template.bin_nuisance_parameters[i].index
+                                   for i, pi in enumerate(current_bin_nu_pars)), \
+                            (template.name, [(pi.index, template.bin_nuisance_parameters[i].index,
+                                              template.bin_nuisance_parameters[i].name)
+                                             for i, pi in enumerate(current_bin_nu_pars)])
+                        index_counter += n_bins
+
         self._bin_nuisance_params_checked = True
 
     def get_template_bin_counts(self):
@@ -1294,8 +1338,9 @@ class FitModel:
             raise RuntimeError("The Model has already been finalized and cannot be altered anymore!")
 
     def _check_if_fractions_are_needed(self) -> bool:
-        assert all([n_it <= n_t for n_it, n_t in zip(self.number_of_independent_templates, self.number_of_templates)]), \
-            "\n".join([f"{i}] <= {t}" for i, t in zip(self.number_of_independent_templates, self.number_of_templates)])
+        assert all(
+            [n_it <= n_t for n_it, n_t in zip(self.number_of_independent_templates, self.number_of_templates)]
+        ), "\n".join([f"{i}] <= {t}" for i, t in zip(self.number_of_independent_templates, self.number_of_templates)])
         return not (self.number_of_independent_templates == self.number_of_templates)
 
     @jit
@@ -1303,11 +1348,16 @@ class FitModel:
         bin_nuisance_vector = self.get_bin_nuisance_vector(parameter_vector=parameter_vector)
 
         if not self._gauss_term_checked:
-            # TODO: Check gauss term! So, check parts of 'bin_nuisance_vector @ self._inv_corr @ bin_nuisance_vector'
-
+            assert len(bin_nuisance_vector.shape) == 1, bin_nuisance_vector.shape
+            assert len(self._inverse_template_bin_correlation_matrix.shape) == 2, \
+                self._inverse_template_bin_correlation_matrix.shape
+            assert len(bin_nuisance_vector) == self._inverse_template_bin_correlation_matrix.shape[0], \
+                (bin_nuisance_vector.shape, self._inverse_template_bin_correlation_matrix.shape)
+            assert len(bin_nuisance_vector) == self._inverse_template_bin_correlation_matrix.shape[1], \
+                (bin_nuisance_vector.shape, self._inverse_template_bin_correlation_matrix.shape)
             self._gauss_term_checked = True
-        # TODO: Implementation of self._inv_corr
-        return bin_nuisance_vector @ self._inv_corr @ bin_nuisance_vector
+
+        return bin_nuisance_vector @ self._inverse_template_bin_correlation_matrix @ bin_nuisance_vector
 
     def _constraint_term(self, parameter_vector: np.ndarray) -> float:
         if not self._has_constrained_parameters:
@@ -1338,8 +1388,8 @@ class FitModel:
             assert isinstance(chi2_data_term, float), (chi2_data_term, type(chi2_data_term))
             self._chi2_calculation_checked = True
 
-        return chi2_data_term + self._gauss_term(parameter_vector=parameter_vector) \
-               + self._constraint_term(parameter_vector=parameter_vector)
+        return (chi2_data_term + self._gauss_term(parameter_vector=parameter_vector)
+                + self._constraint_term(parameter_vector=parameter_vector))
 
     def nll(self, parameter_vector: np.ndarray) -> float:
         expected_bin_count = self.calculate_expected_bin_count(parameter_vector=parameter_vector)
@@ -1364,51 +1414,6 @@ class FitModel:
 
     # TODO: The following stuff is not adapted, yet...
 
-    def relative_error_matrix(self):
-        errors_per_template = [template.errors() for template
-                               in self.templates.values()]
-
-        self.template_errors = np.stack(errors_per_template)
-
-    def initialise_bin_pars(self):
-        """ Add parameters for the template """
-
-        bin_pars = np.zeros((self.num_bins * len(self.templates), 1))
-        bin_par_names = []
-        for template in self.templates.values():
-            bin_par_names += ["{}_binpar_{}".format(template.name, i) for i in range(0, self.num_bins)]
-        bin_par_indices = self._params.add_parameters(bin_pars, bin_par_names)
-        self.bin_par_slice = (bin_par_indices[0], bin_par_indices[-1] + 1)
-
-    @jit
-    def expected_events_per_bin(self, bin_pars: np.ndarray, yields: np.ndarray, sub_pars: np.ndarray) -> np.ndarray:
-        sys_pars = self._params.get_parameters_by_index(self.sys_pars)
-        # compute the up and down errors for single par variations
-        up_corr = np.prod(1 + sys_pars * (sys_pars > 0) * self.up_errors, 0)
-        down_corr = np.prod(1 + sys_pars * (sys_pars < 0) * self.down_errors, 0)
-        corrections = (1 + self.template_errors * bin_pars) * (up_corr + down_corr)
-        sub_fractions = np.matmul(self.converter_matrix, sub_pars) + self.converter_vector
-        fractions = self.template_fractions * corrections
-        norm_fractions = fractions / np.sum(fractions, 1)[:, np.newaxis]
-        expected_per_bin = np.sum(norm_fractions * yields * sub_fractions, axis=0)
-        return expected_per_bin
-        # compute overall correction terms
-        # get sub template fractions into the correct form with the converter and additive part
-        # normalised expected corrected fractions
-        # determine expected amount of events in each bin
-
-    def x_expected(self) -> np.ndarray:
-        yields = self._params.get_parameters_by_index(self.yield_indices)
-        fractions_per_template = np.array([template.fractions() for template in self.templates.values()])
-        return yields @ fractions_per_template
-
-    def bin_pars(self) -> np.ndarray:
-        return np.concatenate([template.get_bin_pars() for template in self.templates.values()])
-
-    def _create_block_diag_inv_corr_mat(self) -> None:
-        inv_corr_mats = [template.inv_corr_mat() for template in self.templates.values()]
-        self._inv_corr = block_diag(*inv_corr_mats)
-
     @staticmethod
     def _get_projection(ax: str, bc: np.ndarray) -> np.ndarray:
         # TODO: Is the mapping for x and y defined the wrong way around?
@@ -1432,6 +1437,31 @@ class FitModel:
             has_data=self.has_data
         )
         return old_plotting.plot_stacked_on(plot_info=plot_info, ax=ax, plot_all=plot_all, **kwargs)
+
+    # TODO: Remaining functions that have to be looked through if every old functionality is covered.
+
+    # def relative_error_matrix(self):
+    #     errors_per_template = [template.errors() for template
+    #                            in self.templates.values()]
+    #
+    #     self.template_errors = np.stack(errors_per_template)
+    #
+    # @jit
+    # def expected_events_per_bin(self, bin_pars: np.ndarray, yields: np.ndarray, sub_pars: np.ndarray) -> np.ndarray:
+    #     sys_pars = self._params.get_parameters_by_index(self.sys_pars)
+    #     # compute the up and down errors for single par variations
+    #     up_corr = np.prod(1 + sys_pars * (sys_pars > 0) * self.up_errors, 0)
+    #     down_corr = np.prod(1 + sys_pars * (sys_pars < 0) * self.down_errors, 0)
+    #     corrections = (1 + self.template_errors * bin_pars) * (up_corr + down_corr)
+    #     sub_fractions = np.matmul(self.converter_matrix, sub_pars) + self.converter_vector
+    #     fractions = self.template_fractions * corrections
+    #     norm_fractions = fractions / np.sum(fractions, 1)[:, np.newaxis]
+    #     expected_per_bin = np.sum(norm_fractions * yields * sub_fractions, axis=0)
+    #     return expected_per_bin
+    #     # compute overall correction terms
+    #     # get sub template fractions into the correct form with the converter and additive part
+    #     # normalised expected corrected fractions
+    #     # determine expected amount of events in each bin
 
 
 class AbstractTemplateCostFunction(ABC):
