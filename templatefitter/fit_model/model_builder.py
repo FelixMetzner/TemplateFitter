@@ -661,6 +661,8 @@ class FitModel:
 
     def _initialize_template_bin_uncertainties(self) -> None:
         # TODO: Implement new version using systematics of BinnedDistribution!
+        #       This requires the method BinnedDistribution._get_cov_from_systematics
+        #       to be adapted to the multidimensional case!
         inv_corr_mats = [template.inv_corr_mat() for template in self.templates.values()]
         self._inverse_template_bin_correlation_matrix = block_diag(*inv_corr_mats)
 

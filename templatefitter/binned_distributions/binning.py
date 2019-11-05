@@ -169,6 +169,14 @@ class Binning:
     def range(self) -> Tuple[Tuple[float, float]]:
         return self._range
 
+    # TODO: The more complicated part is the adaptive binning of multidimensional distributions, as it is not
+    #       clear into which direction the bins should be enlarged. This should be covered first, when reworking
+    #       this function!
+    # TODO: Rework this to be applicable to a case where multiple binned_distribution make up one histogram,
+    #       maybe also in multiple channels (although multiple channels can have different binnings, maybe it
+    #       could be handy to be able to find one common binning for them all... this could be done by just
+    #       using the most coarse binning, whilst ensuring that this binning covers all sparsely populated
+    #       regions of every other channel, too)
     def apply_adaptive_binning(
             self,
             components,  # TODO add type hint, once component class is defined
