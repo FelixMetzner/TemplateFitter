@@ -5,15 +5,14 @@ Class which defines the fit model by combining templates and handles the computa
 import logging
 import operator
 import numpy as np
+
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
-
 from keras.preprocessing.sequence import pad_sequences
 from typing import Optional, Union, List, Tuple, Dict, NamedTuple
 
 from templatefitter.utility import xlogyx
-from templatefitter.plotter import old_plotting
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
@@ -38,14 +37,18 @@ __all__ = ["FitModel"]
 #           ratio = yield_2 / yield_1 -> yield_2 = ratio * yield_1
 #           => (yield_i, yield_1, yield_1, yield_j, ...)^T * (1, 1, ratio, 1, ...)^T
 
+# TODO: Define method to plot initial and fitted model vs data distribution
+#       => use histogram for plotting!
+
+# TODO: Maybe the FitModel could produce a Model object, which is a container that holds all
+#       the necessary information and can be used to recreate the model.
+
+
 class FractionConversionInfo(NamedTuple):
     needed: bool
     conversion_matrix: np.ndarray
     conversion_vector: np.ndarray
 
-
-# TODO: Maybe the FitModel could produce a Model object, which is a container that holds all
-#       the necessary information and can be used to recreate the model.
 
 class FitModel:
     def __init__(
@@ -1406,40 +1409,15 @@ class FitModel:
         return poisson_term + (self._gauss_term(parameter_vector=parameter_vector)
                                + self._constraint_term(parameter_vector=parameter_vector)) / 2.
 
+    # Using CostFunction class name as type hint, before CostFunction is defined.
     def create_nll(self) -> "CostFunction":
         return NLLCostFunction(self, parameter_handler=self._params)
 
+    # Using CostFunction class name as type hint, before CostFunction is defined.
     def create_chi2(self) -> "CostFunction":
         return Chi2CostFunction(self, parameter_handler=self._params)
 
-    # TODO: The following stuff is not adapted, yet...
-
-    @staticmethod
-    def _get_projection(ax: str, bc: np.ndarray) -> np.ndarray:
-        # TODO: Is the mapping for x and y defined the wrong way around?
-        x_to_i = {
-            "x": 1,
-            "y": 0
-        }
-
-        # TODO: use method provided by BinnedDistribution!
-        return np.sum(bc, axis=x_to_i[ax])
-
-    # TODO: Use histogram for plotting!
-    def plot_stacked_on(self, ax, plot_all=False, **kwargs):
-        plot_info = old_plotting.PlottingInfo(
-            templates=self.templates,
-            params=self._params,
-            yield_indices=self.yield_indices,
-            dimension=self._dim,
-            projection_fct=self._get_projection,
-            data=self.data,
-            has_data=self.has_data
-        )
-        return old_plotting.plot_stacked_on(plot_info=plot_info, ax=ax, plot_all=plot_all, **kwargs)
-
-    # TODO: Remaining functions that have to be looked through if every old functionality is covered.
-
+    # TODO: Remaining functions that have to be looked through if every old functionality is covered:
     # def relative_error_matrix(self):
     #     errors_per_template = [template.errors() for template
     #                            in self.templates.values()]
