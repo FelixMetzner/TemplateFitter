@@ -293,7 +293,7 @@ class BinnedDistribution:
         return self._data_column_names
 
     @property
-    def get_base_data(self) -> BaseDataContainer:
+    def base_data(self) -> BaseDataContainer:
         return self._base_data
 
     def get_projection_on(self, dimension: int) -> Tuple[np.ndarray, Binning]:

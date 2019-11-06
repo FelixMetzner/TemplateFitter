@@ -3,55 +3,67 @@ Utility functions for multiple BinnedDistributions.
 """
 
 import numpy as np
-from typing import Optional
+from typing import Optional, Union, Tuple, List
+
+from templatefitter.binned_distributions.binned_distribution import BinnedDistribution
+
+DistributionContainerInputType = Union[List[BinnedDistribution], Tuple[BinnedDistribution, ...]]
+
+__all__ = ["get_combined_covariance", "DistributionContainerInputType"]
 
 
-### TODO: This whole file is WIP!!! ###
+# TODO: Use this in FitModel._initialize_template_bin_uncertainties
+def get_combined_covariance(distributions: DistributionContainerInputType) -> Optional[np.ndarray]:
+    _check_distribution_container_input(distributions=distributions)
+    common_binning = distributions[0].binning
 
-# TODO: Secondly introduce utility function, which combines the systematics of multiple components of a
-#       distribution and get covariance matrix and correlation matrix for this
-# TODO: Maybe pack all the functions acting on multiple BinnedDistribution instances with the same binning
-#       into a new file called distribution_utils.py, or so.
+    if all(len(dist.systematics) == 0 for dist in distributions):
+        return None
 
-def _get_cov_from_systematics(self, component_label: Optional[str] = None) -> Optional[np.ndarray]:
-    if component_label is not None:
-        assert component_label in [c.label for c in self._mc_components["single"]]
-        components = [c for c in self._mc_components["single"] if c.label == component_label]
-        assert len(components) == 1
-        comp = components[0]
-        if comp.systematics is None:
-            return None
+    assert all(len(dist.systematics) == len(distributions[0].systematics) for dist in distributions), \
+        ([len(d.systematics) for d in distributions])
 
-        cov = np.zeros((len(self._bin_mids), len(self._bin_mids)))
-        for sys_info in comp.systematics:
-            cov += sys_info.get_cov(data=comp.data, weights=comp.weights, bin_edges=self.bin_edges())
+    cov = np.zeros((common_binning.num_bins_total, common_binning.num_bins_total))
+
+    if len(distributions) == 1:
+        for sys_info in distributions[0].systematics:
+            cov += sys_info.get_covariance_matrix(
+                data=distributions[0].base_data.data,
+                weights=distributions[0].base_data.weights,
+                binning=common_binning
+            )
         return cov
     else:
-        components = self._mc_components["stacked"]
-        if all(comp.systematics is None for comp in components):
-            return None
-        if all(len(comp.systematics) == 0 for comp in components):
-            return None
-
-        assert all(len(comp.systematics) == len(components[0].systematics) for comp in components)
-
-        cov = np.zeros((len(self._bin_mids), len(self._bin_mids)))
-        for sys_index in range(len(components[0].systematics)):
-            assert all(isinstance(comp.systematics[sys_index], type(components[0].systematics[sys_index]))
-                       for comp in components)
+        for sys_index in range(len(distributions[0].systematics)):
+            assert all(isinstance(dist.systematics[sys_index], type(distributions[0].systematics[sys_index]))
+                       for dist in distributions)
 
             varied_hists = None
-            for comp in components:
-                varied_hists = comp.systematics[sys_index].get_varied_hist(
+            for dist in distributions:
+                varied_hists = dist.systematics[sys_index].get_varied_hist(
                     initial_varied_hists=varied_hists,
-                    data=comp.data,
-                    weights=comp.weights,
-                    bin_edges=self.bin_edges
+                    data=dist.base_data.data,
+                    weights=dist.base_data.weights,
+                    binning=common_binning
                 )
 
-            cov += components[0].systematics[sys_index].get_cov_from_varied_hists(varied_hists=varied_hists)
+            cov += distributions[0].systematics[sys_index].get_cov_from_varied_hists(varied_hists=varied_hists)
 
         return cov
+
+
+def _check_distribution_container_input(distributions: DistributionContainerInputType) -> None:
+    if not (isinstance(distributions, list) or isinstance(distributions, tuple)):
+        raise ValueError(f"The argument 'distributions' must be either a list or a tuple of "
+                         f"{BinnedDistribution.__name__} objects, but you provided an object of type "
+                         f"{type(distributions)}...")
+    if not all(isinstance(dist, BinnedDistribution) for dist in distributions):
+        raise ValueError(f"The argument 'distributions' must be either a list or a tuple of "
+                         f"{BinnedDistribution.__name__} objects, but you provided a list containing objects of "
+                         f"the following types:\n{[type(d) for d in distributions]}")
+    if not all(dist.binning == distributions[0].binning for dist in distributions):
+        raise ValueError(f"The binning of all distributions provided via the argument 'distributions' must be"
+                         f"the equal, however, the provided distributions had different binning definitions!")
 
 # TODO: This method should be available to find the range of a distribution for a given data set
 #       especially for multiple-component- or multi-dimensional distributions
