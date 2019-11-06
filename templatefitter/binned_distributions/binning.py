@@ -146,6 +146,7 @@ class Binning:
     def num_bins(self) -> Tuple[int, ...]:
         return self._num_bins
 
+    @property
     def num_bins_total(self) -> int:
         return sum(self._num_bins)
 

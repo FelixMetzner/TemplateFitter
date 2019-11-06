@@ -1008,9 +1008,9 @@ class FitModel:
 
     def _apply_padding_to_templates(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
         if not self._template_shapes_checked:
-            assert all([bc.shape[1] == ch.binning.num_bins_total()
+            assert all([bc.shape[1] == ch.binning.num_bins_total
                         for bc, ch in zip(bin_counts_per_channel, self._channels)]), "\t" + "\n\t".join(
-                [f"{bc.shape[1]} : {ch.binning.num_bins_total()}"
+                [f"{bc.shape[1]} : {ch.binning.num_bins_total}"
                  for bc, ch in zip(bin_counts_per_channel, self._channels)]
             )
 
@@ -1026,10 +1026,10 @@ class FitModel:
             ]
 
     def _pad_widths_per_channel(self) -> List[List[Tuple[int, int]]]:
-        max_n_bins = max([ch.binning.num_bins_total() for ch in self._channels])
+        max_n_bins = max([ch.binning.num_bins_total for ch in self._channels])
         if not self._is_checked:
             assert max_n_bins == self.max_number_of_bins_flattened, (max_n_bins, self.max_number_of_bins_flattened)
-        return [[(0, 0), (0, max_n_bins - ch.binning.num_bins_total())] for ch in self._channels]
+        return [[(0, 0), (0, max_n_bins - ch.binning.num_bins_total)] for ch in self._channels]
 
     def _check_template_shapes(self, template_bin_counts: np.ndarray) -> None:
         # Check order of processes in channels:
@@ -1178,7 +1178,7 @@ class FitModel:
         if all(len(bc) == max_n_bins for bc in bin_counts_per_channel):
             return bin_counts_per_channel
         else:
-            pad_widths = [(0, max_n_bins - ch.binning.num_bins_total()) for ch in self._channels]
+            pad_widths = [(0, max_n_bins - ch.binning.num_bins_total) for ch in self._channels]
             return [
                 np.pad(bc, pad_width=pad_width, mode='constant', constant_values=0)
                 for bc, pad_width in zip(bin_counts_per_channel, pad_widths)
@@ -1194,7 +1194,7 @@ class FitModel:
 
     @property
     def max_number_of_bins_flattened(self) -> int:
-        return max(ch_binning.num_bins_total() for ch_binning in self.binning)
+        return max(ch_binning.num_bins_total for ch_binning in self.binning)
 
     @property
     def number_of_components(self) -> Tuple[int, ...]:

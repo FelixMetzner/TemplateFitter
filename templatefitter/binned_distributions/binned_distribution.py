@@ -187,7 +187,7 @@ class BinnedDistribution:
     @property
     def num_bins_total(self) -> int:
         """ Number of bins after flattening, so the total number of bins """
-        return self._binning.num_bins_total()
+        return self._binning.num_bins_total
 
     @property
     def bin_edges(self) -> BinEdgesType:

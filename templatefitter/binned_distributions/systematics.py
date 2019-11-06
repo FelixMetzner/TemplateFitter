@@ -78,7 +78,7 @@ class SystematicsInfoItemFromCov(SystematicsInfoItem):
     ) -> np.ndarray:
         assert binning is not None
         assert self._cov_matrix.shape[0] == self._cov_matrix.shape[1], self._cov_matrix.shape
-        assert binning.num_bins_total() == self._cov_matrix.shape[0], (binning.num_bins_total(), self._cov_matrix.shape)
+        assert binning.num_bins_total == self._cov_matrix.shape[0], (binning.num_bins_total, self._cov_matrix.shape)
         return self._cov_matrix
 
     def get_varied_hist(self, initial_varied_hists, data=None, weights=None, bin_edges=None):
