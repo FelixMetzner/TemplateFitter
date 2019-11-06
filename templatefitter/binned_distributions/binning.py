@@ -12,7 +12,7 @@ __all__ = ["Binning", "BinEdgesType", "BinsInputType", "ScopeInputType"]
 
 BinsInputType = Union[int, Tuple[int, ...], Tuple[float, ...], Tuple[Tuple[float, ...], ...]]
 ScopeInputType = Union[None, Tuple[float, float], Tuple[Tuple[float, float], ...]]
-BinEdgesType = Tuple[Tuple[float, ...]]
+BinEdgesType = Tuple[Tuple[float, ...], ...]
 
 
 # TODO: Check TODO in apply_adaptive_binning!

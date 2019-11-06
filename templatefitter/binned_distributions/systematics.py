@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import Union, Optional, Tuple, List
 
-from templatefitter.binned_distributions.binning import Binning, BinEdgesType
+from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -26,14 +26,6 @@ MultipleSystematicsInputType = List[SingleSystematicsInputType]
 SystematicsInputType = Union[None, SingleSystematicsInputType, MultipleSystematicsInputType]
 
 
-# TODO: Conversion from 1-D histograms to n-D necessary!
-#  weights, data, bin_edges, etc. have to be handled correctly!
-# TODO: Check weights shapes
-# TODO: Check bin_edges shapes
-# TODO: Check data shapes!
-
-# TODO: Use type hints!
-
 class SystematicsInfoItem(ABC):
     def __init__(self):
         self._sys_type = None
@@ -47,16 +39,22 @@ class SystematicsInfoItem(ABC):
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
             binning: Optional[Binning] = None
-    ):
+    ) -> np.ndarray:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_varied_hist(self, initial_varied_hists, data=None, weights=None, bin_edges=None):
+    def get_varied_hist(
+            self,
+            initial_varied_hists: Optional[Tuple[np.ndarray, ...]],
+            data: Optional[np.ndarray] = None,
+            weights: WeightsInputType = None,
+            binning: Optional[Binning] = None
+    ) -> Tuple[np.ndarray, ...]:
         raise NotImplementedError()
 
     @staticmethod
     @abstractmethod
-    def get_cov_from_varied_hists(varied_hists):
+    def get_cov_from_varied_hists(varied_hists) -> np.ndarray:
         raise NotImplementedError()
 
 
@@ -81,11 +79,11 @@ class SystematicsInfoItemFromCov(SystematicsInfoItem):
         assert binning.num_bins_total == self._cov_matrix.shape[0], (binning.num_bins_total, self._cov_matrix.shape)
         return self._cov_matrix
 
-    def get_varied_hist(self, initial_varied_hists, data=None, weights=None, bin_edges=None):
+    def get_varied_hist(self, initial_varied_hists, data=None, weights=None, binning=None) -> None:
         raise NotImplementedError("This method is not (yet) supported for systematics provided via covariance matrix.")
 
     @staticmethod
-    def get_cov_from_varied_hists(varied_hists):
+    def get_cov_from_varied_hists(varied_hists: Tuple[np.ndarray, ...]) -> None:
         raise NotImplementedError("This method is not (yet) supported for systematics provided via covariance matrix.")
 
 
@@ -100,47 +98,63 @@ class SystematicsInfoItemFromUpDown(SystematicsInfoItem):
         self._sys_weight = sys_weight
         self._sys_uncert = sys_uncert
 
-    # TODO: Rework to use binning instead of bin_edges
-    # TODO: Rework to be usable for multidimensional distributions!
     def get_covariance_matrix(
             self,
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
             binning: Optional[Binning] = None
     ) -> np.ndarray:
-        varied_hists = self.get_varied_hist(initial_varied_hists=None, data=data, weights=weights, bin_edges=bin_edges)
-        return self.get_cov_from_varied_hists(varied_hists=varied_hists)
+        varied_hists = self.get_varied_hist(initial_varied_hists=None, data=data, weights=weights, binning=binning)
+        covariance_matrix = self.get_cov_from_varied_hists(varied_hists=varied_hists)
+        assert len(covariance_matrix.shape) == 2, covariance_matrix.shape
+        assert covariance_matrix.shape[0] == covariance_matrix.shape[1] == binning.num_bins_total, \
+            (covariance_matrix.shape, binning.num_bins_total)
+        return covariance_matrix
 
     def get_varied_hist(
             self,
-            initial_varied_hists,
+            initial_varied_hists: Optional[Tuple[np.ndarray, ...]],
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
-            bin_edges: Optional[BinEdgesType] = None
+            binning: Optional[Binning] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
         assert data is not None
         assert weights is not None
-        assert bin_edges is not None
-        if initial_varied_hists is None:
-            initial_varied_hists = (np.zeros(len(bin_edges) - 1), np.zeros(len(bin_edges) - 1))
-        assert len(initial_varied_hists) == 2, len(initial_varied_hists)
+        assert binning is not None
+
         assert len(self._sys_weight) == len(data), (len(self._sys_weight), len(data))
+
+        if initial_varied_hists is None:
+            initial_varied_hists = (np.zeros(binning.num_bins_total), np.zeros(binning.num_bins_total))
+        assert len(initial_varied_hists) == 2, len(initial_varied_hists)
+
         wc = weights > 0.
         weights_up = copy.copy(weights)
         weights_up[wc] = weights[wc] / self._sys_weight[wc] * (self._sys_weight[wc] + self._sys_uncert[wc])
         weights_dw = copy.copy(weights)
         weights_dw[wc] = weights[wc] / self._sys_weight[wc] * (self._sys_weight[wc] - self._sys_uncert[wc])
 
-        bins = [np.array(list(edges)) for edges in bin_edges] if bin_edges is not None else bin_edges
+        bins = [np.array(list(edges)) for edges in binning.bin_edges]
         hist_up, _ = np.histogramdd(data, bins=bins, weights=weights_up)
         hist_dw, _ = np.histogramdd(data, bins=bins, weights=weights_dw)
+        assert hist_up.shape == hist_dw.shape, (hist_up.shape, hist_dw.shape)
 
-        return initial_varied_hists[0] + hist_up, initial_varied_hists[1] + hist_dw
+        if binning.dimensions > 1:
+            flat_hist_up = hist_up.flatten()
+            flat_hist_dw = hist_dw.flatten()
+            assert flat_hist_up.shape == flat_hist_dw.shape, (flat_hist_up.shape, flat_hist_dw.shape)
+            assert flat_hist_up.shape[0] == binning.num_bins_total, (flat_hist_up.shape, binning.num_bins_total)
+
+            return initial_varied_hists[0] + flat_hist_up, initial_varied_hists[1] + flat_hist_dw
+        else:
+            return initial_varied_hists[0] + hist_up, initial_varied_hists[1] + hist_dw
 
     @staticmethod
     def get_cov_from_varied_hists(varied_hists: Tuple[np.ndarray, np.ndarray]) -> np.ndarray:
         assert len(varied_hists) == 2, len(varied_hists)
         hist_up, hist_dw = varied_hists
+        assert hist_up.shape == hist_dw.shape, (hist_up.shape, hist_dw.shape)
+
         diff_sym = (hist_up - hist_dw) / 2.
         return np.outer(diff_sym, diff_sym)
 
@@ -157,18 +171,16 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
         self._sys_weight = sys_weight
         self._sys_uncert = sys_uncert
 
-    def number_of_variations(self):
+    def number_of_variations(self) -> int:
         return self._sys_uncert.shape[1]
 
-    # TODO: Rework to use binning instead of bin_edges
-    # TODO: Rework to be usable for multidimensional distributions!
     def get_covariance_matrix(
             self,
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
             binning: Optional[Binning] = None
     ) -> np.ndarray:
-        varied_hists = self.get_varied_hist(initial_varied_hists=None, data=data, weights=weights, bin_edges=bin_edges)
+        varied_hists = self.get_varied_hist(initial_varied_hists=None, data=data, weights=weights, binning=binning)
         return self.get_cov_from_varied_hists(varied_hists=varied_hists)
 
     def get_varied_hist(
@@ -176,16 +188,17 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
             initial_varied_hists: Optional[Tuple[np.ndarray, ...]],
             data: Optional[np.ndarray] = None,
             weights: WeightsInputType = None,
-            bin_edges: Optional[BinEdgesType] = None
+            binning: Optional[Binning] = None
     ) -> Tuple[np.ndarray, ...]:
         assert data is not None
         assert weights is not None
-        assert bin_edges is not None
-        if initial_varied_hists is None:
-            initial_varied_hists = (np.zeros(len(bin_edges) - 1),) * self.number_of_variations()
-        assert len(initial_varied_hists) == self.number_of_variations(), (len(initial_varied_hists),
-                                                                          self.number_of_variations())
+        assert binning is not None
         assert len(self._sys_weight) == len(data), (len(self._sys_weight), len(data))
+
+        if initial_varied_hists is None:
+            initial_varied_hists = tuple([np.zeros(binning.num_bins_total) for _ in range(self.number_of_variations())])
+        assert len(initial_varied_hists) == self.number_of_variations(), \
+            (len(initial_varied_hists), self.number_of_variations())
 
         varied_hists = []
         for hist_variation, sys_weight_var in zip(initial_varied_hists, self._sys_uncert.T):
@@ -193,10 +206,13 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
             w_cond = weights > 0.
             varied_weights[w_cond] = weights[w_cond] / self._sys_weight[w_cond] * sys_weight_var[w_cond]
 
-            bins = [np.array(list(edges)) for edges in bin_edges] if bin_edges is not None else bin_edges
-            varied_hists.append(hist_variation + np.histogramdd(data, bins=bins, weights=varied_weights)[0])
+            bins = [np.array(list(edges)) for edges in binning.bin_edges]
+            varied_hists.append(hist_variation + np.histogramdd(data, bins=bins, weights=varied_weights)[0].flatten())
 
         assert len(varied_hists) == len(initial_varied_hists), (len(varied_hists), len(initial_varied_hists))
+        assert all(len(vh.shape) == 1 for vh in varied_hists), [vh.shape for vh in varied_hists]
+        assert all(vh.shape[0] == binning.num_bins_total for vh in varied_hists), \
+            ([vh.shape for vh in varied_hists], binning.num_bins_total)
         return tuple(varied_hists)
 
     @staticmethod
