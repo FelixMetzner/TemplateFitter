@@ -252,6 +252,9 @@ class BinnedDistribution:
         assert not self.is_empty
 
         num_bins_total = self.num_bins_total
+        if len(self.systematics) == 0:
+            return np.eye(num_bins_total)
+
         cov = np.zeros((num_bins_total, num_bins_total))
 
         for sys_info in self.systematics:

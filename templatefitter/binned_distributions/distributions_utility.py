@@ -3,7 +3,7 @@ Utility functions for multiple BinnedDistributions.
 """
 
 import numpy as np
-from typing import Optional, Union, Tuple, List
+from typing import Union, Tuple, List
 
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution
 
@@ -12,16 +12,16 @@ DistributionContainerInputType = Union[List[BinnedDistribution], Tuple[BinnedDis
 __all__ = ["get_combined_covariance", "DistributionContainerInputType"]
 
 
-# TODO: Use this in FitModel._initialize_template_bin_uncertainties
-def get_combined_covariance(distributions: DistributionContainerInputType) -> Optional[np.ndarray]:
+# TODO: Use this in FitModel._initialize_template_bin_uncertainties?
+def get_combined_covariance(distributions: DistributionContainerInputType) -> np.ndarray:
     _check_distribution_container_input(distributions=distributions)
     common_binning = distributions[0].binning
 
-    if all(len(dist.systematics) == 0 for dist in distributions):
-        return None
-
     assert all(len(dist.systematics) == len(distributions[0].systematics) for dist in distributions), \
         ([len(d.systematics) for d in distributions])
+
+    if all(len(dist.systematics) == 0 for dist in distributions):
+        return np.eye(common_binning.num_bins_total)
 
     cov = np.zeros((common_binning.num_bins_total, common_binning.num_bins_total))
 

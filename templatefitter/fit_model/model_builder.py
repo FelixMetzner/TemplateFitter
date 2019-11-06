@@ -660,17 +660,30 @@ class FitModel:
         self._constraints_checked = True
 
     def _initialize_template_bin_uncertainties(self) -> None:
-        # TODO: Implement new version using systematics of BinnedDistribution!
-        #       This requires the method BinnedDistribution._get_cov_from_systematics
-        #       to be adapted to the multidimensional case!
-        inv_corr_mats = [template.inv_corr_mat() for template in self.templates.values()]
+        # TODO: Think about this: This can be done as block diagonal matrix
+        #                           - with each block being a channel, and all systematics combined for each
+        #                             channel in one matrix via distribution_utiliy.get_combined_covariance
+        #                           - or with one block for each template via template.bin_correlation_matrix
+        #                           - or with one block for each systematic via loop over template.systematics (would
+        #                             require some now function, though to get the cov/corr matrix for each sys...)
+
+        inv_corr_mats = [
+            np.linalg.inv(template.bin_correlation_matrix)
+            for channel in self._channels for template in channel.sub_templates
+            if template.bin_nuisance_parameters is not None
+        ]
         self._inverse_template_bin_correlation_matrix = block_diag(*inv_corr_mats)
 
     def _check_template_bin_uncertainties(self) -> None:
-        # TODO: Implement checks!
-        # TODO: Check shape of self._inverse_template_bin_correlation_matrix; must be m x m np.ndarray
-        #       with m = sum of bins of templates with uncertainty...
-        pass
+        assert self._inverse_template_bin_correlation_matrix is not None
+        inv_corr_mat = self._inverse_template_bin_correlation_matrix
+        assert len(inv_corr_mat.shape) == 2, inv_corr_mat.shape
+        assert inv_corr_mat.shape[0] == inv_corr_mat.shape[1], inv_corr_mat.shape
+        expected_dim = sum([temp.num_bins_total for ch in self._channels for temp in ch.sub_templates
+                            if temp.bin_nuisance_parameters is not None])
+        assert inv_corr_mat.shape[0] == expected_dim, (inv_corr_mat.shape, expected_dim)
+        # Checking matrix is symmetric.
+        assert np.allclose(inv_corr_mat, inv_corr_mat.T, rtol=1e-05, atol=1e-08), (inv_corr_mat, "Matrix not symmetric")
 
     def get_yields_vector(self, parameter_vector: np.ndarray) -> np.ndarray:
         if self._yield_indices is not None:
