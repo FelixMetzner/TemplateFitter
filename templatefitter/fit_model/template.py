@@ -7,8 +7,8 @@ import numpy as np
 
 from typing import Optional, List, Tuple
 
-from templatefitter.binned_distributions.binning import BinsInputType, ScopeInputType
 from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
+from templatefitter.binned_distributions.binning import BinsInputType, ScopeInputType, LogSpaceInputType
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataColumnNamesInput
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -26,9 +26,17 @@ class Template(BinnedDistribution):
             bins: BinsInputType,
             scope: ScopeInputType,
             params: ParameterHandler,
-            data_column_names: DataColumnNamesInput
+            data_column_names: DataColumnNamesInput,
+            log_space_mask: LogSpaceInputType = False
     ):
-        super().__init__(bins=bins, dimensions=dimensions, scope=scope, name=name, data_column_names=data_column_names)
+        super().__init__(
+            bins=bins,
+            dimensions=dimensions,
+            scope=scope,
+            log_space_mask=log_space_mask,
+            name=name,
+            data_column_names=data_column_names
+        )
         self._params = params
         self._process_name = process_name
         self._serial_number = None

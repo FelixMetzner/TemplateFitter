@@ -5,6 +5,7 @@ Utility functions for multiple BinnedDistributions.
 import numpy as np
 from typing import Optional
 
+
 ### TODO: This whole file is WIP!!! ###
 
 # TODO: Secondly introduce utility function, which combines the systematics of multiple components of a
@@ -63,26 +64,3 @@ def _get_cov_from_systematics(self, component_label: Optional[str] = None) -> Op
 #         max_vals.append(np.amax(component.data))
 #
 #     return np.amin(min_vals), np.amax(max_vals)
-#
-# def _get_bin_edges(self) -> Tuple[np.ndarray, np.ndarray, float]:
-#     """
-#     Calculates the bin edges for the histogram.
-#     :return: Bin edges.
-#     """
-#     if self._variable.has_scope():
-#         scope = self._variable.scope
-#     else:
-#         scope = self._find_range_from_components()
-#
-#     low, high = scope[0], scope[1]
-#
-#     if self._variable.use_logspace:
-#         assert low > 0, \
-#             f"Cannot use log-space for variable {self._variable.x_label} since the minimum value is <= 0."
-#         bin_edges = np.logspace(np.log10(low), np.log10(high), self._num_bins + 1)
-#     else:
-#         bin_edges = np.linspace(low, high, self._num_bins + 1)
-#
-#     bin_mids = (bin_edges[1:] + bin_edges[:-1]) / 2
-#     bin_width = bin_edges[1] - bin_edges[0]
-#     return bin_edges, bin_mids, bin_width
