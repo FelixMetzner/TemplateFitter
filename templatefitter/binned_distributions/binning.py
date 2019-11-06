@@ -16,6 +16,8 @@ BinEdgesType = Tuple[Tuple[float, ...], ...]
 
 
 # TODO: Check TODO in apply_adaptive_binning!
+# TODO: Implement log-space binning
+
 class Binning:
     def __init__(
             self,

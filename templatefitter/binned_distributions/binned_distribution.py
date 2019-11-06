@@ -13,6 +13,7 @@ import pandas as pd
 
 from typing import Union, Optional, Tuple, List, NamedTuple
 
+from templatefitter.utility import cov2corr
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 from templatefitter.binned_distributions.systematics import SystematicsInfo, SystematicsInputType
 from templatefitter.binned_distributions.binning import Binning, BinsInputType, ScopeInputType, BinEdgesType
@@ -58,8 +59,10 @@ class BinnedDistribution:
         self._init_data_column_names(data_column_names=data_column_names, data=data)
 
         self._base_data = None
-        self._covariance_matrix = None
         self._is_empty = True
+
+        self._bin_covariance_matrix = None
+        self._bin_correlation_matrix = None
 
         if data is not None:
             self._base_data = self._get_base_info(in_data=data, in_weights=weights, in_systematics=systematics)
@@ -240,16 +243,15 @@ class BinnedDistribution:
         return self._base_data.systematics
 
     @property
-    def covariance_matrix(self) -> np.ndarray:
-        if self._covariance_matrix is not None:
-            return self._covariance_matrix
+    def bin_covariance_matrix(self) -> np.ndarray:
+        if self._bin_covariance_matrix is not None:
+            return self._bin_covariance_matrix
 
         assert not self.is_empty
 
         num_bins_total = self.num_bins_total
         cov = np.zeros((num_bins_total, num_bins_total))
 
-        # TODO: Must be applicable for multidimensional distributions, too, but sys_info.get_cov is not, yet!
         for sys_info in self.systematics:
             cov += sys_info.get_covariance_matrix(
                 data=self._base_data.data,
@@ -260,10 +262,18 @@ class BinnedDistribution:
         assert len(cov.shape) == 2, cov.shape
         assert cov.shape[0] == cov.shape[1], cov.shape
         assert cov.shape[0] == self.num_bins_total, (cov.shape[0], self.num_bins_total)
-        assert np.allclose(cov, cov.T, rtol=1e-05, atol=1e-08), cov
+        assert np.allclose(cov, cov.T, rtol=1e-05, atol=1e-08), cov  # Checking if covariance matrix is symmetric.
 
-        self._covariance_matrix = cov
+        self._bin_covariance_matrix = cov
         return cov
+
+    @property
+    def bin_correlation_matrix(self) -> np.ndarray:
+        if self._bin_correlation_matrix is not None:
+            return self._bin_correlation_matrix
+
+        self._bin_correlation_matrix = cov2corr(self.bin_covariance_matrix)
+        return self._bin_correlation_matrix
 
     @property
     def is_empty(self) -> bool:
@@ -320,85 +330,3 @@ class BinnedDistribution:
                 raise ValueError("Received unexpected input for parameter 'data_column_names'.\n"
                                  "This parameter should be a list of column names of columns of the "
                                  "pandas.DataFrame that can be provided via the argument 'data'.")
-
-    # TODO: Firstly rework to get systematics (done), covariance matrix and correlation matrix for this distribution!
-    #       For multidimensional BinnedDistribution the systematics should be handled on the flattened bin_counts.
-    # TODO: Secondly introduce utility function, which combines the systematics of multiple components of a
-    #       distribution and get covariance matrix and correlation matrix for this
-    # TODO: Maybe pack all the functions acting on multiple BinnedDistribution instances with the same binning
-    #       into a new file called distribution_utils.py, or so.
-
-    def _get_cov_from_systematics(self, component_label: Optional[str] = None) -> Optional[np.ndarray]:
-        if component_label is not None:
-            assert component_label in [c.label for c in self._mc_components["single"]]
-            components = [c for c in self._mc_components["single"] if c.label == component_label]
-            assert len(components) == 1
-            comp = components[0]
-            if comp.systematics is None:
-                return None
-
-            cov = np.zeros((len(self._bin_mids), len(self._bin_mids)))
-            for sys_info in comp.systematics:
-                cov += sys_info.get_cov(data=comp.data, weights=comp.weights, bin_edges=self.bin_edges())
-            return cov
-        else:
-            components = self._mc_components["stacked"]
-            if all(comp.systematics is None for comp in components):
-                return None
-            if all(len(comp.systematics) == 0 for comp in components):
-                return None
-
-            assert all(len(comp.systematics) == len(components[0].systematics) for comp in components)
-
-            cov = np.zeros((len(self._bin_mids), len(self._bin_mids)))
-            for sys_index in range(len(components[0].systematics)):
-                assert all(isinstance(comp.systematics[sys_index], type(components[0].systematics[sys_index]))
-                           for comp in components)
-
-                varied_hists = None
-                for comp in components:
-                    varied_hists = comp.systematics[sys_index].get_varied_hist(
-                        initial_varied_hists=varied_hists,
-                        data=comp.data,
-                        weights=comp.weights,
-                        bin_edges=self.bin_edges
-                    )
-
-                cov += components[0].systematics[sys_index].get_cov_from_varied_hists(varied_hists=varied_hists)
-
-            return cov
-
-    # TODO: This method should be available to find the range of a distribution for a given data set
-    #       especially for multiple-component- or multi-dimensional distributions
-    # def _find_range_from_components(self) -> Tuple[float, float]:
-    #     min_vals = list()
-    #     max_vals = list()
-    #
-    #     for component in itertools.chain(*self._mc_components.values()):
-    #         min_vals.append(np.amin(component.data))
-    #         max_vals.append(np.amax(component.data))
-    #
-    #     return np.amin(min_vals), np.amax(max_vals)
-    #
-    # def _get_bin_edges(self) -> Tuple[np.ndarray, np.ndarray, float]:
-    #     """
-    #     Calculates the bin edges for the histogram.
-    #     :return: Bin edges.
-    #     """
-    #     if self._variable.has_scope():
-    #         scope = self._variable.scope
-    #     else:
-    #         scope = self._find_range_from_components()
-    #
-    #     low, high = scope[0], scope[1]
-    #
-    #     if self._variable.use_logspace:
-    #         assert low > 0, \
-    #             f"Cannot use log-space for variable {self._variable.x_label} since the minimum value is <= 0."
-    #         bin_edges = np.logspace(np.log10(low), np.log10(high), self._num_bins + 1)
-    #     else:
-    #         bin_edges = np.linspace(low, high, self._num_bins + 1)
-    #
-    #     bin_mids = (bin_edges[1:] + bin_edges[:-1]) / 2
-    #     bin_width = bin_edges[1] - bin_edges[0]
-    #     return bin_edges, bin_mids, bin_width
