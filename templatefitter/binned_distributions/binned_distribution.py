@@ -11,7 +11,8 @@ import logging
 import numpy as np
 import pandas as pd
 
-from typing import Union, Optional, Tuple, List, NamedTuple
+from collections.abc import Sequence as CollectionsABCSequence
+from typing import Union, Optional, Tuple, List, NamedTuple, Sequence
 
 from templatefitter.utility import cov2corr
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
@@ -23,7 +24,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = ["BinnedDistribution", "BaseDataContainer", "DataColumnNamesInput", "InputDataType"]
 
-InputDataType = Union[pd.Series, pd.DataFrame, np.ndarray]
+InputDataType = Union[pd.Series, pd.DataFrame, np.ndarray, Sequence[pd.Series], Sequence[np.ndarray]]
 DataColumnNamesInput = Union[None, str, List[str]]
 
 
@@ -150,6 +151,21 @@ class BinnedDistribution:
             data = in_data[self.data_column_names].values
         elif isinstance(in_data, np.ndarray):
             data = in_data
+        elif isinstance(in_data, CollectionsABCSequence):
+            first_type = type(in_data[0])
+            assert all(isinstance(d_in, first_type) for d_in in in_data), [type(d) for d in in_data]
+            if all(isinstance(d_in, pd.Series) for d_in in in_data):
+                assert all(len(d_in.index) == len(in_data[0].index) for d_in in in_data), [len(d) for d in in_data]
+                data = np.stack([d_in.values for d_in in in_data]).T
+            elif all(isinstance(d_in, np.ndarray) for d_in in in_data):
+                assert all(len(d_in.shape) == 1 for d_in in in_data), [d_in.shape for d_in in in_data]
+                assert all(d_in.shape == in_data[0].shape for d_in in in_data), [d_in.shape for d_in in in_data]
+                data = np.stack([d_in for d_in in in_data]).T
+            else:
+                raise ValueError(f"You provided a sequence of objects of type {first_type.__name__} for the "
+                                 f"argument 'data' / 'input_data', but this parameter expects inputs of the following "
+                                 f"types:\n\tpandas.Series\n\tpandas.DataFrame\n\tnumpy.ndarray\n\t"
+                                 f"sequence of pandas.Series\n\tsequence of numpy.ndarray")
         else:
             raise RuntimeError(f"Got unexpected type for data: {type(in_data)}.\n"
                                f"Should be one of pd.DataFrame, pd.Series, np.ndarray.")
