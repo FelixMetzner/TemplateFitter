@@ -2,16 +2,26 @@
 Utility functions for multiple BinnedDistributions.
 """
 
+import logging
 import numpy as np
 import pandas as pd
-from typing import Union, Tuple, List, Sequence
+from typing import Union, Optional, Tuple, List, Sequence
 from collections.abc import Sequence as CollectionsABCSequence
 
+from templatefitter.binned_distributions.binning import Binning, BinEdgesType
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataColumnNamesInput
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 DistributionContainerInputType = Union[List[BinnedDistribution], Tuple[BinnedDistribution, ...]]
 
-__all__ = ["get_combined_covariance", "DistributionContainerInputType"]
+__all__ = [
+    "DistributionContainerInputType",
+    "get_combined_covariance",
+    "find_ranges_for_data",
+    "find_ranges_for_distributions",
+    "run_adaptive_binning"
+]
 
 
 # TODO: Use this in FitModel._initialize_template_bin_uncertainties?
@@ -129,3 +139,185 @@ def find_ranges_for_distributions(distributions: Sequence[BinnedDistribution]) -
             range_maxs[dim].append(range_tuple[1])
 
     return tuple([(min(range_mins[dim]), max(range_maxs[dim])) for dim in range(common_dim)])
+
+
+def find_common_binning_for_distributions(distributions: Sequence[BinnedDistribution]) -> Binning:
+    assert isinstance(distributions, CollectionsABCSequence), type(distributions)
+    assert all(isinstance(dist, BinnedDistribution) for dist in distributions), [type(d) for d in distributions]
+
+    common_dims = distributions[0].dimensions
+    assert all(dist.dimensions == common_dims for dist in distributions), \
+        ([d.dimensions for d in distributions], common_dims)
+
+    common_log_scale_mask = distributions[0].binning.log_scale_mask
+    assert all(dist.binning.log_scale_mask == common_log_scale_mask for dist in distributions), \
+        ([d.binning.log_scale_mask for d in distributions], common_log_scale_mask)
+
+    # find most general binning:
+    common_ranges = find_ranges_for_distributions(distributions=distributions)
+    n_bins_per_dim = {dim: [] for dim in range(common_dims)}
+    for dist in distributions:
+        num_bins = dist.binning.num_bins
+        for dim in range(common_dims):
+            n_bins_per_dim[dim].append(num_bins[dim])
+    common_num_bins = tuple([max(n_bins_per_dim[dim]) for dim in range(common_dims)])
+    common_binning = Binning(
+        bins=common_num_bins,
+        dimensions=common_dims,
+        scope=common_ranges,
+        log_scale=common_log_scale_mask
+    )
+
+    return common_binning
+
+
+def run_adaptive_binning(
+        distributions: Sequence[BinnedDistribution],
+        bin_edges: Optional[BinEdgesType] = None,
+        start_from: str = "auto",
+        minimal_bin_count: int = 5,
+        minimal_number_of_bins: Union[int, Sequence[int]] = 7
+) -> BinEdgesType:
+    if not minimal_bin_count > 0:
+        raise ValueError(f"minimal_bin_count must be greater than 0, the value provided is {minimal_bin_count}")
+    min_count = minimal_bin_count
+
+    assert isinstance(distributions, CollectionsABCSequence), type(distributions)
+    assert all(isinstance(dist, BinnedDistribution) for dist in distributions), [type(d) for d in distributions]
+
+    common_dims = distributions[0].dimensions
+    assert all(dist.dimensions == common_dims for dist in distributions), \
+        ([d.dimensions for d in distributions], common_dims)
+
+    common_log_scale_mask = distributions[0].binning.log_scale_mask
+    assert all(dist.binning.log_scale_mask == common_log_scale_mask for dist in distributions), \
+        ([d.binning.log_scale_mask for d in distributions], common_log_scale_mask)
+
+    min_num_of_bins = _get_minimal_number_of_bins(minimal_number_of_bins=minimal_number_of_bins, dimensions=common_dims)
+
+    valid_start_from_strings = ["left", "right", "max", "auto"]
+    if start_from not in valid_start_from_strings:
+        raise ValueError(f"Value provided for parameter `start_from` is not valid.\n"
+                         f"You provided '{start_from}'.\nShould be one of {valid_start_from_strings}.")
+
+    if bin_edges is None:
+        common_binning = find_common_binning_for_distributions(distributions=distributions)
+        bin_edges = common_binning.bin_edges
+
+    # Starting Condition
+    if all(len(edges) < min_num_bins for edges, min_num_bins in zip(bin_edges, min_num_of_bins)):
+        logging.info(f"Adaptive binning stopped via starting condition:\nNumber of bins per dim = {min_num_of_bins}")
+        return bin_edges
+
+    bins = [np.array(list(edges)) for edges in bin_edges]
+    initial_hist = np.sum(
+        np.array([np.histogramdd(dist.base_data.data, bins=bins, weights=dist.base_data.weights)[0]
+                  for dist in distributions]),
+        axis=0
+    )
+    assert len(initial_hist.shape) == common_dims, (initial_hist.shape, len(initial_hist.shape), common_dims)
+    assert all(initial_hist.shape[i] == len(bin_edges[i]) - 1 for i in range(common_dims)), \
+        (initial_hist.shape, [len(edges) for edges in bin_edges])
+
+    # Termination condition
+    if np.all(initial_hist >= min_count):
+        logging.info(f"Adaptive binning was successfully terminated.")
+        return bin_edges
+
+    # TODO: This part does not work for n-dimensions, yet!
+    if start_from == "left":
+        starting_point = np.argmax(initial_hist < min_count)
+        offset = 1 if len(initial_hist[starting_point:]) % 2 == 0 else 0
+        original = bin_edges[:starting_point + offset]
+        adapted = bin_edges[starting_point + offset:][1::2]
+        new_edges = np.r_[original, adapted]
+        final_bin_edges = run_adaptive_binning(
+            distributions=distributions,
+            bin_edges=new_edges,
+            start_from=start_from,
+            minimal_bin_count=min_count,
+            minimal_number_of_bins=minimal_number_of_bins
+        )
+    elif start_from == "right":
+        starting_point = len(initial_hist) - np.argmax(np.flip(initial_hist) < min_count)
+        offset = 0 if len(initial_hist[:starting_point]) % 2 == 0 else 1
+        original = bin_edges[starting_point + offset:]
+        adapted = bin_edges[:starting_point + offset][::2]
+        new_edges = np.r_[adapted, original]
+        final_bin_edges = run_adaptive_binning(
+            distributions=distributions,
+            bin_edges=new_edges,
+            start_from=start_from,
+            minimal_bin_count=min_count,
+            minimal_number_of_bins=minimal_number_of_bins
+        )
+    elif start_from == "max":
+        max_bin = np.argmax(initial_hist)
+        assert np.all(initial_hist[max_bin - 2:max_bin + 3] >= min_count)
+        original_mid = bin_edges[max_bin - 1:max_bin + 2]
+        adopted_left = run_adaptive_binning(
+            distributions=distributions,
+            bin_edges=bin_edges[:max_bin - 1],
+            start_from="right",
+            minimal_bin_count=min_count,
+            minimal_number_of_bins=minimal_number_of_bins
+        )[0]
+        adopted_right = run_adaptive_binning(
+            distributions=distributions,
+            bin_edges=bin_edges[max_bin + 2:],
+            start_from="left",
+            minimal_bin_count=min_count,
+            minimal_number_of_bins=minimal_number_of_bins
+        )[0]
+        final_bin_edges = np.r_[adopted_left, original_mid, adopted_right]
+    elif start_from == "auto":
+        max_bin = np.argmax(initial_hist)
+        if max_bin / len(initial_hist) < 0.15:
+            method = "left"
+        elif max_bin / len(initial_hist) > 0.85:
+            method = "right"
+        else:
+            method = "max"
+        return run_adaptive_binning(
+            distributions=distributions,
+            bin_edges=bin_edges,
+            start_from=method,
+            minimal_bin_count=min_count,
+            minimal_number_of_bins=minimal_number_of_bins
+        )
+    else:
+        raise ValueError(f"Value provided for parameter `start_from` is not valid.\n"
+                         f"You provided '{start_from}'.\nShould be one of {valid_start_from_strings}.")
+    # TODO: end of remaining WIP
+
+    new_vs_old_edges_zip = list(zip(final_bin_edges, bin_edges))
+    assert all(new_edges[0] == old_edges[0] for new_edges, old_edges in new_vs_old_edges_zip), \
+        ("New vs old lower edges:\n\t" + "\n\t".join([f"{n[0]} vs {o[0]}" for n, o in new_vs_old_edges_zip]))
+    assert all(new_edges[-1] == old_edges[-1] for new_edges, old_edges in new_vs_old_edges_zip), \
+        ("New vs old upper edges:\n\t" + "\n\t".join([f"{n[-1]} vs {o[-1]}" for n, o in new_vs_old_edges_zip]))
+
+    return final_bin_edges
+
+
+def _get_minimal_number_of_bins(minimal_number_of_bins: Union[int, Sequence[int]], dimensions: int) -> List[int]:
+    if isinstance(minimal_number_of_bins, int):
+        if minimal_number_of_bins <= 5:
+            raise ValueError(f"minimal_number_of_bins must be > 5, but is {minimal_number_of_bins}")
+        return [minimal_number_of_bins for _ in range(dimensions)]
+    elif isinstance(minimal_number_of_bins, CollectionsABCSequence):
+        if not all(isinstance(nb, int) for nb in minimal_number_of_bins):
+            raise ValueError(f"Argument 'minimal_number_of_bins' must be integer or sequence of integers, but a "
+                             f"sequence containing the following types was provided:\n"
+                             f"{[type(nb) for nb in minimal_number_of_bins]}")
+        if not len(minimal_number_of_bins) == dimensions:
+            raise ValueError(f"If 'minimal_number_of_bins' is provided as sequence of integers, the sequence must"
+                             f"have the same length as the number of dimensions of the provided distributions, but "
+                             f"you provided a sequence of length {len(minimal_number_of_bins)}, whereas"
+                             f"the distributions have {dimensions} dimensions.")
+        if not all(nb > 5 for nb in minimal_number_of_bins):
+            raise ValueError(f"minimal_number_of_bins must be > 5 for each dimension, "
+                             f"but you provided {minimal_number_of_bins}")
+        return [nb for nb in minimal_number_of_bins]
+    else:
+        raise ValueError(f"Expected integer or sequence of integer for argument 'minimal_number_of_bins', "
+                         f"but you provided an object of type {type(minimal_number_of_bins)}.")

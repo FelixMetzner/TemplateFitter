@@ -18,7 +18,7 @@ from templatefitter.utility import cov2corr
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 from templatefitter.binned_distributions.systematics import SystematicsInfo, SystematicsInputType
 from templatefitter.binned_distributions.binning import Binning, BinsInputType, ScopeInputType, BinEdgesType, \
-    LogSpaceInputType
+    LogScaleInputType
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -43,7 +43,7 @@ class BinnedDistribution:
             bins: BinsInputType,
             dimensions: int,
             scope: ScopeInputType = None,
-            log_space_mask: LogSpaceInputType = False,
+            log_scale_mask: LogScaleInputType = False,
             name: Optional[str] = None,
             data: Optional[InputDataType] = None,
             weights: WeightsInputType = None,
@@ -51,7 +51,7 @@ class BinnedDistribution:
             data_column_names: DataColumnNamesInput = None
     ) -> None:
         self._name = name
-        self._binning = Binning(bins=bins, dimensions=dimensions, scope=scope, log_space=log_space_mask)
+        self._binning = Binning(bins=bins, dimensions=dimensions, scope=scope, log_scale=log_scale_mask)
 
         self._bin_counts = np.zeros(self.num_bins)
         self._bin_errors_sq = np.zeros(self.num_bins)

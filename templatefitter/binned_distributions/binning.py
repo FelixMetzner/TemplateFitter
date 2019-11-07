@@ -8,15 +8,13 @@ from typing import Union, Tuple, List
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["Binning", "BinEdgesType", "BinsInputType", "ScopeInputType", "LogSpaceInputType"]
+__all__ = ["Binning", "BinEdgesType", "BinsInputType", "ScopeInputType", "LogScaleInputType"]
 
 BinsInputType = Union[int, Tuple[int, ...], Tuple[float, ...], Tuple[Tuple[float, ...], ...]]
 ScopeInputType = Union[None, Tuple[float, float], Tuple[Tuple[float, float], ...]]
 BinEdgesType = Tuple[Tuple[float, ...], ...]
-LogSpaceInputType = Union[bool, List[bool], Tuple[bool, ...]]
+LogScaleInputType = Union[bool, List[bool], Tuple[bool, ...]]
 
-
-# TODO: Check TODO in apply_adaptive_binning!
 
 class Binning:
     def __init__(
@@ -24,7 +22,7 @@ class Binning:
             bins: BinsInputType,
             dimensions: int,
             scope: ScopeInputType = None,
-            log_space: LogSpaceInputType = False
+            log_scale: LogScaleInputType = False
     ) -> None:
         assert isinstance(dimensions, int) and dimensions > 0, \
             f"Dimensions must be integer greater than 0, " \
@@ -37,9 +35,9 @@ class Binning:
         self._bin_mids = None
         self._bin_widths = None
         self._range = None
-        self._log_space_mask = None
+        self._log_scale_mask = None
 
-        self._init_log_space(log_space=log_space)
+        self._init_log_scale(log_scale=log_scale)
         self._init_binning(bins_input=bins, scope_input=scope)
         self._check_binning()
 
@@ -63,7 +61,7 @@ class Binning:
                 assert isinstance(scope_input, tuple) and len(scope_input) == 2, (type(scope_input), scope_input)
                 assert all(isinstance(scp, int) for scp in scope_input), scope_input
                 self._num_bins = (bins_input,)
-                self._bin_edges = (self._get_bin_edges(scope=scope_input, bins=bins_input, log=self.log_space_mask[0]),)
+                self._bin_edges = (self._get_bin_edges(scope=scope_input, bins=bins_input, log=self.log_scale_mask[0]),)
             elif isinstance(bins_input, tuple) and all(isinstance(bin_num, float) for bin_num in bins_input):
                 self._num_bins = (len(bins_input) - 1,)
                 self._bin_edges = (bins_input,)
@@ -83,7 +81,7 @@ class Binning:
                 assert all(isinstance(scp, tuple) and len(scp) == 2 for scp in scope_input), scope_input
                 self._num_bins = bins_input
                 self._bin_edges = tuple([self._get_bin_edges(scope=scp, bins=num, log=log)
-                                         for num, scp, log in zip(bins_input, scope_input, self.log_space_mask)])
+                                         for num, scp, log in zip(bins_input, scope_input, self.log_scale_mask)])
             elif all(isinstance(bin_num, tuple) for bin_num in bins_input):
                 assert all(isinstance(edge, float) for edges in bins_input for edge in edges), bins_input
                 if scope_input is not None:
@@ -101,26 +99,26 @@ class Binning:
         self._bin_widths = tuple(map(self._get_bin_widths, self.bin_edges))
         self._range = tuple(map(self._get_range, self.bin_edges))
 
-    def _init_log_space(self, log_space: LogSpaceInputType) -> None:
-        assert self._log_space_mask is None
-        base_error_text = "The argument 'log_space', which can be used to define a logarithmic binning " \
+    def _init_log_scale(self, log_scale: LogScaleInputType) -> None:
+        assert self._log_scale_mask is None
+        base_error_text = "The argument 'log_scale', which can be used to define a logarithmic binning " \
                           "for some or all dimensions of the binning, must be either a boolean or a " \
                           "list or tuple of booleans"
 
-        if isinstance(log_space, bool):
-            self._log_space_mask = tuple([log_space for _ in range(self.dimensions)])
-        elif isinstance(log_space, list) or isinstance(log_space, tuple):
-            if not all(isinstance(ls, bool) for ls in log_space):
-                raise ValueError(f"{base_error_text}, but you provided a {type(log_space)} containing "
-                                 f"objects of the following types:\n{[type(ls) for ls in log_space]}")
-            if len(log_space) != self.dimensions:
-                raise ValueError(f"{base_error_text}.\nYou provided a {type(log_space)} of booleans, but"
-                                 f"it is of length {len(log_space)} for a binning meant for {self.dimensions} "
+        if isinstance(log_scale, bool):
+            self._log_scale_mask = tuple([log_scale for _ in range(self.dimensions)])
+        elif isinstance(log_scale, list) or isinstance(log_scale, tuple):
+            if not all(isinstance(ls, bool) for ls in log_scale):
+                raise ValueError(f"{base_error_text}, but you provided a {type(log_scale)} containing "
+                                 f"objects of the following types:\n{[type(ls) for ls in log_scale]}")
+            if len(log_scale) != self.dimensions:
+                raise ValueError(f"{base_error_text}.\nYou provided a {type(log_scale)} of booleans, but"
+                                 f"it is of length {len(log_scale)} for a binning meant for {self.dimensions} "
                                  f"dimensions...\nThe length of the list/tuple must be the same as the number"
                                  f"of dimensions!")
-            self._log_space_mask = tuple(log_space)
+            self._log_scale_mask = tuple(log_scale)
         else:
-            raise ValueError(f"{base_error_text}.\n However, you provided an object of type {type(log_space)}...")
+            raise ValueError(f"{base_error_text}.\n However, you provided an object of type {type(log_scale)}...")
 
     @staticmethod
     def _get_bin_edges(scope: Tuple[float, float], bins: int, log: bool) -> Tuple[float, ...]:
@@ -141,7 +139,7 @@ class Binning:
             return False
         if not self.range == other.range:
             return False
-        if not self.log_space_mask == other.log_space_mask:
+        if not self.log_scale_mask == other.log_scale_mask:
             return False
 
         return True
@@ -211,116 +209,5 @@ class Binning:
         return self._range
 
     @property
-    def log_space_mask(self) -> Tuple[bool, ...]:
-        return self._log_space_mask
-
-    # TODO: The more complicated part is the adaptive binning of multidimensional distributions, as it is not
-    #       clear into which direction the bins should be enlarged. This should be covered first, when reworking
-    #       this function!
-    # TODO: Rework this to be applicable to a case where multiple binned_distribution make up one histogram,
-    #       maybe also in multiple channels (although multiple channels can have different binnings, maybe it
-    #       could be handy to be able to find one common binning for them all... this could be done by just
-    #       using the most coarse binning, whilst ensuring that this binning covers all sparsely populated
-    #       regions of every other channel, too)
-    def apply_adaptive_binning(
-            self,
-            components,  # TODO add type hint, once component class is defined
-            bin_edges: np.ndarray = None,
-            start_from: str = "auto",
-            min_count: int = 5
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        if self.dimensions != 1:
-            raise NotImplementedError("Adaptive binning is only available for 1 dimensional distributions!")
-
-        if not min_count > 0:
-            raise ValueError(f"min_count must be greater than 0, the value provided is {min_count}")
-
-        valid_start_froms = ["left", "right", "max", "auto"]
-        if start_from not in valid_start_froms:
-            raise ValueError(f"Value provided for parameter `start_from` is not valid.\n"
-                             f"You provided '{start_from}'.\nShould be one of {valid_start_froms}.")
-
-        if bin_edges is None:
-            bin_edges = np.array(self.bin_edges)
-        bin_mids = np.array(map(self._get_bin_mids, bin_edges))
-        bin_widths = np.array(map(self._get_bin_widths, bin_edges))
-
-        # Starting Condition
-        if any(len(edges) < 7 for edges in bin_edges):
-            return bin_edges, bin_mids, bin_widths
-
-        initial_hist = np.sum(
-            np.array([np.histogram(comp.data, bins=bin_edges, weights=comp.weights)[0] for comp in components]),
-            axis=0
-        )
-
-        # Termination condition
-        if np.all(initial_hist >= min_count):
-            return bin_edges, bin_mids, bin_widths
-
-        if start_from == "left":
-            starting_point = np.argmax(initial_hist < min_count)
-            offset = 1 if len(initial_hist[starting_point:]) % 2 == 0 else 0
-            original = bin_edges[:starting_point + offset]
-            adapted = bin_edges[starting_point + offset:][1::2]
-            new_edges = np.r_[original, adapted]
-            new_binning = self.apply_adaptive_binning(
-                components=components,
-                bin_edges=new_edges,
-                start_from=start_from,
-                min_count=min_count
-            )
-        elif start_from == "right":
-            starting_point = len(initial_hist) - np.argmax(np.flip(initial_hist) < min_count)
-            offset = 0 if len(initial_hist[:starting_point]) % 2 == 0 else 1
-            original = bin_edges[starting_point + offset:]
-            adapted = bin_edges[:starting_point + offset][::2]
-            new_edges = np.r_[adapted, original]
-            new_binning = self.apply_adaptive_binning(
-                components=components,
-                bin_edges=new_edges,
-                start_from=start_from,
-                min_count=min_count
-            )
-        elif start_from == "max":
-            max_bin = np.argmax(initial_hist)
-            assert np.all(initial_hist[max_bin - 2:max_bin + 3] >= min_count)
-            original_mid = bin_edges[max_bin - 1:max_bin + 2]
-            adopted_left = self.apply_adaptive_binning(
-                components=components,
-                bin_edges=bin_edges[:max_bin - 1],
-                start_from="right",
-                min_count=min_count
-            )[0]
-            adopted_right = self.apply_adaptive_binning(
-                components=components,
-                bin_edges=bin_edges[max_bin + 2:],
-                start_from="left",
-                min_count=min_count
-            )[0]
-            new_edges = np.r_[adopted_left, original_mid, adopted_right]
-            bin_mids = (new_edges[1:] + new_edges[:-1]) / 2
-            bin_widths = new_edges[1:] - new_edges[:-1]
-            new_binning = (new_edges, bin_mids, bin_widths)
-        elif start_from == "auto":
-            max_bin = np.argmax(initial_hist)
-            if max_bin / len(initial_hist) < 0.15:
-                method = "left"
-            elif max_bin / len(initial_hist) > 0.85:
-                method = "right"
-            else:
-                method = "max"
-            return self.apply_adaptive_binning(
-                components=components,
-                bin_edges=bin_edges,
-                start_from=method,
-                min_count=min_count
-            )
-        else:
-            raise ValueError(f"Value provided for parameter `start_from` is not valid.\n"
-                             f"You provided '{start_from}'.\nShould be one of {valid_start_froms}.")
-
-        assert new_binning[0][0] == bin_edges[0]
-        assert new_binning[0][-1] == bin_edges[-1]
-
-        return new_binning
+    def log_scale_mask(self) -> Tuple[bool, ...]:
+        return self._log_scale_mask
