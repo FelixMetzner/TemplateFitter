@@ -3,9 +3,11 @@ Utility functions for multiple BinnedDistributions.
 """
 
 import numpy as np
-from typing import Union, Tuple, List
+import pandas as pd
+from typing import Union, Tuple, List, Sequence
+from collections.abc import Sequence as CollectionsABCSequence
 
-from templatefitter.binned_distributions.binned_distribution import BinnedDistribution
+from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataColumnNamesInput
 
 DistributionContainerInputType = Union[List[BinnedDistribution], Tuple[BinnedDistribution, ...]]
 
@@ -65,14 +67,65 @@ def _check_distribution_container_input(distributions: DistributionContainerInpu
         raise ValueError(f"The binning of all distributions provided via the argument 'distributions' must be"
                          f"the equal, however, the provided distributions had different binning definitions!")
 
-# TODO: This method should be available to find the range of a distribution for a given data set
-#       especially for multiple-component- or multi-dimensional distributions
-# def _find_range_from_components(self) -> Tuple[float, float]:
-#     min_vals = list()
-#     max_vals = list()
-#
-#     for component in itertools.chain(*self._mc_components.values()):
-#         min_vals.append(np.amin(component.data))
-#         max_vals.append(np.amax(component.data))
-#
-#     return np.amin(min_vals), np.amax(max_vals)
+
+def find_ranges_for_data(
+        data: Union[np.ndarray, pd.DataFrame, pd.Series, Sequence[np.ndarray], Sequence[pd.Series]],
+        data_column_names: DataColumnNamesInput = None
+) -> Tuple[Tuple[Tuple[float, float], ...], int, int]:
+    """
+    Returns tuple of scopes and two integers representing the number dimensions of the data and the number of entries;
+    the first is the desired information, the latter two are for cross-checks
+    """
+    if isinstance(data, pd.DataFrame):
+        assert data_column_names is not None, "Column names are required if data is is provided as pandas.DataFrame!"
+        if isinstance(data_column_names, List):
+            assert all(isinstance(c, str) for c in data_column_names), [type(c) for c in data_column_names]
+            columns = data_column_names
+        else:
+            assert isinstance(data_column_names, str), type(data_column_names)
+            columns = [data_column_names]
+        data_array = data[columns].values
+    elif isinstance(data, np.ndarray):
+        data_array = data
+    elif isinstance(data, pd.Series):
+        data_array = data.values
+    elif isinstance(data, CollectionsABCSequence):
+        first_type = type(data[0])
+        assert all(isinstance(d_in, first_type) for d_in in data), [type(d) for d in data]
+        if all(isinstance(d_in, pd.Series) for d_in in data):
+            assert all(len(d_in.index) == len(data[0].index) for d_in in data), [len(d) for d in data]
+            data_array = np.stack([d_in.values for d_in in data]).T
+        elif all(isinstance(d_in, np.ndarray) for d_in in data):
+            assert all(len(d_in.shape) == 1 for d_in in data), [d_in.shape for d_in in data]
+            assert all(d_in.shape == data[0].shape for d_in in data), [d_in.shape for d_in in data]
+            data_array = np.stack([d_in for d_in in data]).T
+        else:
+            raise ValueError(f"Unexpected input type for argument 'data': {type(data).__name__} of {first_type}...")
+    else:
+        raise ValueError(f"Unexpected input type for argument 'data': {type(data)}...")
+
+    assert isinstance(data_array, np.ndarray), type(data_array)
+
+    range_mins = data_array.min(axis=0)
+    range_maxs = data_array.max(axis=0)
+    range_scopes = tuple([(mi, ma) for mi, ma in zip(range_mins, range_maxs)])
+
+    n_entries = data_array.shape[0]
+    dimensions = data_array.shape[1]
+
+    return range_scopes, dimensions, n_entries
+
+
+def find_ranges_for_distributions(distributions: Sequence[BinnedDistribution]) -> Tuple[Tuple[float, float], ...]:
+    common_dim = distributions[0].binning.dimensions
+    assert all(dist.binning.dimensions == common_dim for dist in distributions), \
+        [dist.binning.dimensions for dist in distributions]
+    range_mins = {dim: [] for dim in range(common_dim)}
+    range_maxs = {dim: [] for dim in range(common_dim)}
+
+    for dist in distributions:
+        for dim, range_tuple in enumerate(dist.range):
+            range_mins[dim].append(range_tuple[0])
+            range_maxs[dim].append(range_tuple[1])
+
+    return tuple([(min(range_mins[dim]), max(range_maxs[dim])) for dim in range(common_dim)])

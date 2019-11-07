@@ -48,7 +48,7 @@ class BinnedDistribution:
             data: Optional[InputDataType] = None,
             weights: WeightsInputType = None,
             systematics: SystematicsInputType = None,
-            data_column_names: DataColumnNamesInput = None,
+            data_column_names: DataColumnNamesInput = None
     ) -> None:
         self._name = name
         self._binning = Binning(bins=bins, dimensions=dimensions, scope=scope, log_space=log_space_mask)
@@ -142,13 +142,40 @@ class BinnedDistribution:
             in_weights: WeightsInputType,
             in_systematics: SystematicsInputType
     ) -> BaseDataContainer:
+        data = self.get_data_input(in_data=in_data, data_column_names=self.data_column_names)
+
+        if len(data.shape) == 1:
+            assert self.dimensions == 1, self.dimensions
+        elif len(data.shape) == 2:
+            assert self.dimensions == data.shape[1], (self.dimensions, data.shape, data.shape[1])
+        else:
+            raise RuntimeError(f"The data related to the distribution is of unexpected shape:\n"
+                               f"Shape of data: {data.shape}\nDimensions: {self.dimensions}")
+
+        weights = Weights(weight_input=in_weights, data=data, data_input=in_data).get_weights()
+        assert len(data) == len(weights)
+
+        systematics = SystematicsInfo(
+            in_sys=in_systematics,
+            data=data,
+            in_data=in_data,
+            weights=weights
+        )
+
+        return BaseDataContainer(data=data, weights=weights, systematics=systematics)
+
+    @staticmethod
+    def get_data_input(
+            in_data: InputDataType,
+            data_column_names: DataColumnNamesInput = None
+    ) -> np.ndarray:
         if isinstance(in_data, pd.Series):
             data = in_data.values
         elif isinstance(in_data, pd.DataFrame):
-            if self.data_column_names is None:
+            if data_column_names is None:
                 raise ValueError("If data is provided as pandas data frame, data_column_names must be provided too!")
-            assert all(c in in_data.columns for c in self.data_column_names), (self.data_column_names, in_data.columns)
-            data = in_data[self.data_column_names].values
+            assert all(c in in_data.columns for c in data_column_names), (data_column_names, in_data.columns)
+            data = in_data[data_column_names].values
         elif isinstance(in_data, np.ndarray):
             data = in_data
         elif isinstance(in_data, CollectionsABCSequence):
@@ -171,25 +198,7 @@ class BinnedDistribution:
                                f"Should be one of pd.DataFrame, pd.Series, np.ndarray.")
 
         assert isinstance(data, np.ndarray), type(data)
-        if len(data.shape) == 1:
-            assert self.dimensions == 1, self.dimensions
-        elif len(data.shape) == 2:
-            assert self.dimensions == data.shape[1], (self.dimensions, data.shape, data.shape[1])
-        else:
-            raise RuntimeError(f"The data related to the distribution is of unexpected shape:\n"
-                               f"Shape of data: {data.shape}\nDimensions: {self.dimensions}")
-
-        weights = Weights(weight_input=in_weights, data=data, data_input=in_data).get_weights()
-        assert len(data) == len(weights)
-
-        systematics = SystematicsInfo(
-            in_sys=in_systematics,
-            data=data,
-            in_data=in_data,
-            weights=weights
-        )
-
-        return BaseDataContainer(data=data, weights=weights, systematics=systematics)
+        return data
 
     @property
     def name(self) -> Union[None, str]:
@@ -351,3 +360,4 @@ class BinnedDistribution:
                 raise ValueError("Received unexpected input for parameter 'data_column_names'.\n"
                                  "This parameter should be a list of column names of columns of the "
                                  "pandas.DataFrame that can be provided via the argument 'data'.")
+            self._data_column_names = None
