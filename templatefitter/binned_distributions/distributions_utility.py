@@ -225,6 +225,13 @@ def run_adaptive_binning(
         return bin_edges
 
     # TODO: This part does not work for n-dimensions, yet!
+    # TODO: Use something of the likes of:
+    #           n_too_small_per_axis = [max(np.sum(initial_hist < 3, axis=a)) for a in range(len(initial_hist.shape))]
+    #           axis_with_least = np.argmin(n_too_small_per_axis)
+    #       and only change bin_edges for this axis.
+    # TODO: Maybe use np.argmin to figure out from where to start in "auto" case
+    # TODO: Everything but start_from = 'auto' should not be available for user when calling the function, as
+    #       the function itself has to figure out along which axis and from where to start...
     if start_from == "left":
         starting_point = np.argmax(initial_hist < min_count)
         offset = 1 if len(initial_hist[starting_point:]) % 2 == 0 else 0
