@@ -145,6 +145,10 @@ def find_common_binning_for_distributions(distributions: Sequence[BinnedDistribu
     assert isinstance(distributions, CollectionsABCSequence), type(distributions)
     assert all(isinstance(dist, BinnedDistribution) for dist in distributions), [type(d) for d in distributions]
 
+    # If all distributions already have the same binning, return it.
+    if all(dist.binning == distributions[0].binning for dist in distributions):
+        return distributions[0].binning
+
     common_dims = distributions[0].dimensions
     assert all(dist.dimensions == common_dims for dist in distributions), \
         ([d.dimensions for d in distributions], common_dims)
@@ -174,7 +178,6 @@ def find_common_binning_for_distributions(distributions: Sequence[BinnedDistribu
 def run_adaptive_binning(
         distributions: Sequence[BinnedDistribution],
         bin_edges: Optional[BinEdgesType] = None,
-        start_from: str = "auto",
         minimal_bin_count: int = 5,
         minimal_number_of_bins: Union[int, Sequence[int]] = 7
 ) -> BinEdgesType:
@@ -194,11 +197,6 @@ def run_adaptive_binning(
         ([d.binning.log_scale_mask for d in distributions], common_log_scale_mask)
 
     min_num_of_bins = _get_minimal_number_of_bins(minimal_number_of_bins=minimal_number_of_bins, dimensions=common_dims)
-
-    valid_start_from_strings = ["left", "right", "max", "auto"]
-    if start_from not in valid_start_from_strings:
-        raise ValueError(f"Value provided for parameter `start_from` is not valid.\n"
-                         f"You provided '{start_from}'.\nShould be one of {valid_start_from_strings}.")
 
     if bin_edges is None:
         common_binning = find_common_binning_for_distributions(distributions=distributions)
@@ -224,78 +222,60 @@ def run_adaptive_binning(
         logging.info(f"Adaptive binning was successfully terminated.")
         return bin_edges
 
+    # Find axis for which a rebinning is most effective:
+    n_too_small_per_axis = [max(np.sum(initial_hist < min_count, axis=axis)) for axis in range(len(initial_hist.shape))]
+    axis_to_update = np.argmin(n_too_small_per_axis)
+    bin_edges_to_update = bin_edges[axis_to_update]
+
     # TODO: This part does not work for n-dimensions, yet!
-    # TODO: Use something of the likes of:
-    #           n_too_small_per_axis = [max(np.sum(initial_hist < 3, axis=a)) for a in range(len(initial_hist.shape))]
-    #           axis_with_least = np.argmin(n_too_small_per_axis)
-    #       and only change bin_edges for this axis.
     # TODO: Maybe use np.argmin to figure out from where to start in "auto" case
     # TODO: Everything but start_from = 'auto' should not be available for user when calling the function, as
     #       the function itself has to figure out along which axis and from where to start...
-    if start_from == "left":
+    # Decide from where to start the rebinning for this axis:
+    max_bin = np.argmax(initial_hist)
+    if max_bin / len(initial_hist) < 0.15:
+        method = "left"
+    elif max_bin / len(initial_hist) > 0.85:
+        method = "right"
+    else:
+        method = "max"
+
+    # Adopt the bin edges of the chosen axis with the chosen method:
+    if method == "left":
         starting_point = np.argmax(initial_hist < min_count)
         offset = 1 if len(initial_hist[starting_point:]) % 2 == 0 else 0
         original = bin_edges[:starting_point + offset]
         adapted = bin_edges[starting_point + offset:][1::2]
-        new_edges = np.r_[original, adapted]
-        final_bin_edges = run_adaptive_binning(
-            distributions=distributions,
-            bin_edges=new_edges,
-            start_from=start_from,
-            minimal_bin_count=min_count,
-            minimal_number_of_bins=minimal_number_of_bins
-        )
-    elif start_from == "right":
+        new_edges = tuple(np.r_[original, adapted])
+    elif method == "right":
         starting_point = len(initial_hist) - np.argmax(np.flip(initial_hist) < min_count)
         offset = 0 if len(initial_hist[:starting_point]) % 2 == 0 else 1
         original = bin_edges[starting_point + offset:]
         adapted = bin_edges[:starting_point + offset][::2]
-        new_edges = np.r_[adapted, original]
-        final_bin_edges = run_adaptive_binning(
-            distributions=distributions,
-            bin_edges=new_edges,
-            start_from=start_from,
-            minimal_bin_count=min_count,
-            minimal_number_of_bins=minimal_number_of_bins
-        )
-    elif start_from == "max":
+        new_edges = tuple(np.r_[adapted, original])
+    else:  # "max"-case
         max_bin = np.argmax(initial_hist)
         assert np.all(initial_hist[max_bin - 2:max_bin + 3] >= min_count)
         original_mid = bin_edges[max_bin - 1:max_bin + 2]
-        adopted_left = run_adaptive_binning(
-            distributions=distributions,
-            bin_edges=bin_edges[:max_bin - 1],
-            start_from="right",
-            minimal_bin_count=min_count,
-            minimal_number_of_bins=minimal_number_of_bins
-        )[0]
-        adopted_right = run_adaptive_binning(
-            distributions=distributions,
-            bin_edges=bin_edges[max_bin + 2:],
-            start_from="left",
-            minimal_bin_count=min_count,
-            minimal_number_of_bins=minimal_number_of_bins
-        )[0]
-        final_bin_edges = np.r_[adopted_left, original_mid, adopted_right]
-    elif start_from == "auto":
-        max_bin = np.argmax(initial_hist)
-        if max_bin / len(initial_hist) < 0.15:
-            method = "left"
-        elif max_bin / len(initial_hist) > 0.85:
-            method = "right"
-        else:
-            method = "max"
-        return run_adaptive_binning(
-            distributions=distributions,
-            bin_edges=bin_edges,
-            start_from=method,
-            minimal_bin_count=min_count,
-            minimal_number_of_bins=minimal_number_of_bins
-        )
-    else:
-        raise ValueError(f"Value provided for parameter `start_from` is not valid.\n"
-                         f"You provided '{start_from}'.\nShould be one of {valid_start_from_strings}.")
+        adopted_left = ...
+        adopted_right = ...
+        new_edges = tuple(np.r_[adopted_left, original_mid, adopted_right])
     # TODO: end of remaining WIP
+
+    assert isinstance(new_edges, tuple)
+    assert new_edges[0][0] == bin_edges_to_update[0][0], (new_edges[0][0], bin_edges_to_update[0][0])
+    assert new_edges[-1][1] == bin_edges_to_update[-1][1], (new_edges[-1][1], bin_edges_to_update[-1][1])
+
+    new_bin_edges = tuple([edges if axis != axis_to_update else new_edges for axis, edges in enumerate(bin_edges)])
+    assert len(new_bin_edges) == common_dims, (len(new_bin_edges), common_dims)
+
+    # Run this function iteratively with new bin-edges:
+    final_bin_edges = run_adaptive_binning(
+        distributions=distributions,
+        bin_edges=new_bin_edges,
+        minimal_bin_count=min_count,
+        minimal_number_of_bins=minimal_number_of_bins
+    )
 
     new_vs_old_edges_zip = list(zip(final_bin_edges, bin_edges))
     assert all(new_edges[0] == old_edges[0] for new_edges, old_edges in new_vs_old_edges_zip), \
