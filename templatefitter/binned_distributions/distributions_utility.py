@@ -225,42 +225,76 @@ def run_adaptive_binning(
     # Find axis for which a rebinning is most effective:
     n_too_small_per_axis = [max(np.sum(initial_hist < min_count, axis=axis)) for axis in range(len(initial_hist.shape))]
     axis_to_update = np.argmin(n_too_small_per_axis)
+    assert isinstance(axis_to_update, int), type(axis_to_update)
     bin_edges_to_update = bin_edges[axis_to_update]
 
-    # TODO: This part does not work for n-dimensions, yet!
-    # TODO: Maybe use np.argmin to figure out from where to start in "auto" case
-    # TODO: Everything but start_from = 'auto' should not be available for user when calling the function, as
-    #       the function itself has to figure out along which axis and from where to start...
     # Decide from where to start the rebinning for this axis:
-    max_bin = np.argmax(initial_hist)
-    if max_bin / len(initial_hist) < 0.15:
+    max_bin_index_tuple = np.unravel_index(np.argmax(initial_hist), initial_hist.shape)
+    max_bin = max_bin_index_tuple[axis_to_update]
+    assert isinstance(max_bin, int), type(max_bin)
+    num_bins_in_axis = initial_hist.shape[axis_to_update]
+
+    left_threshold = 0.15
+    right_threshold = 0.85
+    if max_bin / num_bins_in_axis < left_threshold:
         method = "left"
-    elif max_bin / len(initial_hist) > 0.85:
+    elif max_bin / num_bins_in_axis > right_threshold:
         method = "right"
     else:
         method = "max"
 
     # Adopt the bin edges of the chosen axis with the chosen method:
     if method == "left":
-        starting_point = np.argmax(initial_hist < min_count)
-        offset = 1 if len(initial_hist[starting_point:]) % 2 == 0 else 0
-        original = bin_edges[:starting_point + offset]
-        adapted = bin_edges[starting_point + offset:][1::2]
-        new_edges = tuple(np.r_[original, adapted])
+        new_edges = _update_bin_edges(
+            start_from=method,
+            hist=initial_hist,
+            bin_edges_to_update=bin_edges_to_update,
+            min_count=min_count,
+            axis_to_update=axis_to_update,
+            threshold=left_threshold
+        )
     elif method == "right":
-        starting_point = len(initial_hist) - np.argmax(np.flip(initial_hist) < min_count)
-        offset = 0 if len(initial_hist[:starting_point]) % 2 == 0 else 1
-        original = bin_edges[starting_point + offset:]
-        adapted = bin_edges[:starting_point + offset][::2]
-        new_edges = tuple(np.r_[adapted, original])
+        new_edges = _update_bin_edges(
+            start_from=method,
+            hist=initial_hist,
+            bin_edges_to_update=bin_edges_to_update,
+            min_count=min_count,
+            axis_to_update=axis_to_update,
+            threshold=right_threshold
+        )
     else:  # "max"-case
-        max_bin = np.argmax(initial_hist)
-        assert np.all(initial_hist[max_bin - 2:max_bin + 3] >= min_count)
-        original_mid = bin_edges[max_bin - 1:max_bin + 2]
-        adopted_left = ...
-        adopted_right = ...
-        new_edges = tuple(np.r_[adopted_left, original_mid, adopted_right])
-    # TODO: end of remaining WIP
+        left_bound, right_bound = (max_bin - 1, max_bin + 2)
+        slc = [slice(None) for _ in range(len(initial_hist.shape))]
+        slc[axis_to_update] = slice(max_bin - 2, max_bin + 3, None)
+        middle_slices = tuple(slc)
+        slc[axis_to_update] = slice(None, left_bound, None)
+        left_slices = tuple(slc)
+        slc[axis_to_update] = slice(right_bound, None, None)
+        right_slices = tuple(slc)
+        assert np.all(initial_hist[middle_slices] >= min_count)
+        original_edges_mid = bin_edges[left_bound:right_bound]
+        original_edges_left = bin_edges[:left_bound]
+        original_edges_right = bin_edges[right_bound:]
+        initial_hist_left = initial_hist[left_slices]
+        initial_hist_right = initial_hist[right_slices]
+
+        adopted_left = _update_bin_edges(
+            start_from="left",
+            hist=initial_hist_left,
+            bin_edges_to_update=original_edges_left,
+            min_count=min_count,
+            axis_to_update=axis_to_update,
+            threshold=left_threshold
+        )
+        adopted_right = _update_bin_edges(
+            start_from="right",
+            hist=initial_hist_right,
+            bin_edges_to_update=original_edges_right,
+            min_count=min_count,
+            axis_to_update=axis_to_update,
+            threshold=right_threshold
+        )
+        new_edges = tuple(np.r_[adopted_left, original_edges_mid, adopted_right])
 
     assert isinstance(new_edges, tuple)
     assert new_edges[0][0] == bin_edges_to_update[0][0], (new_edges[0][0], bin_edges_to_update[0][0])
@@ -284,6 +318,39 @@ def run_adaptive_binning(
         ("New vs old upper edges:\n\t" + "\n\t".join([f"{n[-1]} vs {o[-1]}" for n, o in new_vs_old_edges_zip]))
 
     return final_bin_edges
+
+
+def _update_bin_edges(
+        start_from: str,
+        hist: np.ndarray,
+        bin_edges_to_update: Tuple[float, ...],
+        min_count: int,
+        axis_to_update: int,
+        threshold: float
+):
+    num_bins_in_axis = hist.shape[axis_to_update]
+    if start_from == "left":
+        possible_starting_points = np.argmax(hist < min_count, axis=axis_to_update)
+        starting_point = min([p for p in possible_starting_points if p > threshold * num_bins_in_axis])
+        slc = [slice(None) for _ in range(len(hist.shape))]
+        slc[axis_to_update] = slice(starting_point, None, None)
+        offset = 1 if hist[tuple(slc)].shape[axis_to_update] % 2 == 0 else 0
+        original = bin_edges_to_update[:starting_point + offset]
+        adapted = bin_edges_to_update[starting_point + offset:][1::2]
+        new_edges = tuple(np.r_[original, adapted])
+        return new_edges
+    elif start_from == "right":
+        possible_starting_points = num_bins_in_axis - np.argmax(np.flip(hist) < min_count, axis=axis_to_update)
+        starting_point = max([p for p in possible_starting_points if p < threshold * num_bins_in_axis])
+        slc = [slice(None) for _ in range(len(hist.shape))]
+        slc[axis_to_update] = slice(None, starting_point, None)
+        offset = 0 if hist[tuple(slc)].shape[axis_to_update] % 2 == 0 else 1
+        original = bin_edges_to_update[starting_point + offset:]
+        adapted = bin_edges_to_update[:starting_point + offset][::2]
+        new_edges = tuple(np.r_[adapted, original])
+        return new_edges
+    else:
+        raise ValueError(f"Argument start_from can be either 'left' or 'right', but you provided '{start_from}'")
 
 
 def _get_minimal_number_of_bins(minimal_number_of_bins: Union[int, Sequence[int]], dimensions: int) -> List[int]:
