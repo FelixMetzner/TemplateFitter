@@ -1,6 +1,8 @@
 TemplateFitter Reference
 ========================
 
+# TODO: Needs to be rewritten!
+
 Reference page for the TemplateFitter package.
 
 Histogram Module

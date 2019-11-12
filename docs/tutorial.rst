@@ -5,6 +5,8 @@ Basic Example
 #############
 Basic example on how to use the TemplateFitter package
 
+# TODO: Needs to be rewritten!
+
 .. code-block:: python
 
     import pandas as pd

@@ -31,8 +31,8 @@ def cov2corr(cov):
     out : np.ndarray
         Correlation matrix. Shape is (n,n).
     """
-    Dinv = np.nan_to_num(np.diag(1 / np.sqrt(np.diag(cov))))
-    return np.matmul(Dinv, np.matmul(cov, Dinv))
+    d_inv = np.nan_to_num(np.diag(1 / np.sqrt(np.diag(cov))))
+    return np.matmul(d_inv, np.matmul(cov, d_inv))
 
 
 def corr2cov(corr, var):
@@ -52,8 +52,8 @@ def corr2cov(corr, var):
     out : np.ndarray
         Covariance matrix. Shape is (n,n).
     """
-    D = np.diag(var)
-    return np.matmul(D, np.matmul(corr, D))
+    d_matrix = np.diag(var)
+    return np.matmul(d_matrix, np.matmul(corr, d_matrix))
 
 
 def id_to_index(names, param_id):
