@@ -202,8 +202,17 @@ def run_adaptive_binning(
         common_binning = find_common_binning_for_distributions(distributions=distributions)
         bin_edges = common_binning.bin_edges
 
+    if common_dims == 1:
+        return _run_adaptive_binning_for_1d_case(
+            distributions=distributions,
+            bin_edges=bin_edges,
+            start_from="auto",
+            minimal_bin_count=minimal_bin_count,
+            minimal_number_of_bins=minimal_number_of_bins
+        )
+
     # Starting Condition
-    if all(len(edges) < min_num_bins for edges, min_num_bins in zip(bin_edges, min_num_of_bins)):
+    if all((len(edges) - 1) < min_num_bins for edges, min_num_bins in zip(bin_edges, min_num_of_bins)):
         logging.info(f"Adaptive binning stopped via starting condition:\nNumber of bins per dim = {min_num_of_bins}")
         return bin_edges
 
@@ -318,6 +327,137 @@ def run_adaptive_binning(
         ("New vs old upper edges:\n\t" + "\n\t".join([f"{n[-1]} vs {o[-1]}" for n, o in new_vs_old_edges_zip]))
 
     return final_bin_edges
+
+
+def _run_adaptive_binning_for_1d_case(
+        distributions: Sequence[BinnedDistribution],
+        bin_edges: BinEdgesType,
+        start_from: str = "auto",
+        minimal_bin_count: int = 5,
+        minimal_number_of_bins: int = 7
+) -> BinEdgesType:
+    valid_start_froms = ["left", "right", "max", "auto"]
+    if start_from not in valid_start_froms:
+        raise ValueError(f"Value provided for parameter `start_from` is not valid.\n"
+                         f"You provided '{start_from}'.\nShould be one of {valid_start_froms}.")
+
+    if not (isinstance(bin_edges, tuple) and len(bin_edges) == 1 and all(isinstance(be, float) for be in bin_edges[0])):
+        input_length = None
+        try:
+            input_length = len(bin_edges)
+        except TypeError:
+            pass
+        raise ValueError(f"For the 1-dimensional adaptive binning, the argument 'bin_edges' is expected to be "
+                         f"a tuple containing one tuple of floats! You provided:\n\t a {type(bin_edges).__name__} "
+                         + f"of length {input_length} containing objects of the following types:\n"
+                           f"{[type(t) for t in bin_edges]}" if input_length is not None else "")
+
+    if not isinstance(minimal_number_of_bins, int):
+        raise ValueError(f"The argument 'minimal_number_of_bins' must be an integer, "
+                         f"but you provided {type(minimal_number_of_bins).__name__}!")
+    else:
+        min_num_of_bins = minimal_number_of_bins
+
+    if not isinstance(minimal_bin_count, int):
+        raise ValueError(f"The argument 'minimal_bin_count' must be an integer, "
+                         f"but you provided {type(minimal_bin_count).__name__}!")
+    else:
+        min_count = minimal_bin_count
+
+    # Starting Condition
+    if (len(bin_edges) - 1) < min_num_of_bins:
+        logging.info(f"Adaptive binning stopped via starting condition:\nNumber of bins per dim = {min_num_of_bins}")
+        return bin_edges
+
+    bins = [np.array(list(bin_edges[0]))]
+    initial_hist = np.sum(
+        np.array([np.histogramdd(dist.base_data.data, bins=bins, weights=dist.base_data.weights)[0]
+                  for dist in distributions]),
+        axis=0
+    )
+
+    assert len(initial_hist.shape) == 1, initial_hist.shape
+    assert initial_hist.shape[0] == (len(bin_edges[0]) - 1), (initial_hist.shape, (len(bin_edges[0]) - 1))
+
+    # Termination condition
+    if np.all(initial_hist >= min_count):
+        return bin_edges
+
+    bin_edges_1d = bin_edges[0]
+
+    if start_from == "left":
+        starting_point = np.argmax(initial_hist < min_count)
+        offset = 1 if len(initial_hist[starting_point:]) % 2 == 0 else 0
+        original = bin_edges_1d[:starting_point + offset]
+        adapted = bin_edges_1d[starting_point + offset:][1::2]
+        new_edges = tuple([tuple(np.r_[original, adapted]), ])
+        new_binning = _run_adaptive_binning_for_1d_case(
+            distributions=distributions,
+            bin_edges=new_edges,
+            start_from=start_from,
+            minimal_bin_count=min_count,
+            minimal_number_of_bins=min_count
+        )
+    elif start_from == "right":
+        starting_point = len(initial_hist) - np.argmax(np.flip(initial_hist) < min_count)
+        offset = 0 if len(initial_hist[:starting_point]) % 2 == 0 else 1
+        original = bin_edges_1d[starting_point + offset:]
+        adapted = bin_edges_1d[:starting_point + offset][::2]
+        new_edges = tuple([tuple(np.r_[adapted, original]), ])
+        new_binning = _run_adaptive_binning_for_1d_case(
+            distributions=distributions,
+            bin_edges=new_edges,
+            start_from=start_from,
+            minimal_bin_count=min_count,
+            minimal_number_of_bins=min_count
+        )
+    elif start_from == "max":
+        max_bin = np.argmax(initial_hist)
+        assert np.all(initial_hist[max_bin - 2:max_bin + 3] >= min_count)
+        original_mid = bin_edges_1d[max_bin - 1:max_bin + 2]
+        adopted_left = _run_adaptive_binning_for_1d_case(
+            distributions=distributions,
+            bin_edges=tuple([tuple(bin_edges_1d[:max_bin - 1]), ]),
+            start_from="right",
+            minimal_bin_count=min_count,
+            minimal_number_of_bins=min_count
+        )[0]
+        adopted_right = _run_adaptive_binning_for_1d_case(
+            distributions=distributions,
+            bin_edges=tuple([tuple(bin_edges_1d[max_bin + 2:]), ]),
+            start_from="left",
+            minimal_bin_count=min_count,
+            minimal_number_of_bins=min_count
+        )[0]
+        new_binning = tuple([tuple(np.r_[adopted_left, original_mid, adopted_right]), ])
+    elif start_from == "auto":
+        max_bin = np.argmax(initial_hist)
+        if max_bin / len(initial_hist) < 0.15:
+            method = "left"
+        elif max_bin / len(initial_hist) > 0.85:
+            method = "right"
+        else:
+            method = "max"
+        return _run_adaptive_binning_for_1d_case(
+            distributions=distributions,
+            bin_edges=bin_edges,
+            start_from=method,
+            minimal_bin_count=min_count,
+            minimal_number_of_bins=min_count
+        )
+    else:
+        raise ValueError(f"Value provided for parameter `start_from` is not valid.\n"
+                         f"You provided '{start_from}'.\nShould be one of {valid_start_froms}.")
+
+    assert isinstance(new_binning, tuple), type(new_binning)
+    assert len(new_binning) == 1, len(new_binning)
+    assert isinstance(new_binning[0], tuple), type(new_binning[0])
+    assert all(isinstance(be, float) for be in new_binning[0]), [type(be) for be in new_binning[0]]
+
+    assert new_binning[0][0] == bin_edges[0][0]
+    assert new_binning[0][-1] == bin_edges[0][-1]
+
+    return new_binning
 
 
 def _update_bin_edges(
