@@ -36,7 +36,6 @@ class BaseDataContainer(NamedTuple):
 
 class BinnedDistribution:
     # TODO: Include some method to apply adaptive binning once the distribution is filled.
-    # TODO: Maybe we need a distribution component as well... At least for plotting.
 
     def __init__(
             self,

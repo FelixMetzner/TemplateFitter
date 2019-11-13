@@ -1,12 +1,15 @@
 """
-TODO
+Provides the HistComponent class, which is a container combining a BinnedDistribution with
+information necessary to plot it, such as the label and color of the component in the plot.
 """
-
-import numpy as np
 
 from typing import Optional
 
-from templatefitter.binned_distributions.systematics import SystematicsInfo
+from templatefitter.binned_distributions.binning import Binning
+from templatefitter.binned_distributions.weights import WeightsInputType
+from templatefitter.binned_distributions.systematics import SystematicsInputType
+from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataInputType, \
+    DataColumnNamesInput
 
 __all__ = [
     "HistComponent"
@@ -21,9 +24,10 @@ class HistComponent:
     def __init__(
             self,
             label: str,
-            data: np.ndarray,
-            weights: Optional[np.ndarray],
-            systematics: Optional[SystematicsInfo] = None,
+            data: DataInputType,
+            weights: WeightsInputType = None,
+            systematics: SystematicsInputType = None,
+            data_column_names: DataColumnNamesInput = None,
             hist_type: Optional[str] = None,
             color: Optional[str] = None,
             alpha: float = 1.0
@@ -39,31 +43,61 @@ class HistComponent:
         :param color: Color of the histogram component.
         :param alpha: Alpha value of the histogram component.
         """
+
+        self._input_data = data
+        self._input_weights = weights
+        self._input_systematics = systematics
+        self._input_column_names = data_column_names
+
         self._label = label
-        self._data = data
-        self._weights = weights
-        self._systematics = systematics
         self._hist_type = hist_type
         self._color = color
-        self._min = np.amin(data) if len(data) > 0 else +float("inf")
-        self._max = np.amax(data) if len(data) > 0 else -float("inf")
         self._alpha = alpha
+
+        self._binned_distribution = None
+
+    def get_histogram_bin_count(self, binning: Binning):
+        if self._binned_distribution is not None:
+            assert isinstance(self._binned_distribution, BinnedDistribution), type(self._binned_distribution)
+            if self._binned_distribution.binning == binning:
+                bin_count = self._binned_distribution.bin_counts
+                assert bin_count is not None
+                return bin_count
+
+        binned_dist = BinnedDistribution(
+            bins=binning.bin_edges,
+            dimensions=1,
+            log_scale_mask=binning.log_scale_mask,
+            data=self.input_data,
+            weights=self.input_weights,
+            systematics=self.input_systematics,
+            data_column_names=self.input_column_names
+        )
+
+        assert isinstance(binned_dist, BinnedDistribution), type(binned_dist)
+        assert not binned_dist.is_empty
+        self._binned_distribution = binned_dist
+        return binned_dist.bin_counts
 
     @property
     def label(self) -> str:
         return self._label
 
     @property
-    def data(self) -> np.ndarray:
-        return self._data
+    def input_data(self) -> DataInputType:
+        return self._input_data
 
     @property
-    def weights(self) -> Optional[np.ndarray]:
-        return self._weights
+    def input_weights(self) -> WeightsInputType:
+        return self._input_weights
 
     @property
-    def systematics(self) -> Optional[SystematicsInfo]:
-        return self._systematics
+    def input_systematics(self) -> SystematicsInputType:
+        return self._input_systematics
+
+    @property
+    def input_column_names(self) -> DataColumnNamesInput:
+        return self._input_column_names
 
     @property
     def hist_type(self) -> Optional[str]:
@@ -78,9 +112,19 @@ class HistComponent:
         return self._alpha
 
     @property
-    def min_val(self) -> float:
-        return self._min
+    def min_val(self) -> Optional[float]:
+        if self._binned_distribution is None:
+            return None
+        histogram_range = self._binned_distribution.binning.range
+        assert len(histogram_range) == 1, (len(histogram_range), len(histogram_range))
+        assert len(histogram_range[0]) == 2, (len(histogram_range[0]), histogram_range[0])
+        return histogram_range[0][0]
 
     @property
-    def max_val(self) -> float:
-        return self._max
+    def max_val(self) -> Optional[float]:
+        if self._binned_distribution is None:
+            return None
+        histogram_range = self._binned_distribution.binning.range
+        assert len(histogram_range) == 1, (len(histogram_range), len(histogram_range))
+        assert len(histogram_range[0]) == 2, (len(histogram_range[0]), histogram_range[0])
+        return histogram_range[0][1]
