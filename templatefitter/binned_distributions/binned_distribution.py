@@ -320,6 +320,13 @@ class BinnedDistribution:
     def data_column_names(self) -> Optional[List[str]]:
         return self._data_column_names
 
+    @data_column_names.setter
+    def data_column_names(self, column_names: DataColumnNamesInput) -> None:
+        if self._data_column_names is not None:
+            raise RuntimeError(f"You are trying to reset data_column_names\n"
+                               f"\tfrom: {self._data_column_names}\n\tto:   {column_names}")
+        self._init_data_column_names(data_column_names=column_names, data=None)
+
     @property
     def base_data(self) -> BaseDataContainer:
         return self._base_data
