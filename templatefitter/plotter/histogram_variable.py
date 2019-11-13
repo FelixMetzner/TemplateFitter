@@ -32,7 +32,7 @@ class HistVariable:
         :param n_bins: Number of bins used in the histogram.
         :param scope: Tuple with the scope of the variable
         :param var_name: Name of the variable used for the x axis in Plots.
-                         Preferably using Latex strings like r'$\mathrm{m}_{\mu\mu}$'.
+                         Preferably using Latex strings like r"$\mathrm{m}_{\mu\mu}$".
         :param unit: Unit of the variable, like GeV.
         :param use_log_scale: If true, x axis will be plotted in log-space.
                               Default is False.
@@ -97,7 +97,7 @@ class HistVariable:
     def x_label(self) -> str:
         """
         X label of the variable shown in the plot.
-        Accepts raw string, e.g. r'$\cos(\theta_v)$', to be interpreted as latex code.
+        Accepts raw string, e.g. r"$\cos(\theta_v)$", to be interpreted as latex code.
         :return: str
         """
         if self._x_label is not None:
@@ -114,7 +114,7 @@ class HistVariable:
     @property
     def unit(self) -> str:
         """
-        Physical unit of the variable, like Gev.
+        Physical unit of the variable, like "GeV".
         :return: str
         """
         if self._unit is not None:
