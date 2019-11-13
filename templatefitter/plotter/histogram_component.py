@@ -2,6 +2,7 @@
 Provides the HistComponent class, which is a container combining a BinnedDistribution with
 information necessary to plot it, such as the label and color of the component in the plot.
 """
+import numpy as np
 
 from typing import Optional
 
@@ -56,7 +57,12 @@ class HistComponent:
 
         self._binned_distribution = None
 
-    def get_histogram_bin_count(self, binning: Binning):
+    def get_histogram_bin_count(self, binning: Binning) -> np.ndarray:
+        """
+        Calculates the bin count for this component for a given binning.
+        :param binning: The binning to be used to generate the histogram and calculate the bin count.
+        :return: A np.ndarray containing the bin counts.
+        """
         if self._binned_distribution is not None:
             assert isinstance(self._binned_distribution, BinnedDistribution), type(self._binned_distribution)
             if self._binned_distribution.binning == binning:
