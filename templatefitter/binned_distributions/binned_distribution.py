@@ -22,9 +22,9 @@ from templatefitter.binned_distributions.binning import Binning, BinsInputType, 
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["BinnedDistribution", "BaseDataContainer", "DataColumnNamesInput", "InputDataType"]
+__all__ = ["BinnedDistribution", "BaseDataContainer", "DataColumnNamesInput", "DataInputType"]
 
-InputDataType = Union[pd.Series, pd.DataFrame, np.ndarray, Sequence[pd.Series], Sequence[np.ndarray]]
+DataInputType = Union[pd.Series, pd.DataFrame, np.ndarray, Sequence[pd.Series], Sequence[np.ndarray]]
 DataColumnNamesInput = Union[None, str, List[str]]
 
 
@@ -45,7 +45,7 @@ class BinnedDistribution:
             scope: ScopeInputType = None,
             log_scale_mask: LogScaleInputType = False,
             name: Optional[str] = None,
-            data: Optional[InputDataType] = None,
+            data: Optional[DataInputType] = None,
             weights: WeightsInputType = None,
             systematics: SystematicsInputType = None,
             data_column_names: DataColumnNamesInput = None
@@ -73,7 +73,7 @@ class BinnedDistribution:
 
     def fill(
             self,
-            input_data: InputDataType,
+            input_data: DataInputType,
             weights: WeightsInputType = None,
             systematics: SystematicsInputType = None
     ) -> None:
@@ -138,7 +138,7 @@ class BinnedDistribution:
 
     def _get_base_info(
             self,
-            in_data: InputDataType,
+            in_data: DataInputType,
             in_weights: WeightsInputType,
             in_systematics: SystematicsInputType
     ) -> BaseDataContainer:
@@ -166,7 +166,7 @@ class BinnedDistribution:
 
     @staticmethod
     def get_data_input(
-            in_data: InputDataType,
+            in_data: DataInputType,
             data_column_names: DataColumnNamesInput = None
     ) -> np.ndarray:
         if isinstance(in_data, pd.Series):
@@ -343,7 +343,7 @@ class BinnedDistribution:
         assert self.shape == self.num_bins, (self.shape, self.num_bins)
         assert sum(self.shape) == self.num_bins_total, (self.shape, self.num_bins_total)
 
-    def _init_data_column_names(self, data_column_names: DataColumnNamesInput, data: Optional[InputDataType]):
+    def _init_data_column_names(self, data_column_names: DataColumnNamesInput, data: Optional[DataInputType]):
         if isinstance(data_column_names, str):
             assert self.dimensions == 1, (data_column_names, self.dimensions)
             if isinstance(data, pd.DataFrame):

@@ -14,7 +14,7 @@ from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
-from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, InputDataType, \
+from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataInputType, \
     DataColumnNamesInput
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -387,7 +387,7 @@ class DataChannelContainer(Sequence):
     def __init__(
             self,
             channel_names: Optional[List[str]] = None,
-            channel_data: Optional[List[InputDataType]] = None,
+            channel_data: Optional[List[DataInputType]] = None,
             binning: Optional[List[Binning]] = None,
             column_names: Optional[Tuple[DataColumnNamesInput]] = None
     ):
@@ -406,7 +406,7 @@ class DataChannelContainer(Sequence):
     def add_channels(
             self,
             channel_names: List[str],
-            channel_data: List[InputDataType],
+            channel_data: List[DataInputType],
             binning: List[Binning],
             column_names: Tuple[DataColumnNamesInput]
     ) -> List[int]:
@@ -445,7 +445,7 @@ class DataChannelContainer(Sequence):
     def add_channel(
             self,
             channel_name: str,
-            channel_data: InputDataType,
+            channel_data: DataInputType,
             binning: Binning,
             column_names: DataColumnNamesInput
     ) -> int:

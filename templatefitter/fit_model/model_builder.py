@@ -17,7 +17,7 @@ from templatefitter.utility import xlogyx
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.binning import Binning
-from templatefitter.binned_distributions.binned_distribution import InputDataType
+from templatefitter.binned_distributions.binned_distribution import DataInputType
 from templatefitter.fit_model.channel import ChannelContainer, Channel, DataChannelContainer
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
 
@@ -492,7 +492,7 @@ class FitModel:
 
         self._params.add_constraint_to_parameter(index=index, constraint_value=value, constraint_sigma=sigma)
 
-    def add_data(self, channels: Dict[str, InputDataType]):
+    def add_data(self, channels: Dict[str, DataInputType]):
         self._check_is_not_finalized()
         assert self._data_channels.is_empty
         if self._has_data is True:
