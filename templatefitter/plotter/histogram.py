@@ -20,12 +20,15 @@ from templatefitter.plotter.histogram_component import HistComponent
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
-    "Histogram"
+    "Histogram",
+    "HistogramContainer"
 ]
 
 plot_style.set_matplotlibrc_params()
 
 
+# TODO: Handling of systematics via distributions_utility.get_combined_covariance
+# TODO: Handling of statistical uncertainty
 class Histogram:
     """
     Class which holds several HistogramComponents,
@@ -179,3 +182,14 @@ class Histogram:
         color = colors[self._auto_color_index % len(colors)]
         self._auto_color_index += 1
         return color
+
+
+class HistogramContainer:
+    """
+    Container class which holds different Histograms and their plot attributes.
+    The Histograms are sorted and addressable via a key string, i.e. the container
+    is basically an OrderedDict.
+    """
+
+    def __init__(self):
+        pass
