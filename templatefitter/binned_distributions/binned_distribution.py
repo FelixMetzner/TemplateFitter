@@ -22,7 +22,12 @@ from templatefitter.binned_distributions.binning import Binning, BinsInputType, 
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["BinnedDistribution", "BaseDataContainer", "DataColumnNamesInput", "DataInputType"]
+__all__ = [
+    "BinnedDistribution",
+    "BaseDataContainer",
+    "DataColumnNamesInput",
+    "DataInputType"
+]
 
 DataInputType = Union[pd.Series, pd.DataFrame, np.ndarray, Sequence[pd.Series], Sequence[np.ndarray]]
 DataColumnNamesInput = Union[None, str, List[str]]

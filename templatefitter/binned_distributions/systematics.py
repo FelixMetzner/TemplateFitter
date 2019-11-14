@@ -16,7 +16,10 @@ from templatefitter.binned_distributions.weights import Weights, WeightsInputTyp
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["SystematicsInfo", "SystematicsInputType"]
+__all__ = [
+    "SystematicsInfo",
+    "SystematicsInputType"
+]
 
 SystematicsUncertInputType = Union[WeightsInputType, List[WeightsInputType]]
 SystematicsFromVarInputType = Tuple[WeightsInputType, SystematicsUncertInputType]

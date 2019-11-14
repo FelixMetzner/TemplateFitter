@@ -9,7 +9,10 @@ from typing import Union, Optional
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["Weights", "WeightsInputType"]
+__all__ = [
+    "Weights",
+    "WeightsInputType"
+]
 
 WeightsInputType = Union[None, float, str, pd.Series, np.ndarray]
 

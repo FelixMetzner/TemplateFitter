@@ -113,6 +113,10 @@ class HistComponent:
     def color(self) -> Optional[str]:
         return self._color
 
+    @color.setter
+    def color(self, color: str) -> None:
+        self._color = color
+
     @property
     def alpha(self) -> float:
         return self._alpha

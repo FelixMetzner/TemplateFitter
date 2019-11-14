@@ -8,7 +8,13 @@ from typing import Union, Tuple, List
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["Binning", "BinEdgesType", "BinsInputType", "ScopeInputType", "LogScaleInputType"]
+__all__ = [
+    "Binning",
+    "BinEdgesType",
+    "BinsInputType",
+    "ScopeInputType",
+    "LogScaleInputType"
+]
 
 BinsInputType = Union[int, Tuple[int, ...], Tuple[float, ...], Tuple[Tuple[float, ...], ...]]
 ScopeInputType = Union[None, Tuple[float, float], Tuple[Tuple[float, float], ...]]
