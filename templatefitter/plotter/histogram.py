@@ -1,13 +1,19 @@
 """
-Provides the Histogram class which will hold one or multiple HistogramComponents.
+Provides the Histogram class and the HistogramContainer class.
+
+The Histogram class can hold one or multiple HistogramComponents.
 The Histogram defines the Binning and other features for all its components and
 orchestrates the necessary calculations on all components.
+
+The container class HistogramContainer can hold different Histograms which are
+to be plotted in the same plot.
 """
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
 
-from typing import Union, List, Tuple
+from collections import OrderedDict
+from typing import Optional, Union, List, Tuple, ItemsView, KeysView, ValuesView
 
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions import distributions_utility
@@ -125,6 +131,9 @@ class Histogram:
     def binning(self) -> Binning:
         return self._binning
 
+    def reset_binning(self, new_binning: Binning) -> None:
+        self._binning = new_binning
+
     @property
     def bin_edges(self) -> np.ndarray:
         bin_edges = self.binning.bin_edges
@@ -192,4 +201,54 @@ class HistogramContainer:
     """
 
     def __init__(self):
-        pass
+        self._histogram_dict = OrderedDict()  # type dict[Histogram]
+        self._common_binning = None  # type Optional[Binning]
+
+    def add_histogram(self, key: str, histogram: Histogram) -> None:
+        if not isinstance(key, str):
+            raise TypeError(f"The parameter 'key' must be a string, "
+                            f"but you provided an object of type {type(key).__name__}.")
+        if not isinstance(histogram, Histogram):
+            raise TypeError(f"The parameter 'histogram' must be an instance of the Histogram class, "
+                            f"but you provided an object of type {type(histogram).__name__}.")
+        if key in self.histogram_keys:
+            raise KeyError(f"The HistogramContainer instance already contains a Histogram under the key {key}!")
+
+        if self._common_binning is None:
+            self._common_binning = histogram.binning
+        else:
+            if not self._common_binning == histogram.binning:
+                raise RuntimeError(f"The HistogramContainer instance already contains Histograms with a different "
+                                   f"Binning than the one of the Histogram you are trying to add!\n"
+                                   f"Current Binning:\n\t" + "\n\t".join(self.common_binning.as_string_list)
+                                   + f"\nBinning of new Histogram:\n\t" + "\n\t".join(histogram.binning.as_string_list)
+                                   + "\n\nThe Binning must be the same as the one of the other Histograms!")
+
+        self._histogram_dict.update({key: histogram})
+
+    def update_binning(self, new_binning: Binning) -> None:
+        for histogram in self.histograms:
+            histogram.reset_binning(new_binning=new_binning)
+        self._common_binning = new_binning
+
+    # TODO: Maybe also add function to run adaptive binning or range finder on
+    #  one of the histograms (via key) to reset the binning of all.
+
+    @property
+    def histogram_keys(self) -> KeysView[str]:
+        return self._histogram_dict.keys()
+
+    @property
+    def histograms(self) -> ValuesView[Histogram]:
+        return self._histogram_dict.values()
+
+    @property
+    def items(self) -> ItemsView[str, Histogram]:
+        return self._histogram_dict.items()
+
+    def get_histogram_by_key(self, key: str) -> Histogram:
+        return self._histogram_dict[key]
+
+    @property
+    def common_binning(self) -> Optional[Binning]:
+        return self._common_binning

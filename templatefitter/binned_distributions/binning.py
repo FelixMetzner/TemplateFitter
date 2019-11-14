@@ -217,3 +217,15 @@ class Binning:
     @property
     def log_scale_mask(self) -> Tuple[bool, ...]:
         return self._log_scale_mask
+
+    @property
+    def as_string_list(self) -> List[str]:
+        string_list = [
+            f"dimensions = {self.dimensions}",
+            f"number of bins per dimension = {self.num_bins}",
+            f"total number of bins = {self.num_bins_total}",
+            f"range = {self.range}",
+            f"loc_scale_mask = {self.log_scale_mask}",
+            f"bin_edges = {self.bin_edges}"
+        ]
+        return string_list

@@ -1,9 +1,10 @@
 """
-# TODO
+Contains base class for histogram plots: HistogramPlot
 """
 import logging
 
 from templatefitter.plotter import plot_style
+from templatefitter.plotter.histogram import Histogram, HistogramContainer
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -16,8 +17,10 @@ plot_style.set_matplotlibrc_params()
 
 class HistogramPlot:
     """
-    TODO
+    Base class for histogram plots.
     """
 
     def __init__(self):
-        self._histogram_dict = ...  # TODO
+        self._histogram_dict = HistogramContainer()
+
+    # TODO: WIP
