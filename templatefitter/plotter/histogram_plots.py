@@ -13,7 +13,7 @@ from templatefitter.binned_distributions.systematics import SystematicsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType, DataColumnNamesInput
 
 from templatefitter.plotter import plot_style
-from templatefitter.plotter.histogram import HistogramContainer
+from templatefitter.plotter.histogram import Histogram, HistogramContainer
 from templatefitter.plotter.histogram_variable import HistVariable
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -41,12 +41,23 @@ class HistogramPlot(ABC):
             data: DataInputType,
             weights: WeightsInputType = None,
             systematics: SystematicsInputType = None,
-            hist_type: str = 'step',
+            hist_type: Optional[str] = None,
             color: Optional[str] = None,
             alpha: float = 1.0
     ) -> None:
-        # TODO
-        pass
+        if histogram_key not in self._histogram_dict.histogram_keys:
+            new_histogram = Histogram(variable=self.variable, hist_type=hist_type)
+            self._histogram_dict.add_histogram(key=histogram_key, histogram=new_histogram)
+
+        self._histogram_dict.get_histogram_by_key(key=histogram_key).add_histogram_component(
+            label=label,
+            data=data,
+            weights=weights,
+            systematics=systematics,
+            data_column_names=self.variable.df_label,
+            color=color,
+            alpha=alpha
+        )
 
     @abstractmethod
     def plot_on(self) -> Tuple[plt.figure, plt.axis]:

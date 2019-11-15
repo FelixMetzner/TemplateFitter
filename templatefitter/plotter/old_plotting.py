@@ -7,7 +7,7 @@ from templatefitter.fit_model.parameter_handler import ParameterHandler
 from templatefitter.histograms.abstract_hist import AbstractHist
 
 
-class PlottingInfo(NamedTuple):
+class PlottingInfo(NamedTuple):  # TODO: This is not used atm... is it necessary? Maybe for template to hist conversion?
     templates: dict
     params: ParameterHandler
     yield_indices: list
