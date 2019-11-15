@@ -42,12 +42,14 @@ class Histogram:
 
     The Histogram is a stacked histogram composed of all its components.
     """
+    valid_hist_types = ["bar", "barstacked", "step", "stepfilled"]
 
-    def __init__(self, variable: HistVariable) -> None:
+    def __init__(self, variable: HistVariable, hist_type: Optional[str] = None) -> None:
         if not isinstance(variable, HistVariable):
             raise ValueError(f"The parameter 'variable' must be a HistVariable instance, "
                              f"but you provided an object of type {type(variable).__name__}")
         self._variable = variable
+        self._hist_type = self._check_and_return_hist_type(hist_type=hist_type)
 
         self._binning = Binning(
             bins=variable.n_bins,
@@ -128,6 +130,10 @@ class Histogram:
         return self._variable
 
     @property
+    def hist_type(self) -> Optional[str]:
+        return self._hist_type
+
+    @property
     def binning(self) -> Binning:
         return self._binning
 
@@ -185,6 +191,17 @@ class Histogram:
         scope_tuple = (np.amin(min_values), np.amax(max_values))
         self._raw_data_scope = scope_tuple
         return scope_tuple
+
+    def _check_and_return_hist_type(self, hist_type: Optional[str]) -> Optional[str]:
+        if hist_type is not None:
+            base_error_text = f"Argument 'hist_type' must be either None or one of the strings " \
+                              f"{self.valid_hist_types} as expected by matplotlib.pyplot.hist.\n"
+            if not isinstance(hist_type, str):
+                raise TypeError(f"{base_error_text}You provided an object of type {type(hist_type).__name__}!")
+            if hist_type not in self.valid_hist_types:
+                raise ValueError(f"{base_error_text}You provided the string {hist_type}!")
+
+        return hist_type
 
     def _get_auto_color(self):
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]

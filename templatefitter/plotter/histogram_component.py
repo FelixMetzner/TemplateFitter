@@ -31,7 +31,6 @@ class HistComponent:
             weights: WeightsInputType = None,
             systematics: SystematicsInputType = None,
             data_column_names: DataColumnNamesInput = None,
-            hist_type: Optional[str] = None,
             color: Optional[str] = None,
             alpha: float = 1.0
     ):
@@ -42,7 +41,6 @@ class HistComponent:
         :param data: Data to be plotted as histogram.
         :param weights: Weights for the events in data.
         :param systematics: Information about the systematics associated with the data.
-        :param hist_type: Specifies the histogram type of the component in the histogram.
         :param color: Color of the histogram component.
         :param alpha: Alpha value of the histogram component.
         """
@@ -53,7 +51,6 @@ class HistComponent:
         self._input_column_name = self._get_data_column_name(data_column_names=data_column_names)
 
         self._label = label
-        self._hist_type = hist_type
         self._color = color
         self._alpha = alpha
 
@@ -140,10 +137,6 @@ class HistComponent:
         if self._input_column_name is not None:
             raise RuntimeError("You are trying to overwrite the HistogramComponents input_column_names!")
         self._input_column_name = self._get_data_column_name(data_column_names=input_column_names)
-
-    @property
-    def hist_type(self) -> Optional[str]:
-        return self._hist_type
 
     @property
     def color(self) -> Optional[str]:

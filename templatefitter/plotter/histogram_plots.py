@@ -8,6 +8,9 @@ from abc import ABC, abstractmethod
 from matplotlib import pyplot as plt
 
 from templatefitter.binned_distributions.binning import Binning
+from templatefitter.binned_distributions.weights import WeightsInputType
+from templatefitter.binned_distributions.systematics import SystematicsInputType
+from templatefitter.binned_distributions.binned_distribution import DataInputType, DataColumnNamesInput
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram import HistogramContainer
@@ -31,14 +34,23 @@ class HistogramPlot(ABC):
         self._variable = variable  # type: HistVariable
         self._histogram_dict = HistogramContainer()
 
-    def add_component(self) -> None:
+    def add_component(
+            self,
+            label: str,
+            histogram_key: str,
+            data: DataInputType,
+            weights: WeightsInputType = None,
+            systematics: SystematicsInputType = None,
+            hist_type: str = 'step',
+            color: Optional[str] = None,
+            alpha: float = 1.0
+    ) -> None:
         # TODO
         pass
 
     @abstractmethod
     def plot_on(self) -> Tuple[plt.figure, plt.axis]:
-        # TODO
-        pass
+        raise NotImplementedError(f"The 'plot_on' method is not implemented for the class {self.__class__.__name__}!")
 
     @property
     def binning(self) -> Optional[Binning]:
@@ -51,17 +63,17 @@ class HistogramPlot(ABC):
     def reset_binning_to_use_raw_data_range(self) -> None:
         self._histogram_dict.reset_binning_to_use_raw_data_range_of_all()
 
-    def reset_binning_to_use_raw_data_range_of_component(self, component_key: str) -> None:
-        self._histogram_dict.reset_binning_to_use_raw_data_range_of_key(key=component_key)
+    def reset_binning_to_use_raw_data_range_of_histogram(self, histogram_key: str) -> None:
+        self._histogram_dict.reset_binning_to_use_raw_data_range_of_key(key=histogram_key)
 
-    def apply_adaptive_binning_based_on_component(
+    def apply_adaptive_binning_based_on_histogram(
             self,
-            component_key: str,
+            histogram_key: str,
             minimal_bin_count: int = 5,
             minimal_number_of_bins: int = 7
     ) -> None:
         self._histogram_dict.apply_adaptive_binning_based_on_key(
-            key=component_key,
+            key=histogram_key,
             minimal_bin_count=minimal_bin_count,
             minimal_number_of_bins=minimal_number_of_bins
         )
