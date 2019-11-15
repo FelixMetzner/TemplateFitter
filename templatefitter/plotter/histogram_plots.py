@@ -1,105 +1,59 @@
 """
-Contains base class for histogram plots: HistogramPlot
+Provides several specialized histogram plot classes.
 """
 import logging
 
-from typing import Optional, Tuple
-from abc import ABC, abstractmethod
-from matplotlib import pyplot as plt
+from typing import Tuple
+from matplotlib import pyplot as plt, axes, figure
 
-from templatefitter.binned_distributions.binning import Binning
-from templatefitter.binned_distributions.weights import WeightsInputType
-from templatefitter.binned_distributions.systematics import SystematicsInputType
-from templatefitter.binned_distributions.binned_distribution import DataInputType, DataColumnNamesInput
 
 from templatefitter.plotter import plot_style
-from templatefitter.plotter.histogram import Histogram, HistogramContainer
-from templatefitter.plotter.histogram_variable import HistVariable
+from templatefitter.plotter.histogram_plot_base import HistogramPlot
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
-    "HistogramPlot"
+    "SimpleHistogramPlot",
+    "StackedHistogramPlot",
+    "DataMCHistogramPlot"
 ]
 
 plot_style.set_matplotlibrc_params()
 
 
-class HistogramPlot(ABC):
-    """
-    Base class for histogram plots.
-    """
+class SimpleHistogramPlot(HistogramPlot):
+    pass
 
-    def __init__(self, variable: HistVariable):
-        self._variable = variable  # type: HistVariable
-        self._histogram_dict = HistogramContainer()
 
-    def add_component(
-            self,
-            label: str,
-            histogram_key: str,
-            data: DataInputType,
-            weights: WeightsInputType = None,
-            systematics: SystematicsInputType = None,
-            hist_type: Optional[str] = None,
-            color: Optional[str] = None,
-            alpha: float = 1.0
-    ) -> None:
-        if histogram_key not in self._histogram_dict.histogram_keys:
-            new_histogram = Histogram(variable=self.variable, hist_type=hist_type)
-            self._histogram_dict.add_histogram(key=histogram_key, histogram=new_histogram)
+class StackedHistogramPlot(HistogramPlot):
+    pass
 
-        self._histogram_dict.get_histogram_by_key(key=histogram_key).add_histogram_component(
-            label=label,
-            data=data,
-            weights=weights,
-            systematics=systematics,
-            data_column_names=self.variable.df_label,
-            color=color,
-            alpha=alpha
+
+class DataMCHistogramPlot(HistogramPlot):
+    pass
+
+    @staticmethod
+    def create_hist_ratio_figure(
+            fig_size=(5, 5),
+            height_ratio=(3.5, 1)
+    ) -> Tuple[figure.Figure, axes.Axes]:
+        """
+        Create a matplotlib.Figure for histogram ratio plots.
+
+        :param fig_size: Size of full figure. Default is (5, 5).
+        :param height_ratio: Size of main plot vs. size of ratio plot. Default is (3.5, 1).
+        :return: A matplotlib.figure.Figure instance and a matplotlib.axes.Axes instance containing two axis.
+        """
+        fig, axs = plt.subplots(
+            nrows=2,
+            ncols=1,
+            figsize=fig_size,
+            dpi=200,
+            sharex='none',
+            gridspec_kw={"height_ratios": [height_ratio[0], height_ratio[1]]}
         )
 
-    @abstractmethod
-    def plot_on(self) -> Tuple[plt.figure, plt.axis]:
-        raise NotImplementedError(f"The 'plot_on' method is not implemented for the class {self.__class__.__name__}!")
+        assert isinstance(fig, figure.Figure), type(fig)
+        assert len(axs) == 2, (len(axs), axs)
 
-    @property
-    def binning(self) -> Optional[Binning]:
-        return self._histogram_dict.common_binning
-
-    @property
-    def variable(self) -> HistVariable:
-        return self._variable
-
-    def reset_binning_to_use_raw_data_range(self) -> None:
-        self._histogram_dict.reset_binning_to_use_raw_data_range_of_all()
-
-    def reset_binning_to_use_raw_data_range_of_histogram(self, histogram_key: str) -> None:
-        self._histogram_dict.reset_binning_to_use_raw_data_range_of_key(key=histogram_key)
-
-    def apply_adaptive_binning_based_on_histogram(
-            self,
-            histogram_key: str,
-            minimal_bin_count: int = 5,
-            minimal_number_of_bins: int = 7
-    ) -> None:
-        self._histogram_dict.apply_adaptive_binning_based_on_key(
-            key=histogram_key,
-            minimal_bin_count=minimal_bin_count,
-            minimal_number_of_bins=minimal_number_of_bins
-        )
-
-    def _get_y_label(self, normed: bool, evts_or_cands: str = "Events") -> str:
-        if normed:
-            return "Normalized in arb. units"
-        elif self._variable.use_log_scale:
-            return f"{evts_or_cands} / Bin"
-        else:
-            bin_widths = self.binning.bin_widths[0]
-            assert isinstance(bin_widths, tuple), (bin_widths, type(bin_widths))
-            bin_width = min(bin_widths)
-            return "{e} / ({b:.2g}{v})".format(
-                e=evts_or_cands,
-                b=bin_width,
-                v=" " + self._variable.unit if self._variable.unit else ""
-            )
+        return fig, axs
