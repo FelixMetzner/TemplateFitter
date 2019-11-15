@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from collections import OrderedDict
-from typing import Optional, Union, List, Tuple, ItemsView, KeysView, ValuesView
+from typing import Optional, Union, List, Tuple, Dict, ItemsView, KeysView, ValuesView
 
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions import distributions_utility
@@ -201,8 +201,9 @@ class HistogramContainer:
     """
 
     def __init__(self):
-        self._histogram_dict = OrderedDict()  # type dict[Histogram]
-        self._common_binning = None  # type Optional[Binning]
+        self._histogram_dict = OrderedDict()  # type: Dict[str, Histogram]
+        self._common_binning = None  # type: Optional[Binning]
+        self._common_variable = None  # type: Optional[HistVariable]
 
     def add_histogram(self, key: str, histogram: Histogram) -> None:
         if not isinstance(key, str):
@@ -223,6 +224,16 @@ class HistogramContainer:
                                    f"Current Binning:\n\t" + "\n\t".join(self.common_binning.as_string_list)
                                    + f"\nBinning of new Histogram:\n\t" + "\n\t".join(histogram.binning.as_string_list)
                                    + "\n\nThe Binning must be the same as the one of the other Histograms!")
+        if self._common_variable is None:
+            self._common_variable = histogram.variable
+        else:
+            if not self._common_variable == histogram.variable:
+                raise RuntimeError(f"The HistogramContainer instance already contains Histograms with a different "
+                                   f"HistVariable than the one of the Histogram you are trying to add!\n"
+                                   f"Current HistVariable:\n\t" + "\n\t".join(self.common_variable.as_string_list)
+                                   + f"\nHistVariable of new Histogram:\n\t"
+                                   + "\n\t".join(histogram.variable.as_string_list)
+                                   + "\n\nThe HistVariable must be the same as the one of the other Histograms!")
 
         self._histogram_dict.update({key: histogram})
 
@@ -231,8 +242,43 @@ class HistogramContainer:
             histogram.reset_binning(new_binning=new_binning)
         self._common_binning = new_binning
 
-    # TODO: Maybe also add function to run adaptive binning or range finder on
-    #  one of the histograms (via key) to reset the binning of all.
+    def apply_adaptive_binning_based_on_key(
+            self,
+            key: str,
+            minimal_bin_count: int = 5,
+            minimal_number_of_bins: int = 7
+    ) -> None:
+        histogram_to_use = self.get_histogram_by_key(key=key)
+        histogram_to_use.apply_adapted_binning(
+            minimal_bin_count=minimal_bin_count,
+            minimal_number_of_bins=minimal_number_of_bins
+        )
+        new_binning = histogram_to_use.binning
+        logging.info(f"Updating binning for all components via adaptive binning "
+                     f"based on the Histogram with the key '{key}' to:\n\t"
+                     + "\n\t".join(new_binning.as_string_list))
+        self.update_binning(new_binning=new_binning)
+
+    def reset_binning_to_use_raw_data_range_of_key(self, key: str) -> None:
+        histogram_to_use = self.get_histogram_by_key(key=key)
+        histogram_to_use.reset_binning_to_use_raw_data_scope()
+        new_binning = histogram_to_use.binning
+        logging.info(f"Updating binning for all components to use raw data range "
+                     f"of the Histogram with the key '{key}'\nNew binning:\n\t"
+                     + "\n\t".join(new_binning.as_string_list))
+        self.update_binning(new_binning=new_binning)
+
+    def apply_adaptive_binning_based_on_all(
+            self,
+            minimal_bin_count: int = 5,
+            minimal_number_of_bins: int = 7
+    ) -> None:
+        # TODO
+        pass
+
+    def reset_binning_to_use_raw_data_range_of_all(self) -> None:
+        # TODO
+        pass
 
     @property
     def histogram_keys(self) -> KeysView[str]:
@@ -252,3 +298,7 @@ class HistogramContainer:
     @property
     def common_binning(self) -> Optional[Binning]:
         return self._common_binning
+
+    @property
+    def common_variable(self) -> Optional[HistVariable]:
+        return self._common_variable

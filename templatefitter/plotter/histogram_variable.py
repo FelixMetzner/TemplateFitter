@@ -4,7 +4,7 @@ be
 """
 
 from collections.abc import Sequence as ABCSequence
-from typing import Tuple, Optional, Sequence
+from typing import Optional, Tuple, List, Sequence
 
 __all__ = [
     "HistVariable"
@@ -94,6 +94,13 @@ class HistVariable:
         self._scope = tuple(value)
 
     @property
+    def variable_name(self) -> str:
+        if self._var_name is not None:
+            return self._var_name
+        else:
+            return ""
+
+    @property
     def x_label(self) -> str:
         """
         X label of the variable shown in the plot.
@@ -135,3 +142,30 @@ class HistVariable:
         :return: bool
         """
         return self._use_log_scale
+
+    def __eq__(self, other: "HistVariable") -> bool:
+        if self.df_label != other.df_label:
+            return False
+        if self.variable_name != other.variable_name:
+            return False
+        if self.unit != other.unit:
+            return False
+        if self.use_log_scale != other.use_log_scale:
+            return False
+        if self.n_bins != other.n_bins:
+            return False
+        if self.scope != other.scope:
+            return False
+        return True
+
+    @property
+    def as_string_list(self) -> List[str]:
+        string_list = [
+            f"df_label = {self.df_label}",
+            f"variable_name = {self.variable_name}",
+            f"unit = {self.unit}",
+            f"use_log_scale = {self.use_log_scale}",
+            f"n_bins = {self.n_bins}",
+            f"scope = {self.scope}"
+        ]
+        return string_list
