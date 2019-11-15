@@ -3,9 +3,9 @@ Contains abstract base class for histogram plots --- HistogramPlot.
 """
 import logging
 
-from typing import Optional, Tuple
 from abc import ABC, abstractmethod
-from matplotlib import pyplot as plt, figure
+from matplotlib import figure, axis
+from typing import Optional, Union, Any, Tuple
 
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions.weights import WeightsInputType
@@ -62,7 +62,7 @@ class HistogramPlot(ABC):
         )
 
     @abstractmethod
-    def plot_on(self) -> Tuple[plt.figure, plt.axis]:
+    def plot_on(self) -> Union[Tuple[figure.Figure, axis.Axis], Any]:
         raise NotImplementedError(f"The 'plot_on' method is not implemented for the class {self.__class__.__name__}!")
 
     @property
