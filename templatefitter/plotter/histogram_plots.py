@@ -49,12 +49,22 @@ class HistogramPlot(ABC):
         return self._variable
 
     def reset_binning_to_use_raw_data_range(self) -> None:
-        # TODO
-        pass
+        self._histogram_dict.reset_binning_to_use_raw_data_range_of_all()
 
-    def apply_adaptive_binning(self) -> None:
-        # TODO
-        pass
+    def reset_binning_to_use_raw_data_range_of_component(self, component_key: str) -> None:
+        self._histogram_dict.reset_binning_to_use_raw_data_range_of_key(key=component_key)
+
+    def apply_adaptive_binning_based_on_component(
+            self,
+            component_key: str,
+            minimal_bin_count: int = 5,
+            minimal_number_of_bins: int = 7
+    ) -> None:
+        self._histogram_dict.apply_adaptive_binning_based_on_key(
+            key=component_key,
+            minimal_bin_count=minimal_bin_count,
+            minimal_number_of_bins=minimal_number_of_bins
+        )
 
     def _get_y_label(self, normed: bool, evts_or_cands: str = "Events") -> str:
         if normed:

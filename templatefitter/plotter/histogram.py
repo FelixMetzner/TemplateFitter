@@ -268,17 +268,18 @@ class HistogramContainer:
                      + "\n\t".join(new_binning.as_string_list))
         self.update_binning(new_binning=new_binning)
 
-    def apply_adaptive_binning_based_on_all(
-            self,
-            minimal_bin_count: int = 5,
-            minimal_number_of_bins: int = 7
-    ) -> None:
-        # TODO
-        pass
-
     def reset_binning_to_use_raw_data_range_of_all(self) -> None:
-        # TODO
-        pass
+        raw_ranges = [hist.raw_data_range for hist in self.histograms]
+        full_raw_range = (min([rr[0] for rr in raw_ranges]), max([rr[1] for rr in raw_ranges]))
+
+        new_binning = Binning(
+            bins=self._common_binning.bin_edges,
+            dimensions=self._common_binning.dimensions,
+            scope=full_raw_range,
+            log_scale=self._common_variable.use_log_scale
+        )
+
+        self.update_binning(new_binning=new_binning)
 
     @property
     def histogram_keys(self) -> KeysView[str]:
