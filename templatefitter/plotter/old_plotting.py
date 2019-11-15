@@ -7,6 +7,10 @@ from templatefitter.fit_model.parameter_handler import ParameterHandler
 from templatefitter.histograms.abstract_hist import AbstractHist
 
 
+# TODO: Maybe add also:
+#           - latex_tables.py
+#           - mva_plots.py
+
 class PlottingInfo(NamedTuple):  # TODO: This is not used atm... is it necessary? Maybe for template to hist conversion?
     templates: dict
     params: ParameterHandler
