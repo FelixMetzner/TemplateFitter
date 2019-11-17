@@ -126,6 +126,12 @@ class Histogram:
     def get_bin_counts(self) -> List[np.ndarray]:
         return [component.get_histogram_bin_count(binning=self.binning) for component in self._components]
 
+    def get_bin_count_of_component(self, index: int) -> np.ndarray:
+        return self._components[index].get_histogram_bin_count(binning=self.binning)
+
+    def get_component(self, index: int) -> HistComponent:
+        return self._components[index]
+
     @property
     def variable(self) -> HistVariable:
         return self._variable
@@ -133,6 +139,10 @@ class Histogram:
     @property
     def hist_type(self) -> str:
         return self._hist_type
+
+    @property
+    def number_of_components(self) -> int:
+        return len(self._components)
 
     @property
     def binning(self) -> Binning:
@@ -314,6 +324,9 @@ class HistogramContainer:
         return self._histogram_dict.items()
 
     def get_histogram_by_key(self, key: str) -> Histogram:
+        return self._histogram_dict[key]
+
+    def __getitem__(self, key: str) -> Histogram:
         return self._histogram_dict[key]
 
     @property

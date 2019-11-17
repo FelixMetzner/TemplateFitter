@@ -32,10 +32,15 @@ class HistogramPlot(ABC):
 
     def __init__(self, variable: HistVariable):
         self._variable = variable  # type: HistVariable
-        self._histogram_dict = HistogramContainer()
+        self._histograms = HistogramContainer()
 
         self._last_figure = None  # type: Optional[figure.Figure]
 
+    @abstractmethod
+    def plot_on(self) -> Union[Tuple[figure.Figure, axis.Axis], Any]:
+        raise NotImplementedError(f"The 'plot_on' method is not implemented for the class {self.__class__.__name__}!")
+
+    @abstractmethod
     def add_component(
             self,
             label: str,
@@ -47,11 +52,26 @@ class HistogramPlot(ABC):
             color: Optional[str] = None,
             alpha: float = 1.0
     ) -> None:
-        if histogram_key not in self._histogram_dict.histogram_keys:
-            new_histogram = Histogram(variable=self.variable, hist_type=hist_type)
-            self._histogram_dict.add_histogram(key=histogram_key, histogram=new_histogram)
+        raise NotImplementedError(
+            f"The 'add_component' method is not implemented for the class {self.__class__.__name__}!"
+        )
 
-        self._histogram_dict.get_histogram_by_key(key=histogram_key).add_histogram_component(
+    def _add_component(
+            self,
+            label: str,
+            histogram_key: str,
+            data: DataInputType,
+            weights: WeightsInputType = None,
+            systematics: SystematicsInputType = None,
+            hist_type: Optional[str] = None,
+            color: Optional[str] = None,
+            alpha: float = 1.0
+    ) -> None:
+        if histogram_key not in self._histograms.histogram_keys:
+            new_histogram = Histogram(variable=self.variable, hist_type=hist_type)
+            self._histograms.add_histogram(key=histogram_key, histogram=new_histogram)
+
+        self._histograms[histogram_key].add_histogram_component(
             label=label,
             data=data,
             weights=weights,
@@ -61,23 +81,24 @@ class HistogramPlot(ABC):
             alpha=alpha
         )
 
-    @abstractmethod
-    def plot_on(self) -> Union[Tuple[figure.Figure, axis.Axis], Any]:
-        raise NotImplementedError(f"The 'plot_on' method is not implemented for the class {self.__class__.__name__}!")
-
     @property
     def binning(self) -> Optional[Binning]:
-        return self._histogram_dict.common_binning
+        return self._histograms.common_binning
+
+    @property
+    def bin_edges(self) -> Tuple[float, ...]:
+        assert len(self.binning.bin_edges) == 1, self.binning.bin_edges
+        return self.binning.bin_edges[0]
 
     @property
     def variable(self) -> HistVariable:
         return self._variable
 
     def reset_binning_to_use_raw_data_range(self) -> None:
-        self._histogram_dict.reset_binning_to_use_raw_data_range_of_all()
+        self._histograms.reset_binning_to_use_raw_data_range_of_all()
 
     def reset_binning_to_use_raw_data_range_of_histogram(self, histogram_key: str) -> None:
-        self._histogram_dict.reset_binning_to_use_raw_data_range_of_key(key=histogram_key)
+        self._histograms.reset_binning_to_use_raw_data_range_of_key(key=histogram_key)
 
     def apply_adaptive_binning_based_on_histogram(
             self,
@@ -85,7 +106,7 @@ class HistogramPlot(ABC):
             minimal_bin_count: int = 5,
             minimal_number_of_bins: int = 7
     ) -> None:
-        self._histogram_dict.apply_adaptive_binning_based_on_key(
+        self._histograms.apply_adaptive_binning_based_on_key(
             key=histogram_key,
             minimal_bin_count=minimal_bin_count,
             minimal_number_of_bins=minimal_number_of_bins
