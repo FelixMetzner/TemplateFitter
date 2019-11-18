@@ -8,8 +8,11 @@ import numpy as np
 from typing import Optional, List, Tuple
 
 from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
+
+from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binning import BinsInputType, ScopeInputType, LogScaleInputType
-from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataColumnNamesInput
+from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataInputType, \
+    SystematicsInputType, DataColumnNamesInput
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -27,6 +30,9 @@ class Template(BinnedDistribution):
             scope: ScopeInputType,
             params: ParameterHandler,
             data_column_names: DataColumnNamesInput,
+            data: Optional[DataInputType] = None,
+            weights: WeightsInputType = None,
+            systematics: SystematicsInputType = None,
             log_scale_mask: LogScaleInputType = False
     ):
         super().__init__(
@@ -35,6 +41,9 @@ class Template(BinnedDistribution):
             scope=scope,
             log_scale_mask=log_scale_mask,
             name=name,
+            data=data,
+            weights=weights,
+            systematics=systematics,
             data_column_names=data_column_names
         )
         self._params = params

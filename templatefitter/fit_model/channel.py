@@ -12,7 +12,7 @@ from typing import Optional, List, Dict, Tuple
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
-from templatefitter.binned_distributions.binning import Binning
+from templatefitter.binned_distributions.binning import Binning, LogScaleInputType
 from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataInputType, \
     DataColumnNamesInput
@@ -447,7 +447,8 @@ class DataChannelContainer(Sequence):
             channel_name: str,
             channel_data: DataInputType,
             binning: Binning,
-            column_names: DataColumnNamesInput
+            column_names: DataColumnNamesInput,
+            log_scale_mask: LogScaleInputType = False
     ) -> int:
         if channel_name in self._channels_mapping.keys():
             raise RuntimeError(f"Trying to add channel with name '{channel_name}' that is already assigned to the "
@@ -459,9 +460,12 @@ class DataChannelContainer(Sequence):
             dimensions=binning.dimensions,
             scope=binning.range,
             name=f"data_channel_{channel_index}_{channel_name}",
-            data_column_names=column_names
+            data=channel_data,
+            weights=None,
+            systematics=None,
+            data_column_names=column_names,
+            log_scale_mask=log_scale_mask
         )
-        channel_distribution.fill(input_data=channel_data, weights=None, systematics=None)
 
         self._channel_distributions.append(channel_distribution)
         self._channels_mapping.update({channel_name: channel_index})

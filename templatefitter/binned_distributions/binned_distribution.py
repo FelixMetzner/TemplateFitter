@@ -72,8 +72,7 @@ class BinnedDistribution:
         self._bin_correlation_matrix = None
 
         if data is not None:
-            self._base_data = self._get_base_info(in_data=data, in_weights=weights, in_systematics=systematics)
-            self.is_empty = False
+            self.fill(input_data=data, weights=weights, systematics=systematics)
 
     def fill(
             self,
