@@ -18,6 +18,7 @@ from typing import Optional, Union, List, Tuple, Dict, ItemsView, KeysView, Valu
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions import distributions_utility
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution
+from templatefitter.binned_distributions.distributions_utility import get_combined_covariance
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram_variable import HistVariable
@@ -63,6 +64,8 @@ class Histogram:
         self._auto_color_index = 0
 
         self._raw_data_scope = None
+        self._covariance_matrix = None
+        self._binning_used_for_covariance_matrix = None
 
     def add_histogram_component(self, *args, **kwargs) -> None:
         try:
@@ -129,8 +132,31 @@ class Histogram:
     def get_bin_count_of_component(self, index: int) -> np.ndarray:
         return self._components[index].get_histogram_bin_count(binning=self.binning)
 
+    def get_systematic_uncertainty_per_bin(self) -> Optional[np.ndarray]:
+        cov = self.get_covariance_matrix()
+        if cov is not None:
+            return np.diagonal(cov)
+        else:
+            return None
+
+    def get_covariance_matrix(self) -> np.ndarray:
+        if self._covariance_matrix is not None:
+            if self._binning_used_for_covariance_matrix == self.binning:
+                return self._covariance_matrix
+
+        covariance_matrix = get_combined_covariance(
+            distributions=[comp.get_underlying_binned_distribution(binning=self.binning) for comp in self._components]
+        )
+        self._covariance_matrix = covariance_matrix
+        self._binning_used_for_covariance_matrix = self.binning
+        return covariance_matrix
+
     def get_component(self, index: int) -> HistComponent:
         return self._components[index]
+
+    @property
+    def components(self) -> List[HistComponent]:
+        return self._components
 
     @property
     def variable(self) -> HistVariable:
@@ -143,6 +169,14 @@ class Histogram:
     @property
     def number_of_components(self) -> int:
         return len(self._components)
+
+    @property
+    def colors(self) -> Tuple[str, ...]:
+        return tuple([comp.color for comp in self._components])
+
+    @property
+    def labels(self) -> Tuple[str, ...]:
+        return tuple([comp.label for comp in self._components])
 
     @property
     def binning(self) -> Binning:
@@ -171,6 +205,14 @@ class Histogram:
             return bin_widths[0][0]
         else:
             return np.array(bin_widths[0])
+
+    @property
+    def raw_weight_sum(self) -> float:
+        return sum([component.raw_weights_sum for component in self._components])
+
+    @property
+    def raw_data_size(self) -> int:
+        return sum([component.raw_data_size for component in self._components])
 
     @property
     def raw_data_range(self) -> Tuple[float, float]:
@@ -330,9 +372,19 @@ class HistogramContainer:
         return self._histogram_dict[key]
 
     @property
+    def number_of_histograms(self) -> int:
+        return len(self._histogram_dict)
+
+    @property
     def common_binning(self) -> Optional[Binning]:
         return self._common_binning
 
     @property
     def common_variable(self) -> Optional[HistVariable]:
         return self._common_variable
+
+    @property
+    def common_bin_mids(self) -> np.ndarray:
+        bin_mids = self.common_binning.bin_mids
+        assert len(bin_mids) == 1, bin_mids
+        return np.array(bin_mids[0])

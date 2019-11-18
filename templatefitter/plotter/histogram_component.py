@@ -9,8 +9,8 @@ import pandas as pd
 from typing import Optional, Tuple
 
 from templatefitter.binned_distributions.binning import Binning
-from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.systematics import SystematicsInputType
+from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataInputType, \
     DataColumnNamesInput
 
@@ -54,8 +54,10 @@ class HistComponent:
         self._color = color
         self._alpha = alpha
 
+        self._raw_data = None
         self._min_val = None
         self._max_val = None
+        self._raw_weights = None
 
         self._binned_distribution = None
 
@@ -150,16 +152,33 @@ class HistComponent:
     def alpha(self) -> float:
         return self._alpha
 
+    def _get_raw_data(self) -> np.ndarray:
+        if self._raw_data is None:
+            if isinstance(self.input_data, pd.DataFrame) and self.input_column_name is None:
+                raise RuntimeError("input_column_name must be defined if input_data is a pandas.DataFrame!")
+            raw_data = BinnedDistribution.get_data_input(
+                in_data=self.input_data,
+                data_column_names=self.input_column_name
+            )
+            assert len(raw_data.shape) == 1, raw_data.shape
+            self._raw_data = raw_data
+
+        return self._raw_data
+
+    @property
+    def raw_data(self) -> np.ndarray:
+        return self._get_raw_data()
+
+    @property
+    def raw_data_size(self) -> int:
+        return self._get_raw_data().size
+
     @property
     def raw_data_range(self) -> Tuple[float, float]:
         if self._min_val is not None and self._max_val is not None:
             return self._min_val, self._max_val
 
-        if isinstance(self.input_data, pd.DataFrame) and self.input_column_name is None:
-            raise RuntimeError("input_column_name must be defined if input_data is a pandas.DataFrame!")
-
-        raw_data = BinnedDistribution.get_data_input(in_data=self.input_data, data_column_names=self.input_column_name)
-        assert len(raw_data.shape) == 1, raw_data.shape
+        raw_data = self._get_raw_data()
 
         self._min_val = np.amin(raw_data) if len(raw_data) > 0 else +float("inf")
         self._max_val = np.amax(raw_data) if len(raw_data) > 0 else -float("inf")
@@ -173,6 +192,29 @@ class HistComponent:
     @property
     def max_val(self) -> float:
         return self.raw_data_range[1]
+
+    def _get_raw_weights(self) -> np.ndarray:
+        if self._raw_weights is None:
+            raw_weights = Weights(
+                weight_input=self._input_weights,
+                data=self._get_raw_data(),
+                data_input=self._input_data
+            ).get_weights()
+            assert len(raw_weights.shape) == 1, raw_weights.shape
+            assert raw_weights.shape == self._get_raw_data().shape, (raw_weights.shape, self._get_raw_data().shape)
+            self._raw_weights = raw_weights
+
+        return self._raw_weights
+
+    @property
+    def raw_weights(self) -> np.ndarray:
+        return self._get_raw_weights()
+
+    @property
+    def raw_weights_sum(self) -> float:
+        raw_weights_sum = np.sum(self._get_raw_weights())
+        assert isinstance(raw_weights_sum, float)
+        return raw_weights_sum
 
     @staticmethod
     def _get_data_column_name(data_column_names: DataColumnNamesInput) -> Optional[str]:

@@ -2,9 +2,11 @@
 Contains abstract base class for histogram plots --- HistogramPlot.
 """
 import logging
+import numpy as np
+import matplotlib.axes._axes as axes
 
+from matplotlib import figure
 from abc import ABC, abstractmethod
-from matplotlib import figure, axis
 from typing import Optional, Union, Any, Tuple
 
 from templatefitter.binned_distributions.binning import Binning
@@ -13,8 +15,8 @@ from templatefitter.binned_distributions.systematics import SystematicsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType
 
 from templatefitter.plotter import plot_style
-from templatefitter.plotter.histogram import Histogram, HistogramContainer
 from templatefitter.plotter.histogram_variable import HistVariable
+from templatefitter.plotter.histogram import Histogram, HistogramContainer
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -37,21 +39,11 @@ class HistogramPlot(ABC):
         self._last_figure = None  # type: Optional[figure.Figure]
 
     @abstractmethod
-    def plot_on(self) -> Union[Tuple[figure.Figure, axis.Axis], Any]:
+    def plot_on(self) -> Union[axes.Axes, Tuple[figure.Figure, Tuple[axes.Axes, axes.Axes]], Any]:
         raise NotImplementedError(f"The 'plot_on' method is not implemented for the class {self.__class__.__name__}!")
 
     @abstractmethod
-    def add_component(
-            self,
-            label: str,
-            histogram_key: str,
-            data: DataInputType,
-            weights: WeightsInputType = None,
-            systematics: SystematicsInputType = None,
-            hist_type: Optional[str] = None,
-            color: Optional[str] = None,
-            alpha: float = 1.0
-    ) -> None:
+    def add_component(self, label: str, data: DataInputType) -> None:
         raise NotImplementedError(
             f"The 'add_component' method is not implemented for the class {self.__class__.__name__}!"
         )
@@ -91,6 +83,25 @@ class HistogramPlot(ABC):
         return self.binning.bin_edges[0]
 
     @property
+    def bin_widths(self) -> np.ndarray:
+        assert len(self.binning.bin_widths) == 1, self.binning.bin_widths
+        return np.array(self.binning.bin_widths[0])
+
+    @property
+    def bin_mids(self) -> Tuple[float, ...]:
+        assert len(self.binning.bin_mids) == 1, self.binning.bin_mids
+        return self.binning.bin_mids[0]
+
+    @property
+    def number_of_bins(self) -> int:
+        assert len(self.binning.num_bins) == 1, self.binning.num_bins
+        return self.binning.num_bins[0]
+
+    @property
+    def minimal_bin_width(self) -> float:
+        return min(self.bin_widths)
+
+    @property
     def variable(self) -> HistVariable:
         return self._variable
 
@@ -118,14 +129,15 @@ class HistogramPlot(ABC):
         elif self._variable.use_log_scale:
             return f"{evts_or_cands} / Bin"
         else:
-            bin_widths = self.binning.bin_widths[0]
-            assert isinstance(bin_widths, tuple), (bin_widths, type(bin_widths))
-            bin_width = min(bin_widths)
             return "{e} / ({b:.2g}{v})".format(
                 e=evts_or_cands,
-                b=bin_width,
+                b=self.minimal_bin_width,
                 v=" " + self._variable.unit if self._variable.unit else ""
             )
+
+    @property
+    def number_of_histograms(self) -> int:
+        return self._histograms.number_of_histograms
 
     def get_last_figure(self) -> Optional[figure.Figure]:
         return self._last_figure
