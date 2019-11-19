@@ -65,7 +65,7 @@ class Binning:
                 if scope_input is None:
                     raise ValueError(num_error_txt)
                 assert isinstance(scope_input, tuple) and len(scope_input) == 2, (type(scope_input), scope_input)
-                assert all(isinstance(scp, int) for scp in scope_input), scope_input
+                assert all(isinstance(scp, float) for scp in scope_input), scope_input
                 self._num_bins = (bins_input,)
                 self._bin_edges = (self._get_bin_edges(scope=scope_input, bins=bins_input, log=self.log_scale_mask[0]),)
             elif isinstance(bins_input, tuple) and all(isinstance(bin_num, float) for bin_num in bins_input):
@@ -73,7 +73,7 @@ class Binning:
                 self._bin_edges = (bins_input,)
                 if scope_input is not None:
                     assert isinstance(scope_input, tuple) and len(scope_input) == 2, (type(scope_input), scope_input)
-                    assert all(isinstance(scp, int) for scp in scope_input), scope_input
+                    assert all(isinstance(scp, float) for scp in scope_input), scope_input
                     assert scope_input[0] == bins_input[0], scope_error_txt
                     assert scope_input[1] == bins_input[-1], scope_error_txt
             else:
@@ -151,8 +151,8 @@ class Binning:
         return True
 
     def _check_binning(self) -> None:
-        assert self._num_bins is None, "Number of bins is not defined after initialization!"
-        assert self._bin_edges is None, "Bin edges are not defined after initialization!"
+        assert self._num_bins is not None, "Number of bins is not defined after initialization!"
+        assert self._bin_edges is not None, "Bin edges are not defined after initialization!"
 
         assert isinstance(self._bin_edges, tuple)
         assert len(self._bin_edges) == self.dimensions, (len(self._bin_edges), self.dimensions)
@@ -160,13 +160,13 @@ class Binning:
         assert isinstance(self._num_bins, tuple), self._num_bins
         assert all(isinstance(n, int) for n in self._num_bins), self._num_bins
         assert len(self._num_bins) == self.dimensions, (len(self._num_bins), self.dimensions)
-        assert all(len(self._bin_edges[i]) == bins for i, bins in enumerate(self._num_bins)), \
+        assert all(len(self._bin_edges[i]) == bins + 1 for i, bins in enumerate(self._num_bins)), \
             (self._num_bins, self._bin_edges)
 
         assert len(self._bin_mids) == self.dimensions, (len(self._bin_mids), self.dimensions)
-        assert all(len(m) == len(b) for m, b in zip(self._bin_mids, self._num_bins))
+        assert all(len(m) == b for m, b in zip(self._bin_mids, self._num_bins))
         assert len(self._bin_widths) == self.dimensions, (len(self._bin_widths), self.dimensions)
-        assert all(len(w) == len(b) for w, b in zip(self._bin_widths, self._num_bins))
+        assert all(len(w) == b for w, b in zip(self._bin_widths, self._num_bins))
         assert len(self._range) == self.dimensions, (len(self._range), self.dimensions)
         assert all(len(r) == 2 for r in self._range)
 
