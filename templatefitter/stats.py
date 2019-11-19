@@ -1,18 +1,29 @@
+"""
+Provides statistical methods for goodness of fit test
+"""
+
 import numpy as np
+
 from scipy.stats import chi2
 from scipy.integrate import quad
+from typing import Optional, Union, Tuple
 
 __all__ = [
     "pearson_chi2_test",
     "cowan_binned_likelihood_gof",
-    "toy_chi2_test"
+    "toy_chi2_test",
+    "ToyInfoOutputType"
 ]
 
+ToyInfoOutputType = Tuple[np.ndarray, np.ndarray, np.ndarray]
 
-# -- goodness of fit statistics --
 
-
-def pearson_chi2_test(data, expectation, dof, error=None):
+def pearson_chi2_test(
+        data: np.ndarray,
+        expectation: np.ndarray,
+        dof: int,
+        error: Optional[np.ndarray] = None
+) -> Tuple[float, int, float]:
     """
     Performs a Pearson :math:`\chi^2`-test.
     This test reflects the level of agreement between observed
@@ -62,7 +73,7 @@ def pearson_chi2_test(data, expectation, dof, error=None):
     return chi_sq, dof, p_val
 
 
-def cowan_binned_likelihood_gof(data, expectation, dof):
+def cowan_binned_likelihood_gof(data: np.ndarray, expectation: np.ndarray, dof: int) -> Tuple[float, int, float]:
     """
     Performs a GOF-test using a test statistic based on a
     binned likelihood function.
@@ -108,12 +119,10 @@ def cowan_binned_likelihood_gof(data, expectation, dof):
     return chi_sq, dof, p_val
 
 
-def calc_chi_squared(obs, exp, exp_unc):
+def calc_chi_squared(obs: np.ndarray, exp: np.ndarray, exp_unc: np.ndarray) -> Union[float, np.ndarray]:
     """
-    Calculates the chi squared difference between an expected and an observed
-    histogrammed distribution.
-    If obs is 2-dimensional (contains multiple histogramms), an array of
-    chi squared values will be returned.
+    Calculates the chi squared difference between an expected and an observed histogrammed distribution.
+    If obs is 2-dimensional (contains multiple histograms), an array of chi squared values will be returned.
 
     Parameters
     ----------
@@ -138,7 +147,14 @@ def calc_chi_squared(obs, exp, exp_unc):
         return np.sum(np.nan_to_num((obs - exp) ** 2 / exp_unc))
 
 
-def mc_chi_squared_from_toys(obs, exp, exp_unc, mc_cov=None, toys_size=1000000, seed=13377331):
+def mc_chi_squared_from_toys(
+        obs: np.ndarray,
+        exp: np.ndarray,
+        exp_unc: np.ndarray,
+        mc_cov: Optional[np.ndarray] = None,
+        toys_size: int = 1000000,
+        seed: int = 13377331
+) -> Tuple[float, np.ndarray]:
     """
     Evaluates chi squared difference of expected and observed histogrammed
     distributions and obtains the chi squared distribution for exp via toy
@@ -187,7 +203,13 @@ def mc_chi_squared_from_toys(obs, exp, exp_unc, mc_cov=None, toys_size=1000000, 
     return obs_chi_squared, toy_chi_squared
 
 
-def toy_chi2_test(data, expectation, error, mc_cov=None, toys_size=1000000):
+def toy_chi2_test(
+        data: np.ndarray,
+        expectation: np.ndarray,
+        error: np.ndarray,
+        mc_cov: Optional[np.ndarray] = None,
+        toys_size: int = 1000000
+) -> Tuple[float, float, ToyInfoOutputType]:
     """
     Performs a GoF-test using a test statistic based on toy MC sampled
     from the expected distribution.
@@ -222,9 +244,10 @@ def toy_chi2_test(data, expectation, error, mc_cov=None, toys_size=1000000):
     )
 
     bc, be = np.histogram(toys, bins=100, density=True)
-
     bm = (be[1:] + be[:-1]) / 2
     bw = (be[1:] - be[:-1])
+
     p_val = np.sum(bc[bm > obs_chi2] * bw[bm > obs_chi2])
+    assert isinstance(p_val, float)
 
     return obs_chi2, p_val, (bc, be, toys)
