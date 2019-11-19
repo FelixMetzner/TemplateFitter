@@ -572,7 +572,7 @@ class DataMCHistogramPlot(HistogramPlot):
             ncols=1,
             figsize=fig_size,
             dpi=200,
-            sharex='none',
+            sharex="all",
             gridspec_kw={"height_ratios": [height_ratio[0], height_ratio[1]]}
         )
 
