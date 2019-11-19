@@ -5,8 +5,8 @@ import logging
 import numpy as np
 import matplotlib.axes._axes as axes
 
-from matplotlib import figure
 from abc import ABC, abstractmethod
+from matplotlib import figure, pyplot as plt
 from typing import Optional, Union, Any, Tuple
 
 from templatefitter.binned_distributions.binning import Binning
@@ -31,6 +31,10 @@ class HistogramPlot(ABC):
     """
     Base class for histogram plots.
     """
+
+    legend_cols_default = 1
+    legend_loc_default = plt.rcParams["legend.loc"]
+    legend_font_size_default = plt.rcParams["legend.fontsize"]
 
     def __init__(self, variable: HistVariable):
         self._variable = variable  # type: HistVariable
@@ -105,6 +109,10 @@ class HistogramPlot(ABC):
     def variable(self) -> HistVariable:
         return self._variable
 
+    @property
+    def number_of_histograms(self) -> int:
+        return self._histograms.number_of_histograms
+
     def reset_binning_to_use_raw_data_range(self) -> None:
         self._histograms.reset_binning_to_use_raw_data_range_of_all()
 
@@ -135,9 +143,34 @@ class HistogramPlot(ABC):
                 v=" " + self._variable.unit if self._variable.unit else ""
             )
 
-    @property
-    def number_of_histograms(self) -> int:
-        return self._histograms.number_of_histograms
+    def draw_legend(
+            self,
+            axis: axes.Axes,
+            inside: bool,
+            loc: Optional[Union[int, str]] = None,
+            ncols: Optional[int] = None,
+            y_axis_scale: Optional[float] = None,
+            font_size: Optional[Union[int, float, str]] = None,
+            bbox_to_anchor_tuple: Tuple[float, float] = None
+    ) -> None:
+        if loc is None:
+            loc = self.legend_loc_default
+        if ncols is None:
+            ncols = self.legend_cols_default
+        if font_size is None:
+            font_size = self.legend_font_size_default
+
+        if inside:
+            axis.legend(frameon=False, loc=loc, ncol=ncols, fontsize=font_size)
+
+            if y_axis_scale is not None:
+                y_limits = axis.get_ylim()
+                axis.set_ylim(bottom=y_limits[0], top=y_axis_scale * y_limits[1])
+        else:
+            if bbox_to_anchor_tuple is None:
+                bbox_to_anchor_tuple = (1., 1.)
+
+            axis.legend(frameon=False, loc=loc, ncol=ncols, bbox_to_anchor=bbox_to_anchor_tuple)
 
     def get_last_figure(self) -> Optional[figure.Figure]:
         return self._last_figure

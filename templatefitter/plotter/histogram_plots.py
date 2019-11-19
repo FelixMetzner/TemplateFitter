@@ -18,17 +18,20 @@ from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.systematics import SystematicsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType
 
-from templatefitter.stats import pearson_chi2_test, cowan_binned_likelihood_gof, toy_chi2_test
+from templatefitter.stats import pearson_chi2_test, cowan_binned_likelihood_gof, toy_chi2_test, ToyInfoOutputType
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "SimpleHistogramPlot",
     "StackedHistogramPlot",
-    "DataMCHistogramPlot"
+    "DataMCHistogramPlot",
+    "DataMCComparisonOutputType"
 ]
 
 plot_style.set_matplotlibrc_params()
+
+DataMCComparisonOutputType = Tuple[Optional[float], Optional[int], Optional[float], Optional[ToyInfoOutputType]]
 
 
 class SimpleHistogramPlot(HistogramPlot):
@@ -87,12 +90,7 @@ class SimpleHistogramPlot(HistogramPlot):
         ax.set_ylabel(self._get_y_label(normed=normed, evts_or_cands=y_label), plot_style.ylabel_pos)
 
         if draw_legend:
-            if legend_inside:
-                ax.legend(frameon=False)
-                y_limits = ax.get_ylim()
-                ax.set_ylim(bottom=y_limits[0], top=y_axis_scale * y_limits[1])
-            else:
-                ax.legend(frameon=False, bbox_to_anchor=(1, 1))
+            self.draw_legend(axis=ax, inside=legend_inside, y_axis_scale=y_axis_scale)
 
         return ax
 
@@ -151,12 +149,7 @@ class StackedHistogramPlot(HistogramPlot):
         ax.set_ylabel(self._get_y_label(normed=False, evts_or_cands=y_label), plot_style.ylabel_pos)
 
         if draw_legend:
-            if legend_inside:
-                ax.legend(frameon=False)
-                y_limits = ax.get_ylim()
-                ax.set_ylim(bottom=y_limits[0], top=y_axis_scale * y_limits[1])
-            else:
-                ax.legend(frameon=False, bbox_to_anchor=(1, 1))
+            self.draw_legend(axis=ax, inside=legend_inside, y_axis_scale=y_axis_scale)
 
         return ax
 
@@ -168,6 +161,9 @@ class DataMCHistogramPlot(HistogramPlot):
 
     data_key = "data_histogram"
     mc_key = "mc_histogram"
+
+    legend_cols_default = 2
+    legend_loc_default = 0
 
     def __init__(self, variable: HistVariable):
         super().__init__(variable=variable)
@@ -249,7 +245,7 @@ class DataMCHistogramPlot(HistogramPlot):
             plot_outlier_indicators: bool = True,
             adaptive_binning: bool = False,
             y_scale: float = 1.1
-    ) -> Tuple[float, int, float, float]:
+    ) -> DataMCComparisonOutputType:
         ax1, ax2 = self._check_axes_input(ax1=ax1, ax2=ax2)
         self._last_figure = ax1.get_figure()
 
@@ -260,11 +256,6 @@ class DataMCHistogramPlot(HistogramPlot):
             ratio_type=ratio_type
         )
 
-        if legend_cols is None:
-            legend_cols = 2
-        if legend_loc is None:
-            legend_loc = 0
-
         if adaptive_binning:
             self._histograms.apply_adaptive_binning_based_on_key(
                 key=self.mc_key,
@@ -274,30 +265,14 @@ class DataMCHistogramPlot(HistogramPlot):
 
         bin_scaling = 1. / np.around(self.bin_widths / self.minimal_bin_width, decimals=0)
 
-        sum_w = np.sum(np.array(self._histograms[self.mc_key].get_bin_counts()), axis=0)
+        sum_w, sum_w2, norm_factor = self.get_sum_info_for_component(
+            component_key=self.mc_key,
+            data_key=self.data_key,
+            normalize_to_data=normalize_to_data,
+            include_sys=include_sys
+        )
 
-        if normalize_to_data:
-            norm_factor = self._histograms[self.data_key].raw_data_size / self._histograms[self.mc_key].raw_weight_sum
-            sum_w = sum_w * norm_factor
-        else:
-            norm_factor = 1.
-
-        sum_w2_stat_only = np.sum(np.array([np.histogram(
-            mc_component.raw_data,
-            bins=self.bin_edges,
-            weights=np.square(mc_component.raw_weights * norm_factor)
-        )[0] for mc_component in self._histograms[self.mc_key].components]), axis=0)
-
-        if include_sys:
-            sys_uncert2 = self._histograms[self.mc_key].get_systematic_uncertainty_per_bin()
-            if sys_uncert2 is not None:
-                sum_w2 = sum_w2_stat_only + sys_uncert2
-            else:
-                sum_w2 = sum_w2_stat_only
-        else:
-            sum_w2 = sum_w2_stat_only
-
-        data_bin_count = self._histograms[self.data_key].get_bin_counts()
+        data_bin_count = self._histograms[self.data_key].get_bin_count_of_component(index=0)
 
         if style.lower() == "stacked":
             ax1.hist(
@@ -347,36 +322,22 @@ class DataMCHistogramPlot(HistogramPlot):
             label=self._histograms[self.data_key].labels[0]
         )
 
-        ax1.set_ylabel(self._get_y_label(normed=False, evts_or_cands=y_label), plot_style.ylabel_pos)
-
-        toy_output = None
-        dof = self.number_of_bins - 1 if normalize_to_data else self.number_of_bins
-        if gof_check_method is not None and gof_check_method.lower() == "pearson":
-            chi2, ndf, p_val = pearson_chi2_test(data=data_bin_count, expectation=sum_w, dof=dof)
-        elif gof_check_method is not None and gof_check_method.lower() == "cowan":
-            chi2, ndf, p_val = cowan_binned_likelihood_gof(data=data_bin_count, expectation=sum_w, dof=dof)
-        elif gof_check_method is not None and gof_check_method.lower() == "toys":
-            chi2, p_val, toy_output = toy_chi2_test(
-                data=data_bin_count,
-                expectation=sum_w,
-                error=data_bin_count,
-                mc_cov=self._histograms[self.mc_key].get_covariance_matrix()
-            )
-            ndf = dof
-        else:
-            chi2, ndf, p_val = (None, None, None)
+        chi2, ndf, p_val, toy_output = self.do_goodness_of_fit_test(
+            method=gof_check_method,
+            mc_bin_count=sum_w,
+            data_bin_count=data_bin_count,
+            mc_is_normalized_to_data=normalize_to_data
+        )
 
         if draw_legend:
-            if legend_inside:
-                if style == "stacked":
-                    ax1.legend(frameon=False, ncol=legend_cols, loc=legend_loc, fontsize="smaller")
-                else:
-                    ax1.legend(frameon=False, ncol=legend_cols, loc=legend_loc)
+            if style == "stacked":
+                self.draw_legend(axis=ax1, inside=legend_inside, loc=legend_loc, ncols=legend_cols,
+                                 font_size="smaller", y_axis_scale=y_scale)
             else:
-                ax1.legend(frameon=False, bbox_to_anchor=(1, 1))
+                self.draw_legend(axis=ax1, inside=legend_inside, loc=legend_loc, ncols=legend_cols,
+                                 y_axis_scale=y_scale)
 
-        y_limits = ax1.get_ylim()
-        ax1.set_ylim(bottom=0., top=y_scale * y_limits[1])
+        ax1.set_ylabel(self._get_y_label(normed=False, evts_or_cands=y_label), plot_style.ylabel_pos)
 
         ax2.set_xlabel(self._variable.x_label, plot_style.xlabel_pos)
 
@@ -459,6 +420,82 @@ class DataMCHistogramPlot(HistogramPlot):
         plt.subplots_adjust(hspace=0.08)
 
         return chi2, ndf, p_val, toy_output
+
+    def get_sum_info_for_component(
+            self,
+            component_key: Optional[str] = None,
+            data_key: Optional[str] = None,
+            normalize_to_data: bool = False,
+            include_sys: bool = False
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        if component_key is None:
+            component_key = self.mc_key
+        if component_key not in self._histograms.histogram_keys:
+            raise KeyError(f"Histogram key '{component_key}' was not added to the {self.__class__.__name__} "
+                           f"instance!\nAvailable histogram keys are: {self._histograms.histogram_keys}")
+
+        if data_key is None:
+            data_key = self.data_key
+        if data_key not in self._histograms.histogram_keys:
+            raise KeyError(f"Histogram key '{data_key}' was not added to the {self.__class__.__name__} "
+                           f"instance!\nAvailable histogram keys are: {self._histograms.histogram_keys}")
+
+        sum_w = np.sum(np.array(self._histograms[component_key].get_bin_counts()), axis=0)
+
+        if normalize_to_data:
+            norm_factor = self._histograms[data_key].raw_data_size / self._histograms[component_key].raw_weight_sum
+            sum_w = sum_w * norm_factor
+        else:
+            norm_factor = 1.
+
+        sum_w2_stat_only = np.sum(np.array([np.histogram(
+            mc_component.raw_data,
+            bins=self.bin_edges,
+            weights=np.square(mc_component.raw_weights * norm_factor)
+        )[0] for mc_component in self._histograms[component_key].components]), axis=0)
+
+        sum_w2 = sum_w2_stat_only
+
+        if include_sys:
+            sys_uncertainty_squared = self._histograms[component_key].get_systematic_uncertainty_per_bin()
+            if sys_uncertainty_squared is not None:
+                sum_w2 += sys_uncertainty_squared
+
+        assert len(sum_w.shape) == 1, sum_w.shape
+        assert sum_w.shape[0] == self.number_of_bins, (sum_w.shape, self.number_of_bins)
+        assert sum_w.shape == sum_w2.shape, (sum_w.shape, sum_w2.shape)
+
+        return sum_w, sum_w2, norm_factor
+
+    def do_goodness_of_fit_test(
+            self,
+            method: Optional[str],
+            mc_bin_count: np.ndarray,
+            data_bin_count: np.ndarray,
+            mc_is_normalized_to_data: bool
+    ) -> DataMCComparisonOutputType:
+        if method is None:
+            return None, None, None, None
+
+        dof = self.number_of_bins - 1 if mc_is_normalized_to_data else self.number_of_bins
+
+        if method.lower() == "pearson":
+            chi2, ndf, p_val = pearson_chi2_test(data=data_bin_count, expectation=mc_bin_count, dof=dof)
+            return chi2, ndf, p_val, None
+        elif method.lower() == "cowan":
+            chi2, ndf, p_val = cowan_binned_likelihood_gof(data=data_bin_count, expectation=mc_bin_count, dof=dof)
+            return chi2, ndf, p_val, None
+        elif method.lower() == "toys":
+            chi2, p_val, toy_output = toy_chi2_test(
+                data=data_bin_count,
+                expectation=mc_bin_count,
+                error=data_bin_count,
+                mc_cov=self._histograms[self.mc_key].get_covariance_matrix()
+            )
+            return chi2, dof, p_val, toy_output
+        else:
+            raise ValueError(f"The provided goodness of fit method identifier '{method}' is not valid!\n"
+                             f"It must be one of {DataMCHistogramPlot.valid_gof_methods}!")
 
     @staticmethod
     def _check_style_settings_input(style: str, ratio_type: str, gof_check_method: Optional[str]) -> None:
