@@ -33,7 +33,7 @@ def get_combined_covariance(distributions: DistributionContainerInputType) -> np
         ([len(d.systematics) for d in distributions])
 
     if all(len(dist.systematics) == 0 for dist in distributions):
-        return np.eye(common_binning.num_bins_total)
+        return np.zeros((common_binning.num_bins_total, common_binning.num_bins_total))
 
     cov = np.zeros((common_binning.num_bins_total, common_binning.num_bins_total))
 

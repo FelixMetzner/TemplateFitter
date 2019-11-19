@@ -191,7 +191,8 @@ def mc_chi_squared_from_toys(
     obs_chi_squared = calc_chi_squared(obs, exp, exp_unc)
 
     np.random.seed(seed=seed)
-    if mc_cov is None:
+    if mc_cov is None or not np.any(mc_cov):
+        # if covariance matrix is None or contains only zeros (checked with "not np.any(mc_cov)"): use poisson approach
         toys = np.random.poisson(exp, size=(toys_size, len(exp)))
     else:
         toys = np.random.multivariate_normal(mean=exp, cov=mc_cov, size=toys_size)
