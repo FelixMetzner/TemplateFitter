@@ -57,8 +57,8 @@ class BinnedDistribution:
         self._name = name
         self._binning = Binning(bins=bins, dimensions=dimensions, scope=scope, log_scale=log_scale_mask)
 
-        self._bin_counts = np.zeros(self.num_bins)
-        self._bin_errors_sq = np.zeros(self.num_bins)
+        self._bin_counts = None
+        self._bin_errors_sq = None
         self._shape = self._bin_counts.shape
         self._check_shapes()
 
@@ -80,23 +80,26 @@ class BinnedDistribution:
             weights: WeightsInputType = None,
             systematics: SystematicsInputType = None
     ) -> None:
+        assert self.is_empty
         self._base_data = self._get_base_info(in_data=input_data, in_weights=weights, in_systematics=systematics)
 
         bins = [np.array(list(edges)) for edges in self.bin_edges]
 
-        self._bin_counts += np.histogramdd(
+        self._bin_counts = np.histogramdd(
             sample=self._base_data.data,
             weights=self._base_data.weights,
             bins=bins,
             range=self.range
         )[0]
+        assert self._bin_counts.shape == self.num_bins, (self._bin_counts.shape, self.num_bins)
 
-        self._bin_errors_sq += np.histogramdd(
+        self._bin_errors_sq = np.histogramdd(
             sample=self._base_data.data,
-            weights=self._base_data.weights ** 2,
+            weights=np.square(self._base_data.weights),
             bins=bins,
             range=self.range
         )[0]
+        assert self._bin_errors_sq.shape == self.num_bins, (self._bin_errors_sq.shape, self.num_bins)
 
         self.is_empty = False
 
@@ -267,6 +270,22 @@ class BinnedDistribution:
         if self._bin_errors_sq is None:
             return None
         return np.sqrt(self._bin_errors_sq)
+
+    def bin_errors_sq_with_normalization(self, normalization_factor: Optional[float]) -> Union[None, np.ndarray]:
+        if self.is_empty:
+            return None
+
+        if normalization_factor is None or normalization_factor == 1.:
+            return self.bin_errors_sq
+
+        bin_errors_sq = np.histogramdd(
+            sample=self._base_data.data,
+            weights=np.square(self._base_data.weights * normalization_factor),
+            bins=[np.array(list(edges)) for edges in self.bin_edges],
+            range=self.range
+        )[0]
+        assert bin_errors_sq.shape == self.num_bins, (bin_errors_sq.shape, self.num_bins)
+        return bin_errors_sq
 
     @property
     def systematics(self) -> SystematicsInfo:

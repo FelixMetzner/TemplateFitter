@@ -34,8 +34,6 @@ __all__ = [
 plot_style.set_matplotlibrc_params()
 
 
-# TODO: Handling of systematics via distributions_utility.get_combined_covariance
-# TODO: Handling of statistical uncertainty
 class Histogram:
     """
     Class which holds several HistogramComponents,
@@ -132,6 +130,12 @@ class Histogram:
     def get_bin_count_of_component(self, index: int) -> np.ndarray:
         return self._components[index].get_histogram_bin_count(binning=self.binning)
 
+    def get_statistical_uncertainty_per_bin(self, normalization_factor: Optional[float] = None) -> np.ndarray:
+        return np.sum([
+            component.get_histogram_squared_bin_errors(binning=self.binning, normalization_factor=normalization_factor)
+            for component in self._components
+        ], axis=0)
+
     def get_systematic_uncertainty_per_bin(self) -> Optional[np.ndarray]:
         cov = self.get_covariance_matrix()
         if cov is not None:
@@ -153,10 +157,6 @@ class Histogram:
 
     def get_component(self, index: int) -> HistComponent:
         return self._components[index]
-
-    @property
-    def components(self) -> List[HistComponent]:
-        return self._components
 
     @property
     def variable(self) -> HistVariable:
@@ -181,6 +181,11 @@ class Histogram:
     @property
     def binning(self) -> Binning:
         return self._binning
+
+    @property
+    def number_of_bins(self) -> int:
+        assert len(self.binning.num_bins) == 1, self.binning.num_bins
+        return self.binning.num_bins[0]
 
     def reset_binning(self, new_binning: Binning) -> None:
         self._binning = new_binning

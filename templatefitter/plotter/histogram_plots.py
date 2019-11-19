@@ -384,12 +384,9 @@ class DataMCHistogramPlot(HistogramPlot):
         else:
             norm_factor = 1.
 
-        sum_w2_stat_only = np.sum(np.array([np.histogram(
-            mc_component.raw_data,
-            bins=self.bin_edges,
-            weights=np.square(mc_component.raw_weights * norm_factor)
-        )[0] for mc_component in self._histograms[component_key].components]), axis=0)
-
+        sum_w2_stat_only = self._histograms[component_key].get_statistical_uncertainty_per_bin(
+            normalization_factor=norm_factor
+        )
         sum_w2 = sum_w2_stat_only
 
         if include_sys:

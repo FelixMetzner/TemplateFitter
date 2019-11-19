@@ -72,6 +72,12 @@ class HistComponent:
         assert bin_count is not None
         return bin_count
 
+    def get_histogram_squared_bin_errors(self, binning: Binning, normalization_factor: Optional[float]) -> np.ndarray:
+        binned_dist = self.get_underlying_binned_distribution(binning=binning)
+        bin_errors_sq = binned_dist.bin_errors_sq_with_normalization(normalization_factor=normalization_factor)
+        assert bin_errors_sq is not None
+        return bin_errors_sq
+
     def get_underlying_binned_distribution(self, binning: Binning) -> BinnedDistribution:
         if self._binned_distribution is not None:
             if binning == self._binned_distribution.binning:
