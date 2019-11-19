@@ -68,14 +68,30 @@ class Binning:
                 assert all(isinstance(scp, float) for scp in scope_input), scope_input
                 self._num_bins = (bins_input,)
                 self._bin_edges = (self._get_bin_edges(scope=scope_input, bins=bins_input, log=self.log_scale_mask[0]),)
-            elif isinstance(bins_input, tuple) and all(isinstance(bin_num, float) for bin_num in bins_input):
-                self._num_bins = (len(bins_input) - 1,)
-                self._bin_edges = (bins_input,)
+            elif isinstance(bins_input, tuple):
+                if all(isinstance(bin_num, float) for bin_num in bins_input):
+                    self._num_bins = (len(bins_input) - 1,)
+                    self._bin_edges = (bins_input,)
+                elif (all(isinstance(bi, tuple) for bi in bins_input) and len(bins_input) == 1
+                      and all(isinstance(be, float) for be in bins_input[0])):
+                    self._num_bins = (len(bins_input[0]) - 1,)
+                    self._bin_edges = bins_input
+                else:
+                    raise ValueError(error_txt)
+
                 if scope_input is not None:
-                    assert isinstance(scope_input, tuple) and len(scope_input) == 2, (type(scope_input), scope_input)
-                    assert all(isinstance(scp, float) for scp in scope_input), scope_input
-                    assert scope_input[0] == bins_input[0], scope_error_txt
-                    assert scope_input[1] == bins_input[-1], scope_error_txt
+                    if isinstance(scope_input, tuple):
+                        if all(isinstance(scp, float) for scp in scope_input) and len(scope_input) == 2:
+                            assert scope_input[0] == self._bin_edges[0][0], (scope_input, self._bin_edges)
+                            assert scope_input[1] == self._bin_edges[0][-1], (scope_input, self._bin_edges)
+                        elif (all(isinstance(scp, tuple) for scp in scope_input) and len(scope_input) == 1
+                              and all(isinstance(scp, float) for scp in scope_input[0])):
+                            assert scope_input[0][0] == self._bin_edges[0][0], (scope_input, self._bin_edges)
+                            assert scope_input[0][1] == self._bin_edges[0][-1], (scope_input, self._bin_edges)
+                        else:
+                            raise ValueError(scope_error_txt)
+                    else:
+                        raise ValueError(scope_error_txt)
             else:
                 raise ValueError(error_txt)
         else:
