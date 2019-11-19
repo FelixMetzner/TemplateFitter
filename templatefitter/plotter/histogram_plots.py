@@ -265,7 +265,7 @@ class DataMCHistogramPlot(HistogramPlot):
 
         bin_scaling = 1. / np.around(self.bin_widths / self.minimal_bin_width, decimals=0)
 
-        sum_w, sum_w2, norm_factor = self.get_sum_info_for_component(
+        mc_bin_count, mc_uncert, norm_factor = self.get_bin_info_for_component(
             component_key=self.mc_key,
             data_key=self.data_key,
             normalize_to_data=normalize_to_data,
@@ -289,9 +289,9 @@ class DataMCHistogramPlot(HistogramPlot):
 
             ax1.bar(
                 x=self.bin_mids,
-                height=2 * np.sqrt(sum_w2),
+                height=2 * np.sqrt(mc_uncert),
                 width=self.bin_widths,
-                bottom=sum_w * bin_scaling - np.sqrt(sum_w2),
+                bottom=mc_bin_count * bin_scaling - np.sqrt(mc_uncert),
                 color="black",
                 hatch="///////",
                 fill=False,
@@ -301,9 +301,9 @@ class DataMCHistogramPlot(HistogramPlot):
         elif style.lower() == "summed":
             ax1.bar(
                 x=self.bin_mids,
-                height=2 * np.sqrt(sum_w2),
+                height=2 * np.sqrt(mc_uncert),
                 width=self.bin_widths,
-                bottom=sum_w * bin_scaling - np.sqrt(sum_w2),
+                bottom=mc_bin_count * bin_scaling - np.sqrt(mc_uncert),
                 color=sum_color,
                 lw=0,
                 label="MC" if not normalize_to_data else r"MC $\times$ " + f"{norm_factor:.2f}"
@@ -324,7 +324,7 @@ class DataMCHistogramPlot(HistogramPlot):
 
         chi2, ndf, p_val, toy_output = self.do_goodness_of_fit_test(
             method=gof_check_method,
-            mc_bin_count=sum_w,
+            mc_bin_count=mc_bin_count,
             data_bin_count=data_bin_count,
             mc_is_normalized_to_data=normalize_to_data
         )
@@ -344,8 +344,8 @@ class DataMCHistogramPlot(HistogramPlot):
             axis=ax2,
             ratio_type=ratio_type,
             data_bin_count=data_bin_count,
-            mc_bin_count=sum_w,
-            mc_error_sq=sum_w2,
+            mc_bin_count=mc_bin_count,
+            mc_error_sq=mc_uncert,
             markers_with_width=markers_with_width,
             systematics_are_included=include_sys,
             marker_color=plot_style.KITColors.kit_black,
@@ -357,7 +357,7 @@ class DataMCHistogramPlot(HistogramPlot):
 
         return chi2, ndf, p_val, toy_output
 
-    def get_sum_info_for_component(
+    def get_bin_info_for_component(
             self,
             component_key: Optional[str] = None,
             data_key: Optional[str] = None,
@@ -376,29 +376,29 @@ class DataMCHistogramPlot(HistogramPlot):
             raise KeyError(f"Histogram key '{data_key}' was not added to the {self.__class__.__name__} "
                            f"instance!\nAvailable histogram keys are: {self._histograms.histogram_keys}")
 
-        sum_w = np.sum(np.array(self._histograms[component_key].get_bin_counts()), axis=0)
+        component_bin_count = np.sum(np.array(self._histograms[component_key].get_bin_counts()), axis=0)
 
         if normalize_to_data:
             norm_factor = self._histograms[data_key].raw_data_size / self._histograms[component_key].raw_weight_sum
-            sum_w = sum_w * norm_factor
+            component_bin_count *= norm_factor
         else:
             norm_factor = 1.
 
-        sum_w2_stat_only = self._histograms[component_key].get_statistical_uncertainty_per_bin(
+        component_stat_uncert = self._histograms[component_key].get_statistical_uncertainty_per_bin(
             normalization_factor=norm_factor
         )
-        sum_w2 = sum_w2_stat_only
+        component_uncert = component_stat_uncert
 
         if include_sys:
             sys_uncertainty_squared = self._histograms[component_key].get_systematic_uncertainty_per_bin()
             if sys_uncertainty_squared is not None:
-                sum_w2 += sys_uncertainty_squared
+                component_uncert += sys_uncertainty_squared
 
-        assert len(sum_w.shape) == 1, sum_w.shape
-        assert sum_w.shape[0] == self.number_of_bins, (sum_w.shape, self.number_of_bins)
-        assert sum_w.shape == sum_w2.shape, (sum_w.shape, sum_w2.shape)
+        assert len(component_bin_count.shape) == 1, component_bin_count.shape
+        assert component_bin_count.shape[0] == self.number_of_bins, (component_bin_count.shape, self.number_of_bins)
+        assert component_bin_count.shape == component_uncert.shape, (component_bin_count.shape, component_uncert.shape)
 
-        return sum_w, sum_w2, norm_factor
+        return component_bin_count, component_uncert, norm_factor
 
     def do_goodness_of_fit_test(
             self,
