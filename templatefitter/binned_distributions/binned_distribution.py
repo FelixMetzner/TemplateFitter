@@ -59,7 +59,7 @@ class BinnedDistribution:
 
         self._bin_counts = None
         self._bin_errors_sq = None
-        self._shape = self._bin_counts.shape
+        self._shape = self.num_bins
         self._check_shapes()
 
         self._data_column_names = None
