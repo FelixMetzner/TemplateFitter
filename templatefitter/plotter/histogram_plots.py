@@ -338,84 +338,20 @@ class DataMCHistogramPlot(HistogramPlot):
                                  y_axis_scale=y_scale)
 
         ax1.set_ylabel(self._get_y_label(normed=False, evts_or_cands=y_label), plot_style.ylabel_pos)
-
         ax2.set_xlabel(self._variable.x_label, plot_style.xlabel_pos)
 
-        if ratio_type.lower() == "normal":
-            ax2.set_ylabel(r"$\frac{\mathrm{Data - MC}}{\mathrm{Data}}$")
-            ax2.set_ylim(bottom=-1., top=1.)
-        if ratio_type.lower() == "vs_uncert":
-            if include_sys:
-                ax2.set_ylabel(r"$\frac{\mathrm{Data - MC}}{\sigma_\mathrm{stat + sys}^\mathrm{Data - MC}}$")
-            else:
-                ax2.set_ylabel(r"$\frac{\mathrm{Data - MC}}{\sigma_\mathrm{stat}^\mathrm{Data - MC}}$")
-
-        try:
-            uh_data = unp.uarray(data_bin_count, np.sqrt(data_bin_count))
-            uh_mc = unp.uarray(sum_w, np.sqrt(sum_w2))
-
-            if ratio_type.lower() == "normal":
-                divisor = copy.deepcopy(uh_data)
-                divisor[divisor == 0] = ufloat(0.01, 0.1)
-            elif ratio_type.lower() == "vs_uncert":
-                divisor = unp.uarray(unp.std_devs(uh_data - uh_mc), 0.)
-                divisor[divisor == 0] = ufloat(0.01, 0.1)
-            else:
-                divisor = None
-
-            ratio = (uh_data - uh_mc) / divisor
-
-            ratio[(uh_data == 0.) & (uh_mc == 0.)] = ufloat(0., 0.)
-
-            if ratio_type.lower() == "normal":
-                ratio[np.logical_xor((uh_data == 0.), (uh_mc == 0.))] = ufloat(-99, 0.)
-
-            if ratio_type.lower() == "vs_uncert":
-                max_val_mask = (uh_data != 0.) & (uh_mc != 0.) & ((uh_data - uh_mc) != 0)
-                max_val = np.around(max(
-                    abs(np.min(unp.nominal_values(ratio[max_val_mask]) - unp.std_devs(ratio[max_val_mask]))),
-                    abs(np.max(unp.nominal_values(ratio[max_val_mask]) + unp.std_devs(ratio[max_val_mask])))
-                ), decimals=1)
-                assert isinstance(max_val, float), (type(max_val), max_val)
-                ax2.set_ylim(bottom=-1. * max_val, top=max_val)
-            else:
-                max_val = 1.
-
-            ax2.axhline(y=0, color=plot_style.KITColors.dark_grey, alpha=0.8)
-            ax2.errorbar(
-                self.bin_mids,
-                unp.nominal_values(ratio),
-                yerr=unp.std_devs(ratio),
-                xerr=self.bin_widths / 2 if markers_with_width else None,
-                ls="",
-                marker=".",
-                color=plot_style.KITColors.kit_black
-            )
-
-            for bin_mid, r_val, mc_val, data_val in zip(self.bin_mids, ratio, uh_mc, uh_data):
-                if mc_val == 0. and ((data_val != 0. and ratio_type.lower() != "vs_uncert")
-                                     or (abs(r_val) > max_val and ratio_type.lower() == "vs_uncert")):
-                    ax2.text(x=bin_mid, y=+0.1 * max_val, s="No MC", fontsize=5, rotation=90, ha="center", va="bottom")
-                    ax2.text(x=bin_mid, y=+0.1 * max_val, s=f"#Data={int(unp.nominal_values(data_val))}", fontsize=5,
-                             rotation=90, ha="center", va="bottom")
-                elif data_val == 0. and ((mc_val != 0. and ratio_type.lower() != "vs_uncert")
-                                         or (abs(r_val) > max_val and ratio_type.lower() == "vs_uncert")):
-                    ax2.text(x=bin_mid, y=+0.1 * max_val, s=f"#MC={unp.nominal_values(mc_val):.0f}", fontsize=5,
-                             rotation=90, ha="center", va="bottom")
-                    ax2.text(x=bin_mid, y=-0.1 * max_val, s="No Data", fontsize=5, rotation=90, ha="center", va="top")
-                elif r_val > 1.0 and plot_outlier_indicators:
-                    ax2.text(x=bin_mid, y=+0.08 * max_val, s=f"{unp.nominal_values(r_val):3.2f}" + r"$\rightarrow$",
-                             fontsize=5, rotation=90, ha="right", va="bottom")
-                elif r_val < -1.0 and plot_outlier_indicators:
-                    ax2.text(x=bin_mid, y=-0.08 * max_val, s=r"$\leftarrow$" + f"{unp.nominal_values(r_val):3.2f}",
-                             fontsize=5, rotation=90, ha="right", va="top")
-                else:
-                    pass
-
-        except ZeroDivisionError:
-            ax2.text(x=self.bin_mids[int(np.ceil(len(self.bin_mids) / 2.))], y=0.1,
-                     s="DataMCHistogramPlot: ZeroDivisionError occurred!", fontsize=8, ha="center", va="bottom")
-            ax2.axhline(y=0, color=plot_style.KITColors.dark_grey, alpha=0.8)
+        self.add_residual_ratio_plot(
+            axis=ax2,
+            ratio_type=ratio_type,
+            data_bin_count=data_bin_count,
+            mc_bin_count=sum_w,
+            mc_error_sq=sum_w2,
+            markers_with_width=markers_with_width,
+            systematics_are_included=include_sys,
+            marker_color=plot_style.KITColors.kit_black,
+            include_outlier_info=True,
+            plot_outlier_indicators=plot_outlier_indicators
+        )
 
         plt.subplots_adjust(hspace=0.08)
 
@@ -496,6 +432,99 @@ class DataMCHistogramPlot(HistogramPlot):
         else:
             raise ValueError(f"The provided goodness of fit method identifier '{method}' is not valid!\n"
                              f"It must be one of {DataMCHistogramPlot.valid_gof_methods}!")
+
+    def add_residual_ratio_plot(
+            self,
+            axis: axes.Axes,
+            ratio_type: str,
+            data_bin_count: np.ndarray,
+            mc_bin_count: np.ndarray,
+            mc_error_sq: np.ndarray,
+            markers_with_width: bool = True,
+            systematics_are_included: bool = False,
+            marker_color: str = plot_style.KITColors.kit_black,
+            include_outlier_info: bool = False,
+            plot_outlier_indicators: bool = False
+    ) -> None:
+        if ratio_type.lower() == "normal":
+            axis.set_ylabel(r"$\frac{\mathrm{Data - MC}}{\mathrm{Data}}$")
+        elif ratio_type.lower() == "vs_uncert":
+            if systematics_are_included:
+                axis.set_ylabel(r"$\frac{\mathrm{Data - MC}}{\sigma_\mathrm{stat + sys}^\mathrm{Data - MC}}$")
+            else:
+                axis.set_ylabel(r"$\frac{\mathrm{Data - MC}}{\sigma_\mathrm{stat}^\mathrm{Data - MC}}$")
+        else:
+            raise ValueError(f"The provided ratio_type '{ratio_type}' is not valid!\n"
+                             f"The ratio_type must be one of {DataMCHistogramPlot.valid_ratio_types}!")
+
+        try:
+            uh_data = unp.uarray(data_bin_count, np.sqrt(data_bin_count))
+            uh_mc = unp.uarray(mc_bin_count, np.sqrt(mc_error_sq))
+
+            if ratio_type.lower() == "normal":
+                divisor = copy.deepcopy(uh_data)
+            elif ratio_type.lower() == "vs_uncert":
+                divisor = unp.uarray(unp.std_devs(uh_data - uh_mc), 0.)
+            else:
+                divisor = None
+
+            divisor[divisor == 0] = ufloat(0.01, 0.1)
+            ratio = (uh_data - uh_mc) / divisor
+            ratio[(uh_data == 0.) & (uh_mc == 0.)] = ufloat(0., 0.)
+
+            if ratio_type.lower() == "normal":
+                ratio[np.logical_xor((uh_data == 0.), (uh_mc == 0.))] = ufloat(-99, 0.)
+                max_val = 1.
+                axis.set_ylim(bottom=-1. * max_val, top=1. * max_val)
+            elif ratio_type.lower() == "vs_uncert":
+                max_val_mask = (uh_data != 0.) & (uh_mc != 0.) & ((uh_data - uh_mc) != 0)
+                max_val = np.around(max(
+                    abs(np.min(unp.nominal_values(ratio[max_val_mask]) - unp.std_devs(ratio[max_val_mask]))),
+                    abs(np.max(unp.nominal_values(ratio[max_val_mask]) + unp.std_devs(ratio[max_val_mask])))
+                ), decimals=1)
+                assert isinstance(max_val, float), (type(max_val), max_val)
+                axis.set_ylim(bottom=-1. * max_val, top=max_val)
+            else:
+                max_val = None
+
+            axis.axhline(y=0, color=plot_style.KITColors.dark_grey, alpha=0.8)
+            axis.errorbar(
+                self.bin_mids,
+                unp.nominal_values(ratio),
+                yerr=unp.std_devs(ratio),
+                xerr=self.bin_widths / 2 if markers_with_width else None,
+                ls="",
+                marker=".",
+                color=marker_color
+            )
+
+            if not include_outlier_info:
+                return
+
+            for bin_mid, r_val, mc_val, data_val in zip(self.bin_mids, ratio, uh_mc, uh_data):
+                if mc_val == 0. and ((data_val != 0. and ratio_type.lower() != "vs_uncert")
+                                     or (abs(r_val) > max_val and ratio_type.lower() == "vs_uncert")):
+                    axis.text(x=bin_mid, y=+0.1 * max_val, s="No MC", fontsize=5, rotation=90, ha="center", va="bottom")
+                    axis.text(x=bin_mid, y=+0.1 * max_val, s=f"#Data={int(unp.nominal_values(data_val))}", fontsize=5,
+                              rotation=90, ha="center", va="bottom")
+                elif data_val == 0. and ((mc_val != 0. and ratio_type.lower() != "vs_uncert")
+                                         or (abs(r_val) > max_val and ratio_type.lower() == "vs_uncert")):
+                    axis.text(x=bin_mid, y=+0.1 * max_val, s=f"#MC={unp.nominal_values(mc_val):.0f}", fontsize=5,
+                              rotation=90, ha="center", va="bottom")
+                    axis.text(x=bin_mid, y=-0.1 * max_val, s="No Data", fontsize=5, rotation=90, ha="center", va="top")
+                elif r_val > 1.0 and plot_outlier_indicators:
+                    axis.text(x=bin_mid, y=+0.08 * max_val, s=f"{unp.nominal_values(r_val):3.2f}" + r"$\rightarrow$",
+                              fontsize=5, rotation=90, ha="right", va="bottom")
+                elif r_val < -1.0 and plot_outlier_indicators:
+                    axis.text(x=bin_mid, y=-0.08 * max_val, s=r"$\leftarrow$" + f"{unp.nominal_values(r_val):3.2f}",
+                              fontsize=5, rotation=90, ha="right", va="top")
+                else:
+                    pass
+
+        except ZeroDivisionError:
+            axis.text(x=self.bin_mids[int(np.ceil(len(self.bin_mids) / 2.))], y=0.1,
+                      s="DataMCHistogramPlot: ZeroDivisionError occurred!", fontsize=8, ha="center", va="bottom")
+            axis.axhline(y=0, color=plot_style.KITColors.dark_grey, alpha=0.8)
 
     @staticmethod
     def _check_style_settings_input(style: str, ratio_type: str, gof_check_method: Optional[str]) -> None:
