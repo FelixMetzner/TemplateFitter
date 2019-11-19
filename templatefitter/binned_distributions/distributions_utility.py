@@ -365,7 +365,7 @@ def _run_adaptive_binning_for_1d_case(
         min_count = minimal_bin_count
 
     # Starting Condition
-    if (len(bin_edges) - 1) < min_num_of_bins:
+    if (len(bin_edges[0]) - 1) < min_num_of_bins:
         logging.info(f"Adaptive binning stopped via starting condition:\nNumber of bins per dim = {min_num_of_bins}")
         return bin_edges
 
