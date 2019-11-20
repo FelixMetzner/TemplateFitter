@@ -51,8 +51,15 @@ OneOrTwoAxesType = Union[AxesType, Tuple[AxesType, AxesType]]
 
 class FitResultPlot(HistogramPlot):
 
-    def __init__(self, variable: HistVariable, fit_model: FitModel, **kwargs) -> None:
+    def __init__(
+            self,
+            variable: HistVariable,
+            fit_model: FitModel,
+            reference_dimension: int = 0,
+            **kwargs
+    ) -> None:
         super().__init__(variable=variable)
+        self._reference_dimension = reference_dimension
         self._optional_arguments_dict = kwargs  # type: Dict[str, Any]
 
         self._channel_name_list = []  # type: List[str]
@@ -62,6 +69,15 @@ class FitResultPlot(HistogramPlot):
         self._is_initialized = True
 
     def _get_histograms_from_model(self, fit_model: FitModel) -> None:
+        #####
+        # TODO: Either the projection option has to be used, or we have to create separate Histograms per bin of all
+        #       other dimensions. In any way: the dimension which should be used as reference has to be specified!
+        # TODO: The bin edges and so forth have to be chosen correctly from the Binning of the FitModel to
+        #       create the Histograms / the underlying BinnedDistribution
+        #####
+
+        # TODO: Check that column name of reference_dimension agrees with self.variable.df_label
+
         for mc_channel in fit_model.mc_channels_to_plot:
             self._channel_name_list.append(mc_channel.name)
             # TODO: Add latex label property to Channel class!
