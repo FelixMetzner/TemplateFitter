@@ -1442,6 +1442,20 @@ class FitModel:
     def create_chi2(self) -> "CostFunction":
         return Chi2CostFunction(self, parameter_handler=self._params)
 
+    @property
+    def mc_channels_to_plot(self) -> ChannelContainer:
+        if not self._is_initialized:
+            raise RuntimeError("The FitModel is not fully initialized, yet!")
+        return self._channels
+
+    @property
+    def data_channels_to_plot(self) -> DataChannelContainer:
+        if not self._is_initialized:
+            raise RuntimeError("The FitModel is not fully initialized, yet!")
+        return self._data_channels
+
+
+
     # TODO: Remaining functions that have to be looked through if every old functionality is covered:
     # def relative_error_matrix(self):
     #     errors_per_template = [template.errors() for template

@@ -391,8 +391,8 @@ class DataChannelContainer(Sequence):
             binning: Optional[List[Binning]] = None,
             column_names: Optional[Tuple[DataColumnNamesInput]] = None
     ):
-        self._channel_distributions = []
-        self._channels_mapping = {}
+        self._channel_distributions = []  # type: List[BinnedDistribution]
+        self._channels_mapping = {}  # type: Dict[str, int]
         if channel_names is not None:
             self.add_channels(
                 channel_names=channel_names,
@@ -480,7 +480,7 @@ class DataChannelContainer(Sequence):
     def is_empty(self) -> bool:
         return len(self._channel_distributions) == 0
 
-    def __getitem__(self, i) -> Optional[Channel]:
+    def __getitem__(self, i) -> Optional[BinnedDistribution]:
         return self._channel_distributions[i]
 
     def __len__(self) -> int:
