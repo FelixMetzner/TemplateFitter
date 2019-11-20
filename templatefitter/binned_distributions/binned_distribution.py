@@ -67,6 +67,7 @@ class BinnedDistribution:
 
         self._base_data = None
         self._is_empty = True
+        self._was_filled_from_binned = False
 
         self._bin_covariance_matrix = None
         self._bin_correlation_matrix = None
@@ -140,6 +141,7 @@ class BinnedDistribution:
         instance._bin_errors_sq = bin_errors ** 2
 
         instance.is_empty = False
+        instance._was_filled_from_binned = True
         return instance
 
     def _get_base_info(
@@ -279,8 +281,8 @@ class BinnedDistribution:
             return self.bin_errors_sq
 
         bin_errors_sq = np.histogramdd(
-            sample=self._base_data.data,
-            weights=np.square(self._base_data.weights * normalization_factor),
+            sample=self.base_data.data,
+            weights=np.square(self.base_data.weights * normalization_factor),
             bins=[np.array(list(edges)) for edges in self.bin_edges],
             range=self.range
         )[0]
@@ -289,7 +291,7 @@ class BinnedDistribution:
 
     @property
     def systematics(self) -> SystematicsInfo:
-        return self._base_data.systematics
+        return self.base_data.systematics
 
     @property
     def bin_covariance_matrix(self) -> np.ndarray:
@@ -306,8 +308,8 @@ class BinnedDistribution:
 
         for sys_info in self.systematics:
             cov += sys_info.get_covariance_matrix(
-                data=self._base_data.data,
-                weights=self._base_data.weights,
+                data=self.base_data.data,
+                weights=self.base_data.weights,
                 binning=self._binning
             )
 
@@ -351,6 +353,9 @@ class BinnedDistribution:
 
     @property
     def base_data(self) -> BaseDataContainer:
+        if self._was_filled_from_binned:
+            raise RuntimeError("Base data is not available for BinnedDistributions which have been initialized "
+                               "via the fill_from_binned method.\nWhat you are trying to attempt is not possible.")
         return self._base_data
 
     def get_projection_on(self, dimension: int) -> Tuple[np.ndarray, Binning]:
