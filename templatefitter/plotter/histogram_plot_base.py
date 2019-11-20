@@ -22,9 +22,12 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "HistogramPlot",
+    "AxesType"
 ]
 
 plot_style.set_matplotlibrc_params()
+
+AxesType = axes.Axes
 
 
 class HistogramPlot(ABC):
@@ -36,14 +39,14 @@ class HistogramPlot(ABC):
     legend_loc_default = plt.rcParams["legend.loc"]
     legend_font_size_default = plt.rcParams["legend.fontsize"]
 
-    def __init__(self, variable: HistVariable):
+    def __init__(self, variable: HistVariable) -> None:
         self._variable = variable  # type: HistVariable
         self._histograms = HistogramContainer()
 
         self._last_figure = None  # type: Optional[figure.Figure]
 
     @abstractmethod
-    def plot_on(self) -> Union[axes.Axes, Tuple[figure.Figure, Tuple[axes.Axes, axes.Axes]], Any]:
+    def plot_on(self) -> Union[AxesType, Tuple[figure.Figure, Tuple[AxesType, AxesType]], Any]:
         raise NotImplementedError(f"The 'plot_on' method is not implemented for the class {self.__class__.__name__}!")
 
     @abstractmethod
@@ -145,7 +148,7 @@ class HistogramPlot(ABC):
 
     def draw_legend(
             self,
-            axis: axes.Axes,
+            axis: AxesType,
             inside: bool,
             loc: Optional[Union[int, str]] = None,
             ncols: Optional[int] = None,

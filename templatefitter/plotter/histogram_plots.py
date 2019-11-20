@@ -5,14 +5,13 @@ import copy
 import logging
 import numpy as np
 
-import matplotlib.axes._axes as axes
 from typing import Optional, Union, Tuple
 from matplotlib import pyplot as plt, figure
 from uncertainties import unumpy as unp, ufloat
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram_variable import HistVariable
-from templatefitter.plotter.histogram_plot_base import HistogramPlot
+from templatefitter.plotter.histogram_plot_base import HistogramPlot, AxesType
 
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.systematics import SystematicsInputType
@@ -35,7 +34,7 @@ DataMCComparisonOutputType = Tuple[Optional[float], Optional[int], Optional[floa
 
 
 class SimpleHistogramPlot(HistogramPlot):
-    def __init__(self, variable: HistVariable):
+    def __init__(self, variable: HistVariable) -> None:
         super().__init__(variable=variable)
 
     def add_component(
@@ -61,13 +60,13 @@ class SimpleHistogramPlot(HistogramPlot):
 
     def plot_on(
             self,
-            ax: Optional[axes.Axes] = None,
+            ax: Optional[AxesType] = None,
             draw_legend: bool = True,
             legend_inside: bool = True,
             y_axis_scale: float = 1.3,
             normed: bool = False,
             y_label: str = "Events"
-    ) -> axes.Axes:
+    ) -> AxesType:
         if ax is None:
             _, ax = plt.subplots()
         self._last_figure = ax.get_figure()
@@ -96,7 +95,7 @@ class SimpleHistogramPlot(HistogramPlot):
 
 
 class StackedHistogramPlot(HistogramPlot):
-    def __init__(self, variable: HistVariable):
+    def __init__(self, variable: HistVariable) -> None:
         super().__init__(variable=variable)
 
     def add_component(
@@ -120,12 +119,12 @@ class StackedHistogramPlot(HistogramPlot):
 
     def plot_on(
             self,
-            ax: Optional[axes.Axes] = None,
+            ax: Optional[AxesType] = None,
             draw_legend: bool = True,
             legend_inside: bool = True,
             y_axis_scale: float = 1.6,
             y_label: str = "Events"
-    ) -> axes.Axes:
+    ) -> AxesType:
 
         if ax is None:
             _, ax = plt.subplots()
@@ -165,7 +164,7 @@ class DataMCHistogramPlot(HistogramPlot):
     legend_cols_default = 2
     legend_loc_default = 0
 
-    def __init__(self, variable: HistVariable):
+    def __init__(self, variable: HistVariable) -> None:
         super().__init__(variable=variable)
 
     def add_data_component(
@@ -228,8 +227,8 @@ class DataMCHistogramPlot(HistogramPlot):
 
     def plot_on(
             self,
-            ax1: Optional[axes.Axes] = None,
-            ax2: Optional[axes.Axes] = None,
+            ax1: Optional[AxesType] = None,
+            ax2: Optional[AxesType] = None,
             normalize_to_data: bool = True,
             style: str = "stacked",
             ratio_type: str = "normal",
@@ -432,7 +431,7 @@ class DataMCHistogramPlot(HistogramPlot):
 
     def add_residual_ratio_plot(
             self,
-            axis: axes.Axes,
+            axis: AxesType,
             ratio_type: str,
             data_bin_count: np.ndarray,
             mc_bin_count: np.ndarray,
@@ -546,7 +545,7 @@ class DataMCHistogramPlot(HistogramPlot):
         return outlier_indicator_setting
 
     @staticmethod
-    def _check_axes_input(ax1: axes.Axes, ax2: axes.Axes) -> Tuple[axes.Axes, axes.Axes]:
+    def _check_axes_input(ax1: AxesType, ax2: AxesType) -> Tuple[AxesType, AxesType]:
         if ax1 is None and ax2 is None:
             _, (ax1, ax2) = DataMCHistogramPlot.create_hist_ratio_figure()
             return ax1, ax2
@@ -559,7 +558,7 @@ class DataMCHistogramPlot(HistogramPlot):
     def create_hist_ratio_figure(
             fig_size: Tuple[float, float] = (5, 5),
             height_ratio: Tuple[float, float] = (3.5, 1)
-    ) -> Tuple[figure.Figure, Tuple[axes.Axes, axes.Axes]]:
+    ) -> Tuple[figure.Figure, Tuple[AxesType, AxesType]]:
         """
         Create a matplotlib.Figure for histogram ratio plots.
 
