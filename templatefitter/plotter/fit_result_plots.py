@@ -47,6 +47,8 @@ OneOrTwoAxesType = Union[AxesType, Tuple[AxesType, AxesType]]
 #       - we can check if the binning is the same as defined in the variable!
 #       -> Need to differentiate between HistComponent types!
 #       -> Need to update Histogram.add_histogram_component method accordingly
+#
+# TODO: Maybe implement method to generate BinnedDistribution from slice or projection of original BinnedDistribution.
 #########
 
 class FitResultPlot(HistogramPlot):

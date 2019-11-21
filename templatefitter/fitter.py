@@ -1,10 +1,8 @@
-import logging
 import tqdm
-
+import logging
 import numpy as np
 
 from multiprocessing import Pool
-
 from templatefitter.minimizer import *
 
 __all__ = [
