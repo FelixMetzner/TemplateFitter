@@ -960,11 +960,14 @@ class FitModel:
         self._efficiencies_checked = True
 
     def get_bin_nuisance_vector(self, parameter_vector: np.ndarray) -> np.ndarray:
+        return self._params.get_combined_parameters_by_index(
+            parameter_vector=parameter_vector,
+            indices=self.get_bin_nuisance_parameter_indices()
+        )
+
+    def get_bin_nuisance_parameter_indices(self) -> List[int]:
         if self._bin_nuisance_param_indices is not None:
-            return self._params.get_combined_parameters_by_index(
-                parameter_vector=parameter_vector,
-                indices=self._bin_nuisance_param_indices
-            )
+            return self._bin_nuisance_param_indices
 
         bin_nuisance_param_indices = self._params.get_parameter_indices_for_type(
             parameter_type=ParameterHandler.bin_nuisance_parameter_type
@@ -974,11 +977,7 @@ class FitModel:
             self._check_bin_nuisance_parameters()
 
         self._bin_nuisance_param_indices = bin_nuisance_param_indices
-
-        return self._params.get_combined_parameters_by_index(
-            parameter_vector=parameter_vector,
-            indices=self._bin_nuisance_param_indices
-        )
+        return bin_nuisance_param_indices
 
     def _check_bin_nuisance_parameters(self) -> None:
         nu_is = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.bin_nuisance_parameter_type)
