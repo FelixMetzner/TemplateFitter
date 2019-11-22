@@ -214,7 +214,8 @@ class FitModel:
         bin_nuisance_model_params = []
         bin_nuisance_model_param_indices = []
 
-        initial_nuisance_value = 0.  # float, TODO: What is the starting value of the nuisance parameter
+        initial_nuisance_value = 0.
+        nuisance_sigma = 1.0
 
         for counter in range(template.num_bins_total):
             model_param_index, model_parameter = self.add_model_parameter(
@@ -222,8 +223,8 @@ class FitModel:
                 parameter_type=ParameterHandler.bin_nuisance_parameter_type,
                 floating=True,
                 initial_value=initial_nuisance_value,
-                constrain_to_value=None,  # TODO: Should we have a constraint on the nuisance parameter
-                constraint_sigma=None,  # TODO: Should we have a constraint on the nuisance parameter
+                constrain_to_value=initial_nuisance_value,
+                constraint_sigma=nuisance_sigma,
             )
             bin_nuisance_model_params.append(model_parameter)
             bin_nuisance_model_param_indices.append(model_param_index)
