@@ -393,8 +393,9 @@ class ParameterHandler:
     @staticmethod
     def _check_parameter_types(parameter_types: List[str]):
         for parameter_type in parameter_types:
-            raise ValueError(f"Trying to add new parameter with unknown parameter_type {parameter_type}!\n"
-                             f"Parameter_type must be one of {ParameterHandler.parameter_types}!")
+            if parameter_type not in ParameterHandler.parameter_types:
+                raise ValueError(f"Trying to add new parameter with unknown parameter_type {parameter_type}!\n"
+                                 f"Parameter_type must be one of {ParameterHandler.parameter_types}!")
 
     @staticmethod
     def _check_constraint_input(constraint_value: Optional[float], constraint_sigma: Optional[float]):
