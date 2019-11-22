@@ -30,9 +30,6 @@ class Channel(Sequence):
             components: Optional[List[Component]] = None
     ):
         self._channel_components = []
-        if components is not None:
-            self.add_components(components=components)
-
         super().__init__()
 
         self._params = params
@@ -41,6 +38,9 @@ class Channel(Sequence):
         self._channel_index = None
 
         self._efficiency_parameters = None
+
+        if components is not None:
+            self.add_components(components=components)
 
     def add_component(self, component: Component) -> int:
         if not isinstance(component, Component):
