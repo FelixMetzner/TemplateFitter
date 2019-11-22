@@ -280,7 +280,7 @@ class FitModel:
                 raise ValueError("The argument 'templates 'takes a list of Templates, integers or strings, but you "
                                  "provided " + f"an object of type {type(templates)}" if not isinstance(templates, list)
                                  else f"a list containing the types {[type(t) for t in templates]}")
-            if shared_yield is None:
+            if shared_yield is None and len(templates) > 1:
                 raise ValueError("If you want to directly create and add a component, you have to specify whether the "
                                  "templates of the component shall share their yields via the boolean parameter "
                                  "'shared_yields'!")
