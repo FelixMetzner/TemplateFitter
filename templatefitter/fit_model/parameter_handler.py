@@ -499,8 +499,8 @@ class Parameter(ABC):
                  f"\n\tinitial value: {self._initial_value}" \
                  f"\n\tconstraint value: {self._constraint_value}" \
                  f"\n\tconstraint sigma: {self._constraint_sigma}"
-        if self._additional_info is not None:
-            output += self._additional_info
+        if self._additional_info() is not None:
+            output += self._additional_info()
         return output
 
     def __eq__(self, other: "Parameter") -> bool:
