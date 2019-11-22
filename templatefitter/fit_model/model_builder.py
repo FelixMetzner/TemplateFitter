@@ -108,6 +108,8 @@ class FitModel:
         self._chi2_calculation_checked = False
         self._nll_calculation_checked = False
 
+        self._floating_nuisance_parameter_indices = None
+
     def add_model_parameter(
             self,
             name: str,
@@ -1442,6 +1444,22 @@ class FitModel:
     def create_chi2(self) -> "CostFunction":
         return Chi2CostFunction(self, parameter_handler=self._params)
 
+    def update_parameters(self, parameter_vector: np.ndarray) -> None:
+        self._params.update_parameters(parameter_vector=parameter_vector)
+
+    @property
+    def floating_nuisance_parameter_indices(self) -> List[int]:
+        if self._floating_nuisance_parameter_indices is not None:
+            return self._floating_nuisance_parameter_indices
+        all_bin_nuisance_parameter_indices = self.get_bin_nuisance_parameter_indices()
+        floating_nuisance_parameter_indices = []
+        for floating_index, all_index in enumerate(all_bin_nuisance_parameter_indices):
+            if self._params.floating_parameter_mask[all_index]:
+                floating_nuisance_parameter_indices.append(floating_index)
+
+        self._floating_nuisance_parameter_indices = floating_nuisance_parameter_indices
+        return floating_nuisance_parameter_indices
+
     @property
     def mc_channels_to_plot(self) -> ChannelContainer:
         if not self._is_initialized:
@@ -1453,8 +1471,6 @@ class FitModel:
         if not self._is_initialized:
             raise RuntimeError("The FitModel is not fully initialized, yet!")
         return self._data_channels
-
-
 
     # TODO: Remaining functions that have to be looked through if every old functionality is covered:
     # def relative_error_matrix(self):
