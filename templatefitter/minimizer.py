@@ -9,24 +9,29 @@ import numpy as np
 import numdifftools as ndt
 
 from iminuit import Minuit
-from collections import namedtuple
 from scipy.optimize import minimize
 from abc import ABC, abstractmethod
 
-from templatefitter.utility import cov2corr, id_to_index
+from typing import Union, Optional, Tuple, List, Dict, Any, Callable, NamedTuple
+
+from templatefitter.utility import cov2corr
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
-    "Parameters",
+    "MinimizerParameters",
     "AbstractMinimizer",
     "IMinuitMinimizer",
     "ScipyMinimizer",
     "minimizer_factory",
+    "MinimizeResult",
+    "BoundType"
 ]
 
+BoundType = Tuple[Optional[float], Optional[float]]
 
-class Parameters:
+
+class MinimizerParameters:
     """
     Container for parameters used by the Minimizer class.
     Maps parameters described as arrays to names and indices.
@@ -40,24 +45,25 @@ class Parameters:
         List of parameter names.
     """
 
-    def __init__(self, names):
+    def __init__(self, names: List[str]) -> None:
         self._names = names
-        self._nparams = len(names)
-        self._values = np.zeros(len(names))
-        self._errors = np.zeros(len(names))
-        self._covariance = np.zeros((len(names), len(names)))
-        self._correlation = np.zeros((len(names), len(names)))
+        self._number_of_params = len(names)
 
-    def __str__(self):
-        data = {
-            "No": list(range(self._nparams)),
+        self._values = np.zeros(self._number_of_params)
+        self._errors = np.zeros(self._number_of_params)
+        self._covariance = np.zeros((self._number_of_params, self._number_of_params))
+        self._correlation = np.zeros((self._number_of_params, self._number_of_params))
+
+    def __str__(self) -> str:
+        data = {  # type: Dict[str, Any]
+            "No": list(range(self.num_params)),
             "Name": self._names,
             "Value": self._values,
             "Sym. Err": self.errors
         }
         return tabulate.tabulate(data, headers="keys")
 
-    def get_param_value(self, param_id):
+    def get_param_value(self, param_id: Union[int, str]) -> float:
         """
         Returns value of parameter specified by `param_id`.
 
@@ -73,7 +79,7 @@ class Parameters:
         param_index = self.param_id_to_index(param_id)
         return self.values[param_index]
 
-    def get_param_error(self, param_id):
+    def get_param_error(self, param_id: Union[int, str]) -> float:
         """
         Returns error of parameter specified by `param_id`.
 
@@ -89,7 +95,7 @@ class Parameters:
         param_index = self.param_id_to_index(param_id)
         return self.errors[param_index]
 
-    def __getitem__(self, param_id):
+    def __getitem__(self, param_id: Union[int, str]) -> Tuple[float, float]:
         """
         Gets the value and error of the specified parameter.
 
@@ -108,7 +114,7 @@ class Parameters:
         param_index = self.param_id_to_index(param_id)
         return self.values[param_index], self.errors[param_index]
 
-    def param_id_to_index(self, param_id):
+    def param_id_to_index(self, param_id: Union[int, str]) -> int:
         """
         Returns the index of the parameter specified by `param_id`.
 
@@ -121,78 +127,95 @@ class Parameters:
         -------
         int
         """
-        return id_to_index(self.names, param_id)
+        if isinstance(param_id, int) and (param_id in range(len(self.names))):
+            return param_id
+        elif isinstance(param_id, str) and (param_id in self.names):
+            return self.names.index(param_id)
+        else:
+            raise ValueError(
+                "Specify the parameter either by its name (as str) or by "
+                "its index (as int)."
+            )
 
     @property
-    def names(self):
+    def names(self) -> List[str]:
         """list of str: List of parameter names."""
         return self._names
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         """int: Number of parameters."""
-        return self._nparams
+        return self._number_of_params
 
     @property
-    def values(self):
+    def values(self) -> np.ndarray:
         """np.ndarray: Parameter values. Shape is (`num_params`,)."""
         return self._values
 
     @values.setter
-    def values(self, new_values):
+    def values(self, new_values: np.ndarray) -> None:
         if not len(new_values) == self.num_params:
-            raise ValueError(
-                "Number of parameter values must be equal" " to number of parameters"
-            )
+            raise ValueError(f"Number of parameter values must be equal to number of parameters:\n"
+                             f"\toriginal number of parameters: {self.num_params}\n"
+                             f"\tnew number of parameters: {len(new_values)}")
         self._values = new_values
 
     @property
-    def errors(self):
+    def errors(self) -> np.ndarray:
         """np.ndarray: Parameter errors. Shape is (`num_params`,)."""
         return self._errors
 
     @errors.setter
-    def errors(self, new_errors):
+    def errors(self, new_errors: np.ndarray) -> None:
         if not len(new_errors) == self.num_params:
             raise ValueError("Number of parameter errors must be equal to number of parameters")
         self._errors = new_errors
 
     @property
-    def covariance(self):
+    def covariance(self) -> np.ndarray:
         """ np.ndarray: Parameter covariance matrix. Shape is (`num_params`, `num_params`)."""
         return self._covariance
 
     @covariance.setter
-    def covariance(self, new_covariance):
+    def covariance(self, new_covariance: np.ndarray) -> None:
+        if not new_covariance.shape == (self.num_params, self.num_params):
+            raise ValueError(f"Shape of new covariance matrix {new_covariance.shape} must match "
+                             f"the number of parameters {self.num_params}")
         self._covariance = new_covariance
 
     @property
-    def correlation(self):
-        """np.ndarray: Parameter correlation matrix. Shape is
-         (`num_params`, `num_params`)."""
+    def correlation(self) -> np.ndarray:
+        """np.ndarray: Parameter correlation matrix. Shape is  (`num_params`, `num_params`)."""
         return self._correlation
 
     @correlation.setter
-    def correlation(self, new_correlation):
+    def correlation(self, new_correlation: np.ndarray) -> None:
+        if not new_correlation.shape == (self.num_params, self.num_params):
+            raise ValueError(f"Shape of new correlation matrix {new_correlation.shape} must match "
+                             f"the number of parameters {self.num_params}")
         self._correlation = new_correlation
 
 
-MinimizeResult = namedtuple("MinimizeResult", ["fcn_min_val", "params", "success"])
+class MinimizeResult(NamedTuple):
+    """NamedTuple storing the minimization results."""
+    fcn_min_val: float
+    params: MinimizerParameters
+    success: bool
 
-MinimizeResult.__doc__ = """NamedTuple storing the minimization results."""
+
 MinimizeResult.fcn_min_val.__doc__ = """float: Estimated minimum of the objective function."""
-MinimizeResult.params.__doc__ = """Parameters: An instance of the parameters class."""
+MinimizeResult.params.__doc__ = """MinimizerParameters: An instance of the parameters class."""
 MinimizeResult.success.__doc__ = """bool: Whether or not the optimizer exited successfully."""
 
 
 class AbstractMinimizer(ABC):
-    def __init__(self, fcn, param_names):
+    def __init__(self, fcn: Callable, param_names: List[str]) -> None:
         self._fcn = fcn
-        self._params = Parameters(param_names)
+        self._params = MinimizerParameters(param_names)
 
         # this lists can be different for different minimizer implementations
         self._fixed_params = list()
-        self._param_bounds = [(None, None) for _ in self._params.names]
+        self._param_bounds = [(None, None) for _ in self._params.names]  # type: List[BoundType]
 
         self._fcn_min_val = None
 
@@ -201,18 +224,18 @@ class AbstractMinimizer(ABC):
         self._message = None
 
     @abstractmethod
-    def minimize(self, initial_params, verbose=False):
+    def minimize(self, initial_param_values: np.ndarray, verbose: bool = False, **kwargs) -> MinimizeResult:
         pass
 
     @abstractmethod
-    def set_param_fixed(self, param_id):
+    def set_param_fixed(self, param_id: Union[int, str]) -> None:
         pass
 
     @abstractmethod
-    def release_params(self):
+    def release_params(self) -> None:
         pass
 
-    def set_param_bounds(self, param_id, bounds):
+    def set_param_bounds(self, param_id: Union[int, str], bounds: BoundType) -> None:
         """
         Sets parameter boundaries which constrain the minimization.
 
@@ -230,22 +253,22 @@ class AbstractMinimizer(ABC):
         self._param_bounds[param_index] = bounds
 
     @property
-    def fcn_min_val(self):
+    def fcn_min_val(self) -> Optional[str]:
         """
         str: Value of the objective function at it's estimated minimum.
         """
         return self._fcn_min_val
 
     @property
-    def params(self):
+    def params(self) -> MinimizerParameters:
         """
-        Parameters: Instance of the Parameter class. Stores the parameter values,
+        MinimizerParameters: Instance of the MinimizerParameters class. Stores the parameter values,
         errors, covariance and correlation matrix.
         """
         return self._params
 
     @property
-    def param_values(self):
+    def param_values(self) -> np.ndarray:
         """
         np.ndarray: Estimated parameter values at the minimum of fcn.
         Shape is (`num_params`).
@@ -253,7 +276,7 @@ class AbstractMinimizer(ABC):
         return self._params.values
 
     @property
-    def param_errors(self):
+    def param_errors(self) -> np.ndarray:
         """
         np.ndarray: Estimated parameter values at the minimum of fcn.
         Shape is (`num_params`).
@@ -261,7 +284,7 @@ class AbstractMinimizer(ABC):
         return self._params.errors
 
     @property
-    def param_covariance(self):
+    def param_covariance(self) -> np.ndarray:
         """
         np.ndarray: Estimated covariance matrix of the parameters.
         Calculated from the inverse of the Hesse matrix of fcn evaluated
@@ -270,7 +293,7 @@ class AbstractMinimizer(ABC):
         return self._params.covariance
 
     @property
-    def param_correlation(self):
+    def param_correlation(self) -> np.ndarray:
         """
         np.ndarray: Estimated correlation matrix of the parameters.
         Shape is (`num_params`, `num_params`).
@@ -279,11 +302,17 @@ class AbstractMinimizer(ABC):
 
 
 class IMinuitMinimizer(AbstractMinimizer):
-    def __init__(self, fcn, param_names):
+    def __init__(self, fcn: Callable, param_names):
         super().__init__(fcn, param_names)
         self._fixed_params = [False for _ in self.params.names]
 
-    def minimize(self, initial_params, verbose=False, error_def=0.5, **kwargs):
+    def minimize(
+            self,
+            initial_params: np.ndarray,
+            verbose: bool = False,
+            error_def: float = 0.5,
+            **kwargs
+    ) -> MinimizeResult:
         m = Minuit.from_array_func(
             self._fcn,
             initial_params,
@@ -312,11 +341,11 @@ class IMinuitMinimizer(AbstractMinimizer):
 
         return MinimizeResult(m.fval, self._params, self._success)
 
-    def set_param_fixed(self, param_id):
+    def set_param_fixed(self, param_id: Union[int, str]) -> None:
         param_index = self.params.param_id_to_index(param_id)
         self._fixed_params[param_index] = True
 
-    def release_params(self):
+    def release_params(self) -> None:
         self._fixed_params = [False for _ in self.params.names]
 
 
@@ -337,10 +366,16 @@ class ScipyMinimizer(AbstractMinimizer):
         argument of `fcn` to strings.
     """
 
-    def __init__(self, fcn, param_names):
+    def __init__(self, fcn: Callable, param_names: List[str]):
         super().__init__(fcn, param_names)
 
-    def minimize(self, initial_param_values, additional_args=(), get_hesse=True, verbose=False):
+    def minimize(
+            self,
+            initial_param_values: np.ndarray,
+            verbose: bool = False,
+            additional_args: Tuple[Any] = (),
+            get_hesse: bool = True
+    ) -> MinimizeResult:
         """
         Performs minimization of given objective function.
 
@@ -401,7 +436,7 @@ class ScipyMinimizer(AbstractMinimizer):
 
         return result
 
-    def set_param_fixed(self, param_id):
+    def set_param_fixed(self, param_id: Union[int, str]) -> None:
         """
         Fixes specified parameter to it's initial value given in
         `initial_param_values`.
@@ -415,13 +450,13 @@ class ScipyMinimizer(AbstractMinimizer):
         param_index = self.params.param_id_to_index(param_id)
         self._fixed_params.append(param_index)
 
-    def release_params(self):
+    def release_params(self) -> None:
         """
         Removes all constraint specified.
         """
         self._fixed_params = list()
 
-    def _create_constraints(self, initial_param_values):
+    def _create_constraints(self, initial_param_values: np.ndarray) -> List[Dict[str, Union[str, Callable]]]:
         """
         Creates the dictionary used by scipy's minimize function
         to constrain parameters. The dictionary is used to fix
@@ -441,18 +476,16 @@ class ScipyMinimizer(AbstractMinimizer):
         constraints = list()
 
         for fixed_param in self._fixed_params:
-            constraints.append(
-                {
-                    "type": "eq",
-                    "fun": lambda x: x[fixed_param] - initial_param_values[fixed_param],
-                }
-            )
+            constraints.append({
+                "type": "eq",
+                "fun": lambda x: x[fixed_param] - initial_param_values[fixed_param],
+            })
 
         return constraints
 
     @staticmethod
     @functools.lru_cache(maxsize=128)
-    def calculate_hesse_matrix(fcn, x, args):
+    def calculate_hesse_matrix(fcn: Callable, x: np.ndarray, args: Tuple[Any]) -> np.ndarray:
         """
         Calculates the Hesse matrix of callable `fcn` numerically.
 
@@ -473,7 +506,10 @@ class ScipyMinimizer(AbstractMinimizer):
         return ndt.Hessian(fcn)(x, *args)
 
 
-def minimizer_factory(id, fcn, names):
-    available_minimizer = {"scipy": ScipyMinimizer, "iminuit": IMinuitMinimizer}
+def minimizer_factory(minimizer_id: str, fcn: Callable, names: List[str]) -> AbstractMinimizer:
+    available_minimizer = {
+        "scipy": ScipyMinimizer,
+        "iminuit": IMinuitMinimizer
+    }
 
-    return available_minimizer[id.lower()](fcn, names)
+    return available_minimizer[minimizer_id.lower()](fcn, names)

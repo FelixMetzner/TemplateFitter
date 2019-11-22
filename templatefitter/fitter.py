@@ -3,7 +3,10 @@ import logging
 import numpy as np
 
 from multiprocessing import Pool
+from typing import Union, Tuple, List, Dict
+
 from templatefitter.minimizer import *
+from templatefitter.fit_model.model_builder import FitModel
 
 __all__ = [
     "TemplateFitter",
@@ -11,8 +14,6 @@ __all__ = [
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-
-# TODO work on fixing parameters and stuff
 
 class TemplateFitter:
     """
@@ -22,8 +23,8 @@ class TemplateFitter:
 
     Parameters
     ----------
-    templates : Implemented AbstractTemplate
-        An instance of a template class that provides a negative
+    fit_model : Implemented FitModel
+        An instance of a FitModel class that provides a negative
         log likelihood function via the `create_nll` method.
     minimizer_id : str
         A string specifying the method to be used for  the
@@ -31,18 +32,26 @@ class TemplateFitter:
         'scipy' and 'iminuit'.
     """
 
-    def __init__(self, templates, minimizer_id):
-        self._templates = templates
-        self._nll = templates.create_nll()
-        self._fit_result = None
+    def __init__(
+            self,
+            fit_model: FitModel,
+            minimizer_id: str
+    ) -> None:
+        self._fit_model = fit_model
+        self._nll = self._fit_model.create_nll()
         self._minimizer_id = minimizer_id
-        self._fixed_parameters = list()
-        self._bound_parameters = dict()
 
-    def fix_nui_params(self):
-        pass
+        self._fit_result = None
+        self._fixed_parameters = list()  # type: List[Union[str, int]]
+        self._bound_parameters = dict()  # type: Dict[Union[str, int], BoundType]
 
-    def do_fit(self, update_templates=True, get_hesse=True, verbose=True, fix_nui_params=False):
+    def do_fit(
+            self,
+            update_templates: bool = True,
+            get_hesse: bool = True,
+            verbose: bool = True,
+            fix_nui_params: bool = False
+    ) -> MinimizeResult:
         """
         Performs maximum likelihood fit by minimizing the
         provided negative log likelihood function.
@@ -67,17 +76,17 @@ class TemplateFitter:
         Returns
         -------
         MinimizeResult : namedtuple
-            A namedtuple with the most important information about the
-            minimization.
+            A namedtuple with the most important information about the minimization.
         """
-        minimizer = minimizer_factory(self._minimizer_id, self._nll, self._nll.param_names)
+        minimizer = minimizer_factory(
+            minimizer_id=self._minimizer_id,
+            fcn=self._nll,
+            names=self._nll.param_names
+        )
 
         if fix_nui_params:
-            for i in range(self._templates.num_processes,
-                           self._templates.num_nui_params +
-                           self._templates.num_processes +
-                           self._templates.num_rate_uncertainties):
-                minimizer.set_param_fixed(i)
+            for param_id in self._fit_model.floating_nuisance_parameter_indices:
+                minimizer.set_param_fixed(param_id=param_id)
 
         for param_id in self._fixed_parameters:
             minimizer.set_param_fixed(param_id)
@@ -87,16 +96,16 @@ class TemplateFitter:
 
         fit_result = minimizer.minimize(
             initial_param_values=self._nll.x0,
-            get_hesse=get_hesse,
-            verbose=verbose
+            verbose=verbose,
+            get_hesse=get_hesse
         )
 
         if update_templates:
-            self._templates.update_parameters(fit_result.params.values)
+            self._fit_model.update_parameters(fit_result.params.values)
 
         return fit_result
 
-    def set_parameter_fixed(self, param_id):
+    def set_parameter_fixed(self, param_id: Union[int, str]) -> None:
         """
         Adds parameter to the fixed parameter list.
 
@@ -107,7 +116,7 @@ class TemplateFitter:
         """
         self._fixed_parameters.append(param_id)
 
-    def set_parameter_bounds(self, param_id, bounds):
+    def set_parameter_bounds(self, param_id: Union[str, int], bounds: BoundType) -> None:
         """
         Adds parameter and its boundaries to the bound
         parameter dictionary.
@@ -123,7 +132,11 @@ class TemplateFitter:
         self._bound_parameters[param_id] = bounds
 
     @staticmethod
-    def _get_hesse_approx(param_id, fit_result, profile_points):
+    def _get_hesse_approx(
+            param_id: Union[int, str],
+            fit_result: MinimizeResult,
+            profile_points: np.ndarray
+    ) -> np.ndarray:
         """
         Calculates a gaussian approximation of the negative log
         likelihood function using the Hesse matrix.
@@ -154,7 +167,15 @@ class TemplateFitter:
 
         return hesse_approx
 
-    def profile(self, param_id, num_cpu=4, num_points=100, sigma=2.0, subtract_min=True, fix_nui_params=False):
+    def profile(
+            self,
+            param_id: Union[int, str],
+            num_cpu: int = 4,
+            num_points: int = 100,
+            sigma: float = 2.0,
+            subtract_min: bool = True,
+            fix_nui_params: bool = False
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Performs a profile scan of the negative log likelihood
         function for the specified parameter.
@@ -189,15 +210,14 @@ class TemplateFitter:
         print(f"\nCalculating profile likelihood for parameter: '{param_id}'")
 
         minimizer = minimizer_factory(
-            self._minimizer_id, self._nll, self._nll.param_names
+            minimizer_id=self._minimizer_id,
+            fcn=self._nll,
+            names=self._nll.param_names
         )
 
         if fix_nui_params:
-            for i in range(
-                    self._templates.num_processes,
-                    self._templates.num_nui_params + self._templates.num_processes
-            ):
-                minimizer.set_param_fixed(i)
+            for param_id in self._fit_model.floating_nuisance_parameter_indices:
+                minimizer.set_param_fixed(param_id)
 
         for fix_param_id in self._fixed_parameters:
             minimizer.set_param_fixed(fix_param_id)
@@ -230,18 +250,18 @@ class TemplateFitter:
 
         return profile_points, profile_values, hesse_approx
 
-    def _profile_helper(self, args):
+    def _profile_helper(self, args: Tuple[AbstractMinimizer, float, np.ndarray, Union[int, str], bool]) -> float:
         """
         Helper function for the calculation fo the profile nll.
-
 
         Parameters
         ----------
         args: tuple
             1st element: Minimizer object,
-            2nd element: parameter point,
+            2nd element: Parameter point,
             3rd element: Initial parameter values,
-            4th element: parameter identifier.
+            4th element: Parameter identifier.
+            5th element: Boolean indicator for fixing nuisance parameters.
 
         Returns
         -------
@@ -253,14 +273,15 @@ class TemplateFitter:
         point = args[1]
         initial_values = args[2]
         param_id = args[3]
+        fix_nui_params = args[4]
 
         minimizer.release_params()
         param_index = minimizer.params.param_id_to_index(param_id)
         initial_values[param_index] = point
-        if args[4]:
-            for i in range(self._templates.num_processes,
-                           self._templates.num_nui_params + self._templates.num_processes):
-                minimizer.set_param_fixed(i)
+        if fix_nui_params:
+            for param_id in self._fit_model.floating_nuisance_parameter_indices:
+                minimizer.set_param_fixed(param_id)
+
         minimizer.set_param_fixed(param_id)
         for param_id in self._fixed_parameters:
             minimizer.set_param_fixed(param_id)
@@ -275,7 +296,12 @@ class TemplateFitter:
         return loop_result.fcn_min_val
 
     # TODO this is not yet generic, depends on param name in the likelihood
-    def get_significance(self, process_id, verbose=True, fix_nui_params=False):
+    def get_significance(
+            self,
+            process_name: str,
+            verbose: bool = True,
+            fix_nui_params: bool = False
+    ) -> float:
         """
         Calculate significance for yield parameter of template
         specified by `tid` using the profile likelihood ratio.
@@ -298,8 +324,8 @@ class TemplateFitter:
 
         Parameters
         ----------
-        process_id : str
-            Id of component in the composite template for which the
+        process_name : str
+            Process name as specified in Templates of the FitModel for which the
             significance of the yield parameter should be calculated.
         verbose : bool, optional
             Whether to show output. Default is True.
@@ -314,17 +340,15 @@ class TemplateFitter:
         """
 
         # perform the nominal minimization
-
         minimizer = minimizer_factory(
-            self._minimizer_id, self._nll, self._nll.param_names
+            minimizer_id=self._minimizer_id,
+            fcn=self._nll,
+            names=self._nll.param_names
         )
 
         if fix_nui_params:
-            for i in range(self._templates.num_processes,
-                           self._templates.num_nui_params +
-                           self._templates.num_processes +
-                           self._templates.num_rate_uncertainties):
-                minimizer.set_param_fixed(i)
+            for param_id in self._fit_model.floating_nuisance_parameter_indices:
+                minimizer.set_param_fixed(param_id)
 
         print("Perform nominal minimization:")
         for param_id in self._fixed_parameters:
@@ -334,27 +358,29 @@ class TemplateFitter:
             minimizer.set_param_bounds(param_id, bounds)
         fit_result = minimizer.minimize(self._nll.x0, verbose=verbose)
 
-        if fit_result.params[f"{process_id}_yield"][0] < 0:
-            return 0
+        if fit_result.params[f"{process_name}_yield"][0] < 0:  # TODO: Has to be reworked
+            return 0.
 
         # set signal of template specified by param_id to zero and profile the likelihood
-        self._templates.set_yield(process_id, 0)
+        self._templates.set_yield(process_name, 0)  # TODO: Has to be reworked
 
         minimizer = minimizer_factory(
-            self._minimizer_id, self._nll, self._nll.param_names
+            minimizer_id=self._minimizer_id,
+            fcn=self._nll,
+            names=self._nll.param_names
         )
 
         if fix_nui_params:
-            for i in range(self._templates.num_processes,
-                           self._templates.num_nui_params + self._templates.num_processes):
-                minimizer.set_param_fixed(i)
+            for param_id in self._fit_model.floating_nuisance_parameter_indices:
+                minimizer.set_param_fixed(param_id)
+
         for param_id in self._fixed_parameters:
             minimizer.set_param_fixed(param_id)
 
         for param_id, bounds in self._bound_parameters.items():
             minimizer.set_param_bounds(param_id, bounds)
 
-        minimizer.set_param_fixed(process_id + "_yield")
+        minimizer.set_param_fixed(process_name + "_yield")  # TODO: Has to be reworked
         print("Background")
         profile_result = minimizer.minimize(self._nll.x0, verbose=verbose)
 
