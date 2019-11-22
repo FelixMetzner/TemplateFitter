@@ -1433,8 +1433,8 @@ class FitModel:
             assert isinstance(poisson_term, float), (poisson_term, type(poisson_term))
             self._nll_calculation_checked = True
 
-        return poisson_term + (self._gauss_term(parameter_vector=parameter_vector)
-                               + self._constraint_term(parameter_vector=parameter_vector)) / 2.
+        return poisson_term + 0.5 * (self._gauss_term(parameter_vector=parameter_vector)
+                                     + self._constraint_term(parameter_vector=parameter_vector))
 
     # Using CostFunction class name as type hint, before CostFunction is defined.
     def create_nll(self) -> "CostFunction":
