@@ -675,7 +675,10 @@ class FitModel:
             for channel in self._channels for template in channel.sub_templates
             if template.bin_nuisance_parameters is not None
         ]
-        self._inverse_template_bin_correlation_matrix = block_diag(*inv_corr_mats)
+        if len(inv_corr_mats) == 0:
+            self._inverse_template_bin_correlation_matrix = np.ndarray(shape=(0, 0))
+        else:
+            self._inverse_template_bin_correlation_matrix = block_diag(*inv_corr_mats)
 
     def _check_template_bin_uncertainties(self) -> None:
         assert self._inverse_template_bin_correlation_matrix is not None
