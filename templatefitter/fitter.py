@@ -37,6 +37,11 @@ class TemplateFitter:
             fit_model: FitModel,
             minimizer_id: str
     ) -> None:
+        if minimizer_id not in available_template_fitter_minimizer:
+            raise KeyError(f"The parameter 'minimizer_id' defining the Minimizer to be used must be on of\n"
+                           f"{list(available_template_fitter_minimizer.keys())}\n"
+                           f"You provided: minimizer_id = {minimizer_id}")
+
         self._fit_model = fit_model
         self._nll = self._fit_model.create_nll()
         self._minimizer_id = minimizer_id

@@ -25,7 +25,8 @@ __all__ = [
     "ScipyMinimizer",
     "minimizer_factory",
     "MinimizeResult",
-    "BoundType"
+    "BoundType",
+    "available_template_fitter_minimizer"
 ]
 
 BoundType = Tuple[Optional[float], Optional[float]]
@@ -506,10 +507,11 @@ class ScipyMinimizer(AbstractMinimizer):
         return ndt.Hessian(fcn)(x, *args)
 
 
-def minimizer_factory(minimizer_id: str, fcn: Callable, names: List[str]) -> AbstractMinimizer:
-    available_minimizer = {
-        "scipy": ScipyMinimizer,
-        "iminuit": IMinuitMinimizer
-    }
+available_template_fitter_minimizer = {
+    "scipy": ScipyMinimizer,
+    "iminuit": IMinuitMinimizer
+}
 
-    return available_minimizer[minimizer_id.lower()](fcn, names)
+
+def minimizer_factory(minimizer_id: str, fcn: Callable, names: List[str]) -> AbstractMinimizer:
+    return available_template_fitter_minimizer[minimizer_id.lower()](fcn, names)
