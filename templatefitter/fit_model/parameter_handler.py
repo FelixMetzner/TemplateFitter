@@ -63,6 +63,9 @@ class ParameterHandler:
         self._floating_mask = None
         self._floating_conversion_vector = None
         self._floating_conversion_matrix = None
+        self._floating_parameter_indices = None
+        self._initial_values_of_floating_parameters = None
+
         self._is_finalized = False
 
     def add_parameter(
@@ -184,6 +187,13 @@ class ParameterHandler:
         self._floating_conversion_matrix = self._create_conversion_matrix()
 
         self._check_parameter_conversion()
+
+        self._floating_parameter_indices = np.ndarray([index for index, floating
+                                                       in enumerate(self.floating_parameter_mask) if floating])
+        self._initial_values_of_floating_parameters = np.array([
+            iv for iv, floating in zip(self._parameter_infos, self.floating_parameter_mask) if floating
+        ])
+
         self._is_finalized = True
 
     def _create_floating_parameter_mask(self) -> Tuple[bool, ...]:
@@ -297,8 +307,18 @@ class ParameterHandler:
     def get_parameter_names(self) -> List[str]:
         return list(self._pars_dict.keys())
 
+    def get_floating_parameter_names(self) -> List[str]:
+        return [name for name, floating in zip(self._pars_dict.keys(), self.floating_parameter_mask) if floating]
+
     def get_parameters(self) -> np.ndarray:
         return self._np_pars
+
+    def get_floating_parameters(self) -> np.ndarray:
+        return self._np_pars[self._floating_parameter_indices]
+
+    def get_initial_values_of_floating_parameters(self) -> np.ndarray:
+        assert self._is_finalized
+        return self._initial_values_of_floating_parameters
 
     def set_parameters(self, pars: np.ndarray) -> None:
         if len(pars.shape) != 1:

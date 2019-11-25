@@ -1461,6 +1461,10 @@ class FitModel:
         return floating_nuisance_parameter_indices
 
     @property
+    def names_of_floating_parameters(self) -> List[str]:
+        return self._params.get_floating_parameter_names()
+
+    @property
     def mc_channels_to_plot(self) -> ChannelContainer:
         if not self._is_initialized:
             raise RuntimeError("The FitModel is not fully initialized, yet!")
@@ -1508,10 +1512,10 @@ class AbstractTemplateCostFunction(ABC):
 
     def x0(self) -> np.ndarray:
         """ Returns initial parameters of the model """
-        return self._params.get_parameters()
+        return self._params.get_initial_values_of_floating_parameters()
 
     def param_names(self) -> List[str]:
-        return self._params.get_parameter_names()
+        return self._model.names_of_floating_parameters
 
     @abstractmethod
     def __call__(self, x: np.ndarray) -> float:
