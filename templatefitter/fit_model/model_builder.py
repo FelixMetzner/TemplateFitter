@@ -751,22 +751,17 @@ class FitModel:
         assert len(yield_parameter_indices) == max_number_of_templates, \
             (len(yield_parameter_indices), max_number_of_templates)
 
-        for channel in self._channels:
+        for ch_count, channel in enumerate(self._channels):
             assert channel.total_number_of_templates <= len(yield_parameter_indices), \
                 (channel.total_number_of_templates, len(yield_parameter_indices))
-            for count, (yield_parameter_index, template) in enumerate(zip(
-                    yield_parameter_indices[:channel.total_number_of_templates], channel.templates)):
+            for yield_parameter_index, template in zip(yield_parameter_indices[:channel.total_number_of_templates],
+                                                       channel.templates):
                 yield_parameter_info = self._params.get_parameter_infos_by_index(indices=yield_parameter_index)[0]
                 model_parameter = self._model_parameters[yield_parameter_info.model_index]
-
-                serial_number_index = sum(
-                    [c.total_number_of_templates for c in self._channels[:channel.channel_index]])
-                serial_number_index += count
-                template_serial_number = model_parameter.usage_serial_number_list[serial_number_index]
+                template_serial_number = model_parameter.usage_serial_number_list[ch_count]
                 assert template.serial_number == template_serial_number, \
                     (template.serial_number, template_serial_number)
 
-        # Beginning of OLD Checks
         # Check order of yield parameters:
         yield_parameter_infos = self._params.get_parameter_infos_by_index(indices=indices)
         used_model_parameter_indices = []
@@ -795,13 +790,12 @@ class FitModel:
 
         # Check order of channels:
         min_ind = self.min_number_of_independent_yields
-        if not all(list(dict.fromkeys(channel_orders[0]))[:min_ind] == list(dict.fromkeys(co)[:min_ind])
+        if not all(list(dict.fromkeys(channel_orders[0]))[:min_ind] == list(dict.fromkeys(co))[:min_ind]
                    for co in channel_orders):
             raise RuntimeError(
                 "Channel order differs for different yield model parameters.\n\tParameter Name: Channel Order\n\t"
                 + "\n\t".join([f"{p.name}: co" for co, p in zip(channel_orders, yield_parameter_infos)])
             )
-        # End of OLD Checks
 
         self._yields_checked = True
 
