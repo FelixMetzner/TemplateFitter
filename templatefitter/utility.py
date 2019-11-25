@@ -56,12 +56,9 @@ def corr2cov(corr: np.ndarray, var: np.ndarray) -> np.ndarray:
     return np.matmul(d_matrix, np.matmul(corr, d_matrix))
 
 
-# @jit(nopython=True, parallel=False, cache=True)
 @vectorize([float32(float32, float32),
-            float64(float64, float64)],
-           # target="parallel"
-           )
-def xlogyx(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+            float64(float64, float64)])
+def xlogyx(x, y):
     """
     Compute :math:`x*log(y/x)`to a good precision when :math:`y~x`.
     The xlogyx function is taken from https://github.com/scikit-hep/probfit/blob/master/probfit/_libstat.pyx.
