@@ -282,6 +282,8 @@ class ChannelContainer(Sequence):
         channel_index = self.__len__()
         self._channels.append(channel)
         self._channels_mapping.update({channel.name: channel_index})
+        assert len(self._channels_mapping) == len(self._channels), (len(self._channels_mapping), len(self._channels))
+
         channel.channel_index = channel_index
 
         return channel_index
@@ -297,6 +299,8 @@ class ChannelContainer(Sequence):
         for channel, channel_index in zip(channels, channel_indices):
             channel.channel_index = channel_index
             self._channels_mapping.update({channel.name: channel_index})
+
+        assert len(self._channels_mapping) == len(self._channels), (len(self._channels_mapping), len(self._channels))
 
         return channel_indices
 
@@ -368,7 +372,6 @@ class ChannelContainer(Sequence):
 
     @property
     def channel_mapping(self) -> Dict[str, int]:
-        assert len(self.channel_mapping) == len(self._channels), (len(self.channel_mapping), len(self._channels))
         return self._channels_mapping
 
     def get_channel_by_name(self, name: str) -> Channel:
