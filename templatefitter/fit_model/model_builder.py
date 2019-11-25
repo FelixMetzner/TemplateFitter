@@ -908,8 +908,8 @@ class FitModel:
         if self._efficiency_reshaping_indices is None:
             ntpc = self.number_of_templates  # ntpc = Number of templates per channel
             self._efficiency_padding_required = not all(nt == ntpc[0] for nt in ntpc)
-            self._efficiency_reshaping_indices = [sum([len(temps_in_ch) for temps_in_ch in ntpc[:i + 1]])
-                                                  for i in range(len(ntpc) - 1)]
+            self._efficiency_reshaping_indices = [sum([len(temps_in_ch) for i in range(len(ntpc) - 1)
+                                                       for temps_in_ch in ntpc[:i + 1]])]
 
         eff_params_array_list = np.split(eff_params_array, self._efficiency_reshaping_indices)
 
