@@ -703,6 +703,7 @@ class FitModel:
                 parameter_vector=parameter_vector,
                 indices=self._yield_indices
             )
+        self._check_is_initialized()
 
         indices_from_temps = self._get_yield_parameter_indices()
 
@@ -720,8 +721,6 @@ class FitModel:
         return [t.yield_parameter.index for t in self._channels[channel_with_max].templates]
 
     def _check_yield_parameters(self, yield_parameter_indices: Optional[List[int]]) -> None:
-        self._check_is_initialized()
-
         indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.yield_parameter_type)
 
         if yield_parameter_indices is None:
@@ -813,6 +812,7 @@ class FitModel:
                 indices=self._fraction_indices
             )
 
+        self._check_is_initialized()
         indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.fraction_parameter_type)
 
         if not self._fractions_checked:
@@ -822,8 +822,6 @@ class FitModel:
         return self._params.get_combined_parameters_by_index(parameter_vector=parameter_vector, indices=indices)
 
     def _check_fraction_parameters(self) -> None:
-        self._check_is_initialized()
-
         # Check number of fraction parameters
         assert self.number_of_dependent_templates == self.number_of_fraction_parameters, \
             (self.number_of_dependent_templates, self.number_of_fraction_parameters)
@@ -886,13 +884,13 @@ class FitModel:
         # TODO: Would benefit from allowing constrains, e.g. let them float around MC expectation
         #       -> implement add_constrains method!
         # TODO: Add constraint which ensures that they are normalized?
-
         if self._efficiency_indices is not None:
             return self._get_shaped_efficiency_parameters(
                 parameter_vector=parameter_vector,
                 indices=self._efficiency_indices
             )
 
+        self._check_is_initialized()
         indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.efficiency_parameter_type)
         shaped_efficiency_matrix = self._get_shaped_efficiency_parameters(
             parameter_vector=parameter_vector,
@@ -906,6 +904,8 @@ class FitModel:
         return shaped_efficiency_matrix
 
     def _get_shaped_efficiency_parameters(self, parameter_vector: np.ndarray, indices: List[int]) -> np.ndarray:
+        self._check_is_initialized()
+
         eff_params_array = self._params.get_combined_parameters_by_index(
             parameter_vector=parameter_vector,
             indices=indices
@@ -936,8 +936,6 @@ class FitModel:
         return shaped_effs_matrix
 
     def _check_efficiency_parameters(self) -> None:
-        self._check_is_initialized()
-
         eff_i = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.efficiency_parameter_type)
 
         # Check the number of efficiency parameters, should be the same as the number of templates.
