@@ -1510,10 +1510,12 @@ class AbstractTemplateCostFunction(ABC):
         self._model = model
         self._params = parameter_handler
 
+    @property
     def x0(self) -> np.ndarray:
         """ Returns initial parameters of the model """
         return self._params.get_initial_values_of_floating_parameters()
 
+    @property
     def param_names(self) -> List[str]:
         return self._model.names_of_floating_parameters
 
