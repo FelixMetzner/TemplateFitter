@@ -509,16 +509,6 @@ class FitModel:
                              f"Defined channels: \n\t-" + "\n\t-".join([c.name for c in self._channels])
                              + "\nProvided channels: \n\t-" + "\n\t-".join([c for c in channels.keys()])
                              )
-        if not all(ch.binning == self._channels.get_channel_by_name(name=key).binning for key, ch in channels.items()):
-            miss_matches = [(key, ch.binning, self._channels.get_channel_by_name(name=key).binning)
-                            for key, ch in channels.items()
-                            if ch.binning != self._channels.get_channel_by_name(name=key).binning]
-            miss_matches_formatted = [(k, "\n\t\t".join(d_b.as_string_list), "\n\t\t".join(mc_b.as_string_list))
-                                      for k, d_b, mc_b in miss_matches]
-            raise RuntimeError("Binning of data channels does not match the binning of the defined templates:\n"
-                               + "\n".join([f"Miss match in Channel {key}:\n\tData Channel Binning:\n\t\t{d_b}\n"
-                                            f"\n\tMC Channel Binning:\n\t\t{mc_b}"
-                                            for key, d_b, mc_b in miss_matches_formatted]))
 
         for channel_name, channel_data in channels.items():
             mc_channel = self._channels.get_channel_by_name(name=channel_name)
