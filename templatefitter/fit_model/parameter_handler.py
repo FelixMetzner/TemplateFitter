@@ -287,8 +287,8 @@ class ParameterHandler:
              self._floating_conversion_matrix.shape)
 
         n_floating = sum(self.floating_parameter_mask)
-        assert n_floating == self._floating_conversion_matrix.shape[2], \
-            (n_floating, self._floating_conversion_matrix.shape[2], self._floating_conversion_matrix.shape)
+        assert n_floating == self._floating_conversion_matrix.shape[0], \
+            (n_floating, self._floating_conversion_matrix.shape[0])
 
         assert all(entry == 0 if p_info.floating else p_info.initial_value == entry
                    for p_info, entry in zip(self._parameter_infos, self.conversion_vector)), \
