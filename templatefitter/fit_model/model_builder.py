@@ -1464,6 +1464,12 @@ class FitModel:
     def names_of_floating_parameters(self) -> List[str]:
         return self._params.get_floating_parameter_names()
 
+    def set_initial_parameter_value(self, parameter_name: str, new_initial_value: float) -> None:
+        self._params.set_parameter_initial_value(parameter_name=parameter_name, new_initial_value=new_initial_value)
+
+    def reset_initial_parameter_value(self, parameter_name: str) -> None:
+        self._params.reset_parameter_initial_value(parameter_name=parameter_name)
+
     @property
     def mc_channels_to_plot(self) -> ChannelContainer:
         if not self._is_initialized:

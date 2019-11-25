@@ -40,6 +40,13 @@ class ParameterInfo(NamedTuple):
         return f"Parameter {info_list[0]}:\n" + f"\n\t".join(info_list)
 
 
+class ParameterResetInfo(NamedTuple):
+    index: int
+    name: str
+    new_initial_value: float
+    old_initial_value: float
+
+
 class ParameterHandler:
     yield_parameter_type = "yield"
     fraction_parameter_type = "fraction"
@@ -53,12 +60,13 @@ class ParameterHandler:
     ]
 
     def __init__(self):
-        self._pars = []
+        self._initial_pars = []  # type: List[float]
         self._np_pars = np.array([])
-        self._pars_dict = {}
-        self._inverted_pars_dict = None
-        self._parameter_infos = []
+        self._pars_dict = {}  # type: Dict[str, int]
+        self._inverted_pars_dict = None  # type: Optional[Dict[str, int]]
+        self._parameter_infos = []  # type: List[ParameterInfo]
         self._parameters_by_type = {k: [] for k in ParameterHandler.parameter_types}
+        self._redefined_params_dict = {}  # type: Dict[str, ParameterResetInfo]
 
         self._floating_mask = None
         self._floating_conversion_vector = None
@@ -85,7 +93,7 @@ class ParameterHandler:
         self._check_parameter_types(parameter_types=[parameter_type])
         self._check_constraint_input(constraint_value=constraint_value, constraint_sigma=constraint_sigma)
 
-        parameter_index = len(self._pars)
+        parameter_index = len(self._initial_pars)
         assert parameter_index not in self._pars_dict.values(), (parameter_index, self._pars_dict.values())
         assert parameter_index not in self._parameters_by_type[parameter_type], \
             (parameter_type, parameter_index, self._parameters_by_type[parameter_type], self._parameters_by_type)
@@ -101,17 +109,18 @@ class ParameterHandler:
             constraint_sigma=constraint_sigma
         )
 
-        self._pars.append(initial_value)
-        self._np_pars = np.array(self._pars)
-        assert len(self._pars) == len(self._np_pars), (len(self._pars), len(self._np_pars))
+        self._initial_pars.append(initial_value)
+        self._np_pars = np.array(self._initial_pars)
+        assert len(self._initial_pars) == len(self._np_pars), (len(self._initial_pars), len(self._np_pars))
         self._pars_dict[name] = parameter_index
         self._inverted_pars_dict = None
-        assert len(self._pars) == len(self._pars_dict), (len(self._pars), len(self._pars_dict))
+        assert len(self._initial_pars) == len(self._pars_dict), (len(self._initial_pars), len(self._pars_dict))
         self._parameter_infos.append(parameter_info)
-        assert len(self._pars) == len(self._parameter_infos), (len(self._pars), len(self._parameter_infos))
+        assert len(self._initial_pars) == len(self._parameter_infos), \
+            (len(self._initial_pars), len(self._parameter_infos))
         self._parameters_by_type[parameter_type].append(parameter_index)
-        assert sum(len(values) for values in self._parameters_by_type.values()) == len(self._pars), \
-            (sum(len(values) for values in self._parameters_by_type.values()), len(self._pars))
+        assert sum(len(values) for values in self._parameters_by_type.values()) == len(self._initial_pars), \
+            (sum(len(values) for values in self._parameters_by_type.values()), len(self._initial_pars))
 
         return parameter_index
 
@@ -188,11 +197,8 @@ class ParameterHandler:
 
         self._check_parameter_conversion()
 
-        self._floating_parameter_indices = np.ndarray([index for index, floating
-                                                       in enumerate(self.floating_parameter_mask) if floating])
-        self._initial_values_of_floating_parameters = np.array([
-            iv for iv, floating in zip(self._parameter_infos, self.floating_parameter_mask) if floating
-        ])
+        self._create_floating_parameter_indices_info()
+        self._create_floating_parameter_initial_value_info()
 
         self._is_finalized = True
 
@@ -217,6 +223,24 @@ class ParameterHandler:
                 i_index += 1
 
         return conversion_matrix
+
+    def _create_floating_parameter_indices_info(self) -> None:
+        self._floating_parameter_indices = np.ndarray([
+            index for index, floating in enumerate(self.floating_parameter_mask) if floating
+        ])
+        assert all(fpi == fpi_from_pi for fpi, fpi_from_pi in zip(
+            self._floating_parameter_indices,
+            [index for index, pi in enumerate(self._parameter_infos) if pi.floating]
+        ))
+
+    def _create_floating_parameter_initial_value_info(self) -> None:
+        self._initial_values_of_floating_parameters = np.array([
+            iv for iv, floating in zip(self._initial_pars, self.floating_parameter_mask) if floating
+        ])
+        assert all(iv == iv_from_pi for iv, iv_from_pi in zip(
+            self._initial_values_of_floating_parameters,
+            [pi.initial_value for pi, floating in zip(self._parameter_infos, self.floating_parameter_mask) if floating]
+        ))
 
     @property
     def floating_parameter_mask(self) -> Tuple[bool, ...]:
@@ -279,7 +303,7 @@ class ParameterHandler:
     def get_name(self, index: int) -> str:
         if self._inverted_pars_dict is None:
             self._inverted_pars_dict = {v: k for k, v in self._pars_dict.items()}
-        return self._pars_dict[index]
+        return self._inverted_pars_dict[index]
 
     def get_parameters_by_slice(self, slicing: Tuple[Optional[int], Optional[int]]) -> np.ndarray:
         return self._np_pars[slicing[0]:slicing[1]]
@@ -327,6 +351,49 @@ class ParameterHandler:
             raise ValueError(f"Length of provided parameter array (= {len(pars)}) "
                              f"does not match the length of the existing parameter array (= {len(self._np_pars)})")
         self._np_pars[:] = pars
+
+    def reset_parameters_to_initial_values(self) -> None:
+        initial_values = np.array(self._initial_pars)
+        assert len(initial_values) == len(self._np_pars)
+        self._np_pars[:] = initial_values
+
+    def set_parameter_initial_value(self, parameter_name: str, new_initial_value: float) -> None:
+        if parameter_name not in self._pars_dict:
+            raise KeyError(f"No parameter with the name '{parameter_name}' registered!")
+
+        parameter_index = self._pars_dict[parameter_name]
+        old_value = self._initial_pars[parameter_index]
+        is_floating_parameter = self.floating_parameter_mask[parameter_index]
+
+        self._redefined_params_dict.update({parameter_name: ParameterResetInfo(
+            index=parameter_index,
+            name=parameter_name,
+            new_initial_value=new_initial_value,
+            old_initial_value=old_value
+        )})
+
+        self._np_pars[parameter_index] = new_initial_value
+        self._initial_pars[parameter_index] = new_initial_value
+
+        if is_floating_parameter:
+            self._floating_conversion_vector = self._create_conversion_vector()
+            self._create_floating_parameter_initial_value_info()
+
+    def reset_parameter_initial_value(self, parameter_name: str) -> None:
+        if parameter_name not in self._pars_dict:
+            raise KeyError(f"No parameter with the name '{parameter_name}' registered!")
+        if parameter_name not in self._redefined_params_dict:
+            raise KeyError(f"No reset information for parameter '{parameter_name}' available! Cannot reset parameter!")
+
+        parameter_reset_info = self._redefined_params_dict.pop(parameter_name)
+        is_floating_parameter = self.floating_parameter_mask[parameter_reset_info.index]
+
+        self._initial_pars[parameter_reset_info.index] = parameter_reset_info.old_initial_value
+        self._np_pars[parameter_reset_info.index] = parameter_reset_info.old_initial_value
+
+        if is_floating_parameter:
+            self._floating_conversion_vector = self._create_conversion_vector()
+            self._create_floating_parameter_initial_value_info()
 
     def get_constraint_information(self) -> Tuple[List[int], List[float], List[float]]:
         constraint_param_indices = []
