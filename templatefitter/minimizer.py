@@ -309,15 +309,15 @@ class IMinuitMinimizer(AbstractMinimizer):
 
     def minimize(
             self,
-            initial_params: np.ndarray,
+            initial_param_values: np.ndarray,
             verbose: bool = False,
             error_def: float = 0.5,
             **kwargs
     ) -> MinimizeResult:
         m = Minuit.from_array_func(
             self._fcn,  # parameter 'fcn'
-            initial_params,  # parameter 'start'
-            error=0.05 * initial_params,
+            initial_param_values,  # parameter 'start'
+            error=0.05 * initial_param_values,
             errordef=error_def,
             fix=self._fixed_params,
             name=self.params.names,
