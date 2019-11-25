@@ -600,7 +600,7 @@ class FitModel:
             conversion_vectors.append(np.vstack(vectors_for_channel))
 
         assert all(m.shape[0] == v.shape[0] for m, v in zip(conversion_matrices, conversion_vectors))
-        assert all(m.shape[0] == n_f for m, n_f in zip(conversion_matrices, self.number_of_fraction_parameters))
+        assert all(m.shape[0] == n_f for m, n_f in zip(conversion_matrices, self.number_of_independent_templates))
         assert all(np.array_equal(m, conversion_matrices[0]) for m in conversion_matrices)
         assert all(np.array_equal(v, conversion_vectors[0]) for v in conversion_vectors)
 
