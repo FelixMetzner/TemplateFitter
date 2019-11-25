@@ -314,8 +314,8 @@ class IMinuitMinimizer(AbstractMinimizer):
             **kwargs
     ) -> MinimizeResult:
         m = Minuit.from_array_func(
-            self._fcn,
-            initial_params,
+            self._fcn,  # parameter 'fcn'
+            initial_params,  # parameter 'start'
             error=0.05 * initial_params,
             errordef=error_def,
             fix=self._fixed_params,

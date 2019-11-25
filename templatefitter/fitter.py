@@ -295,16 +295,14 @@ class TemplateFitter:
 
         return loop_result.fcn_min_val
 
-    # TODO this is not yet generic, depends on param name in the likelihood
     def get_significance(
             self,
-            process_name: str,
+            yield_parameter: str,
             verbose: bool = True,
             fix_nui_params: bool = False
     ) -> float:
         """
-        Calculate significance for yield parameter of template
-        specified by `tid` using the profile likelihood ratio.
+        Calculate significance for the specified yield parameter using the profile likelihood ratio.
 
         The significance is base on the profile likelihood ratio
 
@@ -324,9 +322,9 @@ class TemplateFitter:
 
         Parameters
         ----------
-        process_name : str
-            Process name as specified in Templates of the FitModel for which the
-            significance of the yield parameter should be calculated.
+        yield_parameter : str
+            Name of yield_parameter of a fit component of the FitModel
+            for which the significance should be calculated.
         verbose : bool, optional
             Whether to show output. Default is True.
         fix_nui_params : bool, optional
@@ -358,11 +356,11 @@ class TemplateFitter:
             minimizer.set_param_bounds(param_id, bounds)
         fit_result = minimizer.minimize(self._nll.x0, verbose=verbose)
 
-        if fit_result.params[f"{process_name}_yield"][0] < 0:  # TODO: Has to be reworked
+        if fit_result.params[yield_parameter][0] < 0:
             return 0.
 
-        # set signal of template specified by param_id to zero and profile the likelihood
-        self._templates.set_yield(process_name, 0)  # TODO: Has to be reworked
+        # set signal of template related to the specified yield_parameter to zero and profile the likelihood
+        self._fit_model.set_initial_parameter_value(parameter_name=yield_parameter, new_initial_value=0.)
 
         minimizer = minimizer_factory(
             minimizer_id=self._minimizer_id,
@@ -380,10 +378,11 @@ class TemplateFitter:
         for param_id, bounds in self._bound_parameters.items():
             minimizer.set_param_bounds(param_id, bounds)
 
-        minimizer.set_param_fixed(process_name + "_yield")  # TODO: Has to be reworked
+        minimizer.set_param_fixed(yield_parameter)
         print("Background")
         profile_result = minimizer.minimize(self._nll.x0, verbose=verbose)
 
         q0 = 2 * (profile_result.fcn_min_val - fit_result.fcn_min_val)
         logging.debug(f"q0: {q0}")
+        self._fit_model.reset_initial_parameter_value(parameter_name=yield_parameter)
         return np.sqrt(q0)
