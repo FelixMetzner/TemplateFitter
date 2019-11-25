@@ -680,11 +680,17 @@ class FitModel:
     def _check_template_bin_uncertainties(self) -> None:
         assert self._inverse_template_bin_correlation_matrix is not None
         inv_corr_mat = self._inverse_template_bin_correlation_matrix
-        assert len(inv_corr_mat.shape) == 2, inv_corr_mat.shape
-        assert inv_corr_mat.shape[0] == inv_corr_mat.shape[1], inv_corr_mat.shape
+
         expected_dim = sum([temp.num_bins_total for ch in self._channels for temp in ch.sub_templates
                             if temp.bin_nuisance_parameters is not None])
         assert inv_corr_mat.shape[0] == expected_dim, (inv_corr_mat.shape, expected_dim)
+
+        if expected_dim == 0:
+            return
+
+        assert len(inv_corr_mat.shape) == 2, inv_corr_mat.shape
+        assert inv_corr_mat.shape[0] == inv_corr_mat.shape[1], inv_corr_mat.shape
+
         # Checking matrix is symmetric.
         assert np.allclose(inv_corr_mat, inv_corr_mat.T, rtol=1e-05, atol=1e-08), (inv_corr_mat, "Matrix not symmetric")
 
@@ -1366,6 +1372,9 @@ class FitModel:
     @jit
     def _gauss_term(self, parameter_vector: np.ndarray) -> float:
         bin_nuisance_vector = self.get_bin_nuisance_vector(parameter_vector=parameter_vector)
+
+        if len(bin_nuisance_vector) == 0:
+            return 0.
 
         if not self._gauss_term_checked:
             assert len(bin_nuisance_vector.shape) == 1, bin_nuisance_vector.shape
