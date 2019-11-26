@@ -63,16 +63,18 @@ def xlogyx(x, y):
     Compute :math:`x*log(y/x)`to a good precision when :math:`y~x`.
     The xlogyx function is taken from https://github.com/scikit-hep/probfit/blob/master/probfit/_libstat.pyx.
     """
+
+    # TODO: Add a test of this xlogyx function to the unit tests!
     # Method 1
-    if x < 1e-100:
+    if x < 1e-100 or y < 1e-100:
         return 0.
-    elif x < y:
-        return x * np.log1p((y - x) / x)
+    if x < y:
+        res = x * np.log1p((y - x) / x)
     else:
-        return -x * np.log1p((x - y) / y)
+        res = -x * np.log1p((x - y) / y)
+    return res
 
     #  Method 2
-
     # result = np.where(x < y, x * np.log1p((y - x) / x), -x * np.log1p((x - y) / y))
     # return np.nan_to_num(result)
 

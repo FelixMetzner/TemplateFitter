@@ -225,7 +225,7 @@ class ParameterHandler:
         return conversion_matrix
 
     def _create_floating_parameter_indices_info(self) -> None:
-        self._floating_parameter_indices = np.ndarray([
+        self._floating_parameter_indices = np.array([
             index for index, floating in enumerate(self.floating_parameter_mask) if floating
         ])
         assert all(fpi == fpi_from_pi for fpi, fpi_from_pi in zip(
