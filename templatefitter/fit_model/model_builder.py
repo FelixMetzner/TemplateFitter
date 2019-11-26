@@ -1099,6 +1099,8 @@ class FitModel:
 
         if self.number_of_channels > 1:
             bin_count = np.sum(bin_count, axis=1)
+        else:
+            bin_count = np.squeeze(bin_count, axis=0)
 
         if not self._is_checked:
             self._check_bin_count_shape(bin_count=bin_count, where="calculate_expected_bin_count")
