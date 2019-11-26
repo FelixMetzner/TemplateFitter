@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Tuple
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
+from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binning import Binning, LogScaleInputType
 from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataInputType, \
@@ -19,7 +20,11 @@ from templatefitter.binned_distributions.binned_distribution import BinnedDistri
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["Channel", "ChannelContainer", "DataChannelContainer"]
+__all__ = [
+    "Channel",
+    "ChannelContainer",
+    "DataChannelContainer"
+]
 
 
 class Channel(Sequence):
@@ -406,12 +411,15 @@ class DataChannelContainer(Sequence):
 
         super().__init__()
 
+        self._requires_rounding_due_to_weights = False
+
     def add_channels(
             self,
             channel_names: List[str],
             channel_data: List[DataInputType],
             binning: List[Binning],
-            column_names: Tuple[DataColumnNamesInput]
+            column_names: Tuple[DataColumnNamesInput],
+            channel_weights: Optional[List[WeightsInputType]] = None
     ) -> List[int]:
         if not len(channel_names) == len(channel_data):
             raise ValueError(f"You must provide a channel_name for each channel_data set, "
@@ -421,7 +429,11 @@ class DataChannelContainer(Sequence):
                              f"but provided {len(binning)} Binning objects and {len(channel_data)} data sets.")
         if not len(channel_data) == len(column_names):
             raise ValueError(f"You must provide a set of column_names for each channel_data set, "
-                             f"but provided {len(column_names)} column_name sets and {len(channel_data)} data sets.")
+                             f"but provided {len(column_names)} column_name and {len(channel_data)} data sets.")
+        if not ((channel_weights is None) or (len(channel_data) == len(channel_weights))):
+            raise ValueError(f"You must provide a set of channel_weights for each channel_data set or "
+                             f"set channel_weights to None, but you provided {len(channel_weights)} channel_weights "
+                             f"and {len(channel_data)} data sets.")
         if not all(name not in self._channels_mapping.keys() for name in channel_names):
             raise ValueError(f"Data channels with the name(s) "
                              f"{[c for c in channel_names if c in self._channels_mapping]} have already been "
@@ -430,12 +442,18 @@ class DataChannelContainer(Sequence):
         if not len(set(channel_names)) == len(channel_names):
             raise ValueError(f"The channel_names must be unique, but the provided list is not:\n\t{channel_names}")
 
+        if channel_weights is None:
+            ch_weights = [None for _ in range(len(channel_names))]
+        else:
+            ch_weights = channel_weights
+
         channel_indices = []
 
-        for name, data, binning, cols in zip(channel_names, channel_data, binning, column_names):
+        for name, data, weights, binning, cols in zip(channel_names, channel_data, ch_weights, binning, column_names):
             channel_index = self.add_channel(
                 channel_name=name,
                 channel_data=data,
+                channel_weights=weights,
                 binning=binning,
                 column_names=cols
             )
@@ -451,6 +469,7 @@ class DataChannelContainer(Sequence):
             channel_data: DataInputType,
             binning: Binning,
             column_names: DataColumnNamesInput,
+            channel_weights: Optional[WeightsInputType] = None,
             log_scale_mask: LogScaleInputType = False
     ) -> int:
         if channel_name in self._channels_mapping.keys():
@@ -464,11 +483,14 @@ class DataChannelContainer(Sequence):
             scope=binning.range,
             name=f"data_channel_{channel_index}_{channel_name}",
             data=channel_data,
-            weights=None,
+            weights=channel_weights,
             systematics=None,
             data_column_names=column_names,
             log_scale_mask=log_scale_mask
         )
+
+        if channel_weights is not None:
+            self._requires_rounding_due_to_weights = True
 
         self._channel_distributions.append(channel_distribution)
         self._channels_mapping.update({channel_name: channel_index})
@@ -482,6 +504,10 @@ class DataChannelContainer(Sequence):
     @property
     def is_empty(self) -> bool:
         return len(self._channel_distributions) == 0
+
+    @property
+    def requires_rounding_due_to_weights(self) -> bool:
+        return self._requires_rounding_due_to_weights
 
     def __getitem__(self, i) -> Optional[BinnedDistribution]:
         return self._channel_distributions[i]

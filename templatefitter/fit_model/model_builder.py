@@ -17,6 +17,7 @@ from templatefitter.utility import xlogyx
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.binning import Binning
+from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType
 from templatefitter.fit_model.channel import ChannelContainer, Channel, DataChannelContainer
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
@@ -495,7 +496,11 @@ class FitModel:
 
         self._params.add_constraint_to_parameter(index=index, constraint_value=value, constraint_sigma=sigma)
 
-    def add_data(self, channels: Dict[str, DataInputType]):
+    def add_data(
+            self,
+            channels: Dict[str, DataInputType],
+            channel_weights: Optional[Dict[str, WeightsInputType]] = None
+    ) -> None:
         self._check_is_not_finalized()
         assert self._data_channels.is_empty
         if self._has_data is True:
@@ -509,12 +514,20 @@ class FitModel:
                              f"Defined channels: \n\t-" + "\n\t-".join([c.name for c in self._channels])
                              + "\nProvided channels: \n\t-" + "\n\t-".join([c for c in channels.keys()])
                              )
+        if channel_weights is not None:
+            logging.warning("You are adding weights to your data! This should only be done for evaluation on MC "
+                            "(e.g. for Asimov fits or toy studies) so be sure to check if this is the case!")
+            if not list(channel_weights.keys()) == list(channels.keys()):
+                raise ValueError(f"The keys of the dictionaries provided for the parameter 'channels' and "
+                                 f"'channel_weights' do not match!\nKeys of channels dictionary: {channels.keys()}\n"
+                                 f"Keys of channel_weights dictionary: {channel_weights.keys()}")
 
         for channel_name, channel_data in channels.items():
             mc_channel = self._channels.get_channel_by_name(name=channel_name)
             self._data_channels.add_channel(
                 channel_name=channel_name,
                 channel_data=channel_data,
+                channel_weights=None if channel_weights is None else channel_weights[channel_name],
                 binning=mc_channel.binning,
                 column_names=mc_channel.data_column_names
             )
@@ -1155,6 +1168,9 @@ class FitModel:
         flat_data_bin_counts = [data_channel.bin_counts.flatten() for data_channel in self._data_channels]
         padded_flat_data_bin_counts = self._apply_padding_to_data_bin_count(bin_counts_per_channel=flat_data_bin_counts)
         data_bin_count_matrix = np.stack(padded_flat_data_bin_counts)
+
+        if self._data_channels.requires_rounding_due_to_weights:
+            data_bin_count_matrix = np.ceil(data_bin_count_matrix)
 
         if not self._data_bin_count_checked:
             self._check_bin_count_shape(bin_count=data_bin_count_matrix, where="get_flattened_data_bin_counts")
