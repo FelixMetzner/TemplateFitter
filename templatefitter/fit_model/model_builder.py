@@ -1081,6 +1081,10 @@ class FitModel:
         # TODO: Apply smearing based on bin_uncertainties.
         # TODO: Are normed after application of corrections, but this should be done in calculate_expected_bin_count!
         normed_smeared_templates = template_bin_counts
+
+        # Temporary solution for normalization:
+        normed_smeared_templates /= normed_smeared_templates.sum(axis=2)[:, :, np.newaxis]
+
         return normed_smeared_templates
 
     def calculate_expected_bin_count(self, parameter_vector: np.ndarray):
@@ -1107,13 +1111,11 @@ class FitModel:
                     self._fraction_conversion.conversion_matrix @ fraction_parameters
                     + self._fraction_conversion.conversion_vector
             ) * normed_efficiency_parameters.T) @ normed_templates.T).T
-        else:
-            bin_count = ((yield_parameters * normed_efficiency_parameters) @ normed_templates.T).T
+            # TODO: use einsum here, too!
 
-        if self.number_of_channels > 1:
             bin_count = np.sum(bin_count, axis=1)
         else:
-            bin_count = np.squeeze(bin_count, axis=0)
+            bin_count = np.einsum("ij, ijk -> ik", (yield_parameters * normed_efficiency_parameters), normed_templates)
 
         if not self._is_checked:
             self._check_bin_count_shape(bin_count=bin_count, where="calculate_expected_bin_count")
@@ -1141,6 +1143,7 @@ class FitModel:
 
         assert len(yield_params.shape) == 1, (len(yield_params.shape), yield_params.shape)
         assert len(efficiency_params.shape) == 2, (len(efficiency_params.shape), efficiency_params.shape)
+        assert len(templates.shape) == 3, (len(templates.shape), templates.shape)
 
         assert yield_params.shape[0] == efficiency_params.shape[1], \
             (yield_params.shape[0], efficiency_params.shape[1])
