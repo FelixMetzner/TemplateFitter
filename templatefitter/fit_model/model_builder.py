@@ -1107,13 +1107,14 @@ class FitModel:
         )
 
         if self._fraction_conversion.needed:
-            bin_count = ((yield_parameters * (
-                    self._fraction_conversion.conversion_matrix @ fraction_parameters
-                    + self._fraction_conversion.conversion_vector
-            ) * normed_efficiency_parameters.T) @ normed_templates.T).T
-            # TODO: use einsum here, too!
-
-            bin_count = np.sum(bin_count, axis=1)
+            bin_count = np.einsum(
+                "ij, ijk -> ik",
+                (yield_parameters
+                 * (self._fraction_conversion.conversion_matrix @ fraction_parameters
+                    + self._fraction_conversion.conversion_vector)
+                 * normed_efficiency_parameters),
+                normed_templates
+            )
         else:
             bin_count = np.einsum("ij, ijk -> ik", (yield_parameters * normed_efficiency_parameters), normed_templates)
 
