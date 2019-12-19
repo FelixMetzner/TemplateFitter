@@ -102,7 +102,9 @@ class FitModel:
         self._has_constrained_parameters = False
 
         self._template_bin_counts = None
+        self._template_bin_errors_sq = None
         self._template_shapes_checked = False
+        self._template_error_shapes_checked = False
 
         self._gauss_term_checked = False
         self._constraint_term_checked = False
@@ -1035,6 +1037,20 @@ class FitModel:
         self._template_bin_counts = template_bin_counts
         return self._template_bin_counts
 
+    def get_template_bin_errors_sq(self):
+        if self._template_bin_errors_sq is not None:
+            return self._template_bin_errors_sq
+
+        b_errs2_per_channel = [np.stack([tmp.bin_errors_sq.flatten() for tmp in ch.templates]) for ch in self._channels]
+        padded_bin_errors_sq_per_channel = self._apply_padding_to_templates(bin_counts_per_channel=b_errs2_per_channel)
+        template_bin_errors_sq_counts = np.stack(padded_bin_errors_sq_per_channel)
+
+        if not self._template_error_shapes_checked:
+            self._check_template_shapes(template_bin_counts=template_bin_errors_sq_counts, checking_errors=True)
+
+        self._template_bin_errors_sq = template_bin_errors_sq_counts
+        return self._template_bin_errors_sq
+
     def _apply_padding_to_templates(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
         if not self._template_shapes_checked:
             assert all([bc.shape[1] == ch.binning.num_bins_total
@@ -1060,7 +1076,7 @@ class FitModel:
             assert max_n_bins == self.max_number_of_bins_flattened, (max_n_bins, self.max_number_of_bins_flattened)
         return [[(0, 0), (0, max_n_bins - ch.binning.num_bins_total)] for ch in self._channels]
 
-    def _check_template_shapes(self, template_bin_counts: np.ndarray) -> None:
+    def _check_template_shapes(self, template_bin_counts: np.ndarray, checking_errors: bool = False) -> None:
         # Check order of processes in channels:
         assert all(ch.process_names == self._channels[0].process_names for ch in self._channels), \
             [ch.process_names for ch in self._channels]
@@ -1074,7 +1090,10 @@ class FitModel:
         assert template_bin_counts.shape[2] == self.max_number_of_bins_flattened, \
             (template_bin_counts.shape, template_bin_counts.shape[2], self.max_number_of_bins_flattened)
 
-        self._template_shapes_checked = True
+        if not checking_errors:
+            self._template_shapes_checked = True
+        else:
+            self._template_error_shapes_checked = True
 
     def get_templates(self) -> np.ndarray:
         template_bin_counts = self.get_template_bin_counts()
