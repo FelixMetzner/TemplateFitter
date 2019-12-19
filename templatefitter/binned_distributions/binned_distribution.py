@@ -110,7 +110,7 @@ class BinnedDistribution:
             bin_counts: np.ndarray,
             bin_edges: BinEdgesType,
             dimensions: int,
-            bin_errors: Optional[np.ndarray] = None,
+            bin_errors_squared: Optional[np.ndarray] = None,
             name: Optional[str] = None
     ) -> "BinnedDistribution":
         if not len(bin_edges) == dimensions:
@@ -129,16 +129,16 @@ class BinnedDistribution:
             raise ValueError(f"Unexpected shape of provided bin_counts!\n"
                              f"Should be (length of dataset, dimensions) but is {bin_counts.shape}")
 
-        if bin_errors is None:
-            bin_errors = np.sqrt(bin_counts)
+        if bin_errors_squared is None:
+            bin_errors_squared = bin_counts
         else:
-            if not bin_errors.shape == bin_counts.shape:
+            if not bin_errors_squared.shape == bin_counts.shape:
                 raise ValueError(f"Shapes of provided bin_counts {bin_counts.shape} "
-                                 f"and bin_errors {bin_errors.shape} does not match!")
+                                 f"and bin_errors_squared {bin_errors_squared.shape} does not match!")
 
         instance = cls(bins=bin_edges, dimensions=dimensions, name=name)
         instance._bin_counts = bin_counts
-        instance._bin_errors_sq = bin_errors ** 2
+        instance._bin_errors_sq = bin_errors_squared
 
         instance.is_empty = False
         instance._was_filled_from_binned = True
