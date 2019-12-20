@@ -105,6 +105,7 @@ class FitModel:
         self._template_bin_errors_sq = None
         self._template_shapes_checked = False
         self._template_error_shapes_checked = False
+        self._template_stat_error_sq_matrix = None
 
         self._gauss_term_checked = False
         self._constraint_term_checked = False
@@ -145,7 +146,7 @@ class FitModel:
         self._model_parameters_mapping.update({name: model_index})
         return model_index, model_parameter
 
-    def _check_model_parameter_registration(self, model_parameter: ModelParameter):
+    def _check_model_parameter_registration(self, model_parameter: ModelParameter) -> None:
         if model_parameter.parameter_handler is not self._params:
             raise ValueError(f"The model parameter you are trying to register uses a different ParameterHandler "
                              f"than the model you are trying to register it to!\n"
@@ -535,7 +536,7 @@ class FitModel:
             )
         self._has_data = True
 
-    def finalize_model(self):
+    def finalize_model(self) -> None:
         if not self._has_data:
             raise RuntimeError("You have not added data, yet, so the model can not be finalized, yet!\n"
                                "Please use the 'add_data' method to add data for all defined channels:\n\t"
@@ -589,7 +590,7 @@ class FitModel:
 
         return output_string
 
-    def _initialize_fraction_conversion(self):
+    def _initialize_fraction_conversion(self) -> None:
         # Fraction conversion matrix and vector should be equal in all channels.
         # The matrices and vectors are generated for each channel, tested for equality and then stored once.
         conversion_matrices = []
@@ -625,7 +626,7 @@ class FitModel:
             conversion_vector=conversion_vectors[0]
         )
 
-    def _check_fraction_conversion(self):
+    def _check_fraction_conversion(self) -> None:
         if self._check_if_fractions_are_needed():
             assert self._fraction_conversion.needed is True
             assert np.any(self._fraction_conversion.conversion_vector != 1), self._fraction_conversion.conversion_vector
@@ -656,7 +657,7 @@ class FitModel:
             assert all(len(yields_i) >= c.total_number_of_templates for c in self._channels), \
                 f"{len(yields_i)}\n" + "\n".join([f"{c.name}: {c.total_number_of_templates}" for c in self._channels])
 
-    def _initialize_parameter_constraints(self):
+    def _initialize_parameter_constraints(self) -> None:
         indices, cvs, css = self._params.get_constraint_information()
         self._constraint_indices = indices
         self._constraint_values = cvs
@@ -664,7 +665,7 @@ class FitModel:
         if len(indices) > 0:
             self._has_constrained_parameters = True
 
-    def _check_parameter_constraints(self):
+    def _check_parameter_constraints(self) -> None:
         if self._has_constrained_parameters:
             assert len(self._constraint_indices) > 0, (self._has_constrained_parameters, self._constraint_indices)
         else:
@@ -1023,7 +1024,7 @@ class FitModel:
 
         self._bin_nuisance_params_checked = True
 
-    def get_template_bin_counts(self):
+    def get_template_bin_counts(self) -> np.ndarray:
         if self._template_bin_counts is not None:
             return self._template_bin_counts
 
@@ -1037,7 +1038,7 @@ class FitModel:
         self._template_bin_counts = template_bin_counts
         return self._template_bin_counts
 
-    def get_template_bin_errors_sq(self):
+    def get_template_bin_errors_sq(self) -> np.ndarray:
         if self._template_bin_errors_sq is not None:
             return self._template_bin_errors_sq
 
@@ -1050,6 +1051,25 @@ class FitModel:
 
         self._template_bin_errors_sq = template_bin_errors_sq_counts
         return self._template_bin_errors_sq
+
+    def get_template_stat_error_sq_matrix(self) -> np.ndarray:
+        if self._template_stat_error_sq_matrix is not None:
+            return self._template_stat_error_sq_matrix
+
+        bin_errors_sq = self.get_template_bin_errors_sq()
+        stat_error_sq_matrix = np.apply_along_axis(
+            func1d=lambda x: np.apply_along_axis(func1d=np.diag, axis=0, arr=x),
+            axis=2,
+            arr=bin_errors_sq
+        )
+
+        # Some checks:
+        assert len(stat_error_sq_matrix.shape) == 4, (stat_error_sq_matrix.shape, len(stat_error_sq_matrix.shape))
+        assert stat_error_sq_matrix.shape[:-1] == bin_errors_sq.shape, (stat_error_sq_matrix.shape, bin_errors_sq.shape)
+        assert stat_error_sq_matrix.shape[2] == stat_error_sq_matrix.shape[3], stat_error_sq_matrix.shape
+
+        self._template_stat_error_sq_matrix = stat_error_sq_matrix
+        return self._template_stat_error_sq_matrix
 
     def _apply_padding_to_templates(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
         if not self._template_shapes_checked:
@@ -1106,7 +1126,7 @@ class FitModel:
 
         return normed_smeared_templates
 
-    def calculate_expected_bin_count(self, parameter_vector: np.ndarray):
+    def calculate_expected_bin_count(self, parameter_vector: np.ndarray) -> np.ndarray:
         if not self._is_checked:
             assert self._fraction_conversion is not None
             assert isinstance(self._fraction_conversion, FractionConversionInfo), type(self._fraction_conversion)
@@ -1336,7 +1356,7 @@ class FitModel:
             container_name: str,
             parameter_type: str,
             input_parameter_list_name: str
-    ):
+    ) -> List[TemplateParameter]:
         assert parameter_type in ParameterHandler.parameter_types, \
             f"parameter_type must be one of {ParameterHandler.parameter_types}, you provided {parameter_type}!"
 
@@ -1389,13 +1409,13 @@ class FitModel:
             raise RuntimeError(f"Trying to add new {adding} after adding the data to the model!\n"
                                f"All {adding}s have to be added before 'add_data' is called!")
 
-    def _check_is_initialized(self):
+    def _check_is_initialized(self) -> None:
         if not self._is_initialized:
             raise RuntimeError(
                 "The model is not finalized, yet!\nPlease use the 'finalize_model' method to finalize the model setup!"
             )
 
-    def _check_is_not_finalized(self):
+    def _check_is_not_finalized(self) -> None:
         if self._is_initialized:
             raise RuntimeError("The Model has already been finalized and cannot be altered anymore!")
 
