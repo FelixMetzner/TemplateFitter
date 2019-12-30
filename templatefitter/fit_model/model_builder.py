@@ -679,21 +679,62 @@ class FitModel:
         self._constraints_checked = True
 
     def _initialize_template_bin_uncertainties(self) -> None:
+        """
+        This function has to initialize the matrices holding the systematic uncertainties.
+        The form of these matrices depend on the way the systematics are handled.
+        In general two kinds of systematics must be considered:
+            1. the statistical uncertainties of the templates
+            2. all other systematics defined by additional weights (up and down variations, multiple variations; see
+               systematics class.).
+        The first type is always present, the second has to be provided by the user via the systematics of
+        the Template class.
+
+        The systematics can be handled independent for each bin and channel/template
+            -> number of nuisance parameters = n_bins * n_channels or n_bins * n_channels * n_templates_p_ch
+        or independent from each other
+            -> number of nuisance parameters = n_systematics
+
+        The resulting systematic uncertainty matrix is stored in self._inverse_template_bin_correlation_matrix and
+        added to
+            - the templates in self.get_templates before they are normalized, or
+            - the yields in self.calculate_expected_bin_count.
+
+        # TODO: Differentiate between relative errors and absolute errors
+                => This effects how the nuisance parameters are handled in the gauss term
+                   and regarding their constraint!!!!
+        # TODO: Should nuisance parameters have an additional constraint or is this handled in the gauss term already?!
+
+        # TODO: Complete documentation once fully implemented!
+
+        :return: None
+        """
         # TODO: Think about this: This can be done as block diagonal matrix
         #                           - with each block being a channel, and all systematics combined for each
         #                             channel in one matrix via distribution_utiliy.get_combined_covariance
         #                           - or with one block for each template via template.bin_correlation_matrix
         #                           - or with one block for each systematic via loop over template.systematics (would
-        #                             require some now function, though to get the cov/corr matrix for each sys...)
+        #                             require some new function, though, to get the cov/corr matrix for each sys...)
+
+        template_statistics_sys = self.get_template_stat_error_sq_matrix()
 
         inv_corr_mats = [
             np.linalg.inv(template.bin_correlation_matrix)
             for channel in self._channels for template in channel.sub_templates
             if template.bin_nuisance_parameters is not None
         ]
+
+        # TODO: Must decide on a way the nuisance parameters are use! (see TODO note above!)
+        #       The matrix shapes must be chosen accordingly!
+
+        # TODO: Decide on whether the nuisance parameters vary with sigma=1 around 0 or with the respective uncertainty.
+
         if len(inv_corr_mats) == 0:
+            # If no other systematics, use only the template statistics!
+            # TODO: Use template_statistics_sys instead of empty matrix => Replace line below!
             self._inverse_template_bin_correlation_matrix = np.ndarray(shape=(0, 0))
         else:
+            # Else, combine other systematics with template statistics!
+            # TODO: check shapes and combine!
             self._inverse_template_bin_correlation_matrix = block_diag(*inv_corr_mats)
 
     def _check_template_bin_uncertainties(self) -> None:
@@ -1063,7 +1104,7 @@ class FitModel:
             arr=bin_errors_sq
         )
 
-        # Some checks:
+        # Checking shape of matrices:
         assert len(stat_error_sq_matrix.shape) == 4, (stat_error_sq_matrix.shape, len(stat_error_sq_matrix.shape))
         assert stat_error_sq_matrix.shape[:-1] == bin_errors_sq.shape, (stat_error_sq_matrix.shape, bin_errors_sq.shape)
         assert stat_error_sq_matrix.shape[2] == stat_error_sq_matrix.shape[3], stat_error_sq_matrix.shape
@@ -1121,6 +1162,7 @@ class FitModel:
         # TODO: Are normed after application of corrections, but this should be done in calculate_expected_bin_count!
         normed_smeared_templates = template_bin_counts
 
+        # TODO: Remove this, once fixed!
         # Temporary solution for normalization:
         normed_smeared_templates /= normed_smeared_templates.sum(axis=2)[:, :, np.newaxis]
 
