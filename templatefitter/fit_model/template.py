@@ -50,6 +50,7 @@ class Template(BinnedDistribution):
         self._process_name = process_name
         self._serial_number = None
         self._component_serial_number = None
+        self._use_other_systematics = True
 
         self._yield_parameter = None
         self._bin_nuisance_parameters = None
@@ -255,6 +256,14 @@ class Template(BinnedDistribution):
     @property
     def params(self) -> ParameterHandler:
         return self._params
+
+    @property
+    def use_other_systematics(self) -> bool:
+        return self._use_other_systematics
+
+    @use_other_systematics.setter
+    def use_other_systematics(self, boolean_value) -> None:
+        self._use_other_systematics = boolean_value
 
     # TODO: Needs work...
     def expected_bin_counts(self):

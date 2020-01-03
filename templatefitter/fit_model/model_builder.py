@@ -45,6 +45,10 @@ __all__ = ["FitModel"]
 #       the necessary information and can be used to recreate the model.
 
 
+# TODO next: - Include uncertainties into yield or template shapes!
+#            - uncertainties must be relative uncertainties!
+#            - generalize uncertainty handling!
+
 class FractionConversionInfo(NamedTuple):
     needed: bool
     conversion_matrix: np.ndarray
@@ -104,10 +108,10 @@ class FitModel:
         self._has_constrained_parameters = False
 
         self._template_bin_counts = None
-        self._template_bin_errors_sq_per_channel = None
         self._template_shapes_checked = False
-        self._template_error_per_channel_shapes_checked = False
+        self._template_bin_errors_sq_per_ch_and_temp = None
         self._template_stat_error_sq_matrix_per_channel = None
+        self._template_stat_error_sq_matrix_per_ch_and_temp = None
 
         self._gauss_term_checked = False
         self._constraint_term_checked = False
@@ -164,7 +168,7 @@ class FitModel:
             self,
             template: Template,
             yield_parameter: Union[ModelParameter, str],
-            use_bin_nuisance_parameters: bool = True
+            use_other_systematics: bool = True
     ) -> int:
         self._check_is_not_finalized()
         self._check_has_data(adding="template")
@@ -201,17 +205,16 @@ class FitModel:
 
         yield_model_parameter.used_by(template_parameter=yield_param, template_serial_number=serial_number)
 
-        if use_bin_nuisance_parameters:
-            bin_nuisance_paras = self._create_bin_nuisance_parameters(template=template)
-            assert len(bin_nuisance_paras) == template.num_bins_total, \
-                (len(bin_nuisance_paras), template.num_bins_total)
-        else:
-            bin_nuisance_paras = None
+        bin_nuisance_paras = self._create_bin_nuisance_parameters(template=template)
+        assert len(bin_nuisance_paras) == template.num_bins_total, \
+            (len(bin_nuisance_paras), template.num_bins_total)
 
         template.initialize_parameters(
             yield_parameter=yield_param,
             bin_nuisance_parameters=bin_nuisance_paras
         )
+
+        template.use_other_systematics = use_other_systematics
 
         self._templates.append(template)
         self._templates_mapping.update({template.name: serial_number})
@@ -731,57 +734,108 @@ class FitModel:
         #       The matrix shapes must be chosen accordingly!
 
         # Getting template_statistics_sys and sum over template axis to get right shape:
-        # TODO: Whether the sum is needed depends on option 1a, 1b or 2)! -> Currently it is Option 1a!
-        template_statistics_sys_per_ch = [m.sum(axis=0) for m in self.get_template_stat_error_sq_matrix_per_channel()]
+        # TODO: Whether the sum is needed depends on option 1a, 1b or 2)! -> Currently it is Option 1b!
+        template_statistics_sys_per_ch = self.get_template_stat_error_sq_matrix_per_ch_and_temp()
+        # Option 1a:
+        # template_statistics_sys_per_ch = [m.sum(axis=0) for m in self.get_template_stat_error_sq_matrix_per_channel()]
 
-        # TODO: The following combination is only valid for Option 1a!
-        other_systematics_cov_matrix_per_ch = [
-            np.sum([temp.bin_covariance_matrix if temp.bin_nuisance_parameters is not None
-                    else np.zeros_like(template_statistics_sys_per_ch[ch_i])
-                    for temp in ch.sub_templates], axis=0)
+        # TODO: The following combination is only valid for Option 1b!
+        other_sys_cov_matrix_per_ch_and_temp = [
+            [temp.bin_covariance_matrix if temp.bin_nuisance_parameters is not None and temp.use_other_systematics
+             else np.zeros_like(template_statistics_sys_per_ch[ch_i][temp_i])
+             for temp_i, temp in enumerate(ch.sub_templates)]
             for ch_i, ch in enumerate(self._channels)
         ]
 
-        assert all(stat_m.shape == o_cov_m.shape
-                   for stat_m, o_cov_m in zip(template_statistics_sys_per_ch, other_systematics_cov_matrix_per_ch)), \
-            [(a.shape, b.shape) for a, b in zip(template_statistics_sys_per_ch, other_systematics_cov_matrix_per_ch)]
-        cov_matrix_per_ch = [
-            stat_sys + cov_matrix
-            for stat_sys, cov_matrix in zip(template_statistics_sys_per_ch, other_systematics_cov_matrix_per_ch)
+        # Option 1a:
+        # other_systematics_cov_matrix_per_ch = [
+        #     np.sum([temp.bin_covariance_matrix if temp.bin_nuisance_parameters is not None
+        #             else np.zeros_like(template_statistics_sys_per_ch[ch_i])
+        #             for temp in ch.sub_templates], axis=0)
+        #     for ch_i, ch in enumerate(self._channels)
+        # ]
+
+        assert all(all(stat_m.shape == o_cov_m.shape for stat_m, o_cov_m in zip(stat_ms, o_cov_ms))
+                   for stat_ms, o_cov_ms in zip(template_statistics_sys_per_ch, other_sys_cov_matrix_per_ch_and_temp)), \
+            [[(a.shape, b.shape) for a, b in zip(stat_ms, o_cov_ms)]
+             for stat_ms, o_cov_ms in zip(template_statistics_sys_per_ch, other_sys_cov_matrix_per_ch_and_temp)]
+
+        # Option 1a:
+        # assert all(stat_m.shape == o_cov_m.shape
+        #            for stat_m, o_cov_m in zip(template_statistics_sys_per_ch, other_systematics_cov_matrix_per_ch)), \
+        #     [(a.shape, b.shape) for a, b in zip(template_statistics_sys_per_ch, other_systematics_cov_matrix_per_ch)]
+
+        cov_matrices_per_ch = [
+            [stat_sys + cov_matrix for stat_sys, cov_matrix in zip(stat_sys_covs, o_covs)]
+            for stat_sys_covs, o_covs in zip(template_statistics_sys_per_ch, other_sys_cov_matrix_per_ch_and_temp)
         ]
+
+        # Option 1a:
+        # cov_matrices_per_ch = [
+        #     stat_sys + cov_matrix
+        #     for stat_sys, cov_matrix in zip(template_statistics_sys_per_ch, other_systematics_cov_matrix_per_ch)
+        # ]
 
         # TODO now: Entries of correlation matrices must be relative errors! Normalize with respect to bin count!
         #           be careful to handle divisions by zero when normalizing with padded template_bin_count matrix!
         # TODO: should be padded for easy combination with template_bin_counts...
-        self._systematics_covariance_matrices_per_channel = cov_matrix_per_ch
+        self._systematics_covariance_matrices_per_channel = cov_matrices_per_ch
 
-        # TODO: The following combination is only valid for Option 1a!
-        inv_corr_mats = [np.linalg.inv(cov2corr(cov_matrix)) for cov_matrix in cov_matrix_per_ch]
-        self._inverse_template_bin_correlation_matrix = block_diag(*inv_corr_mats)
+        # TODO: The following combination is only valid for Option 1b!
+        inv_corr_matrices = [np.linalg.inv(cov2corr(cov_matrix))
+                             for cov_matrices_per_temp in cov_matrices_per_ch
+                             for cov_matrix in cov_matrices_per_temp]
+        self._inverse_template_bin_correlation_matrix = block_diag(*inv_corr_matrices)
+
+        # Option 1a:
+        # inv_corr_matrices = [np.linalg.inv(cov2corr(cov_matrix)) for cov_matrix in cov_matrices_per_ch]
+        # self._inverse_template_bin_correlation_matrix = block_diag(*inv_corr_matrices)
 
     def _check_systematics_uncertainty_matrices(self) -> None:
         assert len(self._systematics_covariance_matrices_per_channel) == self.number_of_channels, \
             (len(self._systematics_covariance_matrices_per_channel), self.number_of_channels)
 
-        # TODO: The checks must depend on option of handling systematics, currently only checks for Option 1a are done!
-        assert all(len(m.shape) == 2 for m in self._systematics_covariance_matrices_per_channel), \
-            [m.shape for m in self._systematics_covariance_matrices_per_channel]
-        assert all(m.shape[0] == m.shape[1] for m in self._systematics_covariance_matrices_per_channel), \
-            [m.shape for m in self._systematics_covariance_matrices_per_channel]
-        assert all(m.shape[0] == ch.binning.num_bins_total
-                   for m, ch in zip(self._systematics_covariance_matrices_per_channel, self._channels)), \
+        # TODO: The checks must depend on option of handling systematics, currently only checks for Option 1b are done!
+        assert all(len(sys_per_temp) == ch.total_number_of_templates
+                   for sys_per_temp, ch in zip(self._systematics_covariance_matrices_per_channel, self._channels)), \
+            [(len(t), ch.total_number_of_templates)
+             for t, ch in zip(self._systematics_covariance_matrices_per_channel, self._channels)]
+        assert all(all(isinstance(m, np.ndarray) for m in per_temp)
+                   for per_temp in self._systematics_covariance_matrices_per_channel), \
+            [type(m) for ms in self._systematics_covariance_matrices_per_channel for m in ms]
+        assert all(all(len(m.shape) == 2 for m in per_temp)
+                   for per_temp in self._systematics_covariance_matrices_per_channel), \
+            [m.shape for ms in self._systematics_covariance_matrices_per_channel for m in ms]
+        assert all(all(m.shape[0] == m.shape[1] for m in per_temp)
+                   for per_temp in self._systematics_covariance_matrices_per_channel), \
+            [m.shape for ms in self._systematics_covariance_matrices_per_channel for m in ms]
+        assert all(all(m.shape[0] == ch.binning.num_bins_total for m in per_temp)
+                   for per_temp, ch in zip(self._systematics_covariance_matrices_per_channel, self._channels)), \
             [(m.shape[0], ch.binning.num_bins_total)
-             for m, ch in zip(self._systematics_covariance_matrices_per_channel, self._channels)]
+             for ms, ch in zip(self._systematics_covariance_matrices_per_channel, self._channels) for m in ms]
+
+        # Option 1a:
+        # assert all(len(m.shape) == 2 for m in self._systematics_covariance_matrices_per_channel), \
+        #     [m.shape for m in self._systematics_covariance_matrices_per_channel]
+        # assert all(m.shape[0] == m.shape[1] for m in self._systematics_covariance_matrices_per_channel), \
+        #     [m.shape for m in self._systematics_covariance_matrices_per_channel]
+        # assert all(m.shape[0] == ch.binning.num_bins_total
+        #            for m, ch in zip(self._systematics_covariance_matrices_per_channel, self._channels)), \
+        #     [(m.shape[0], ch.binning.num_bins_total)
+        #      for m, ch in zip(self._systematics_covariance_matrices_per_channel, self._channels)]
 
     def _check_bin_correlation_matrix(self) -> None:
         assert self._inverse_template_bin_correlation_matrix is not None
         inv_corr_mat = self._inverse_template_bin_correlation_matrix
 
-        # TODO: The checks must depend on option of handling systematics, currently only checks for Option 1a are done!
-        expected_dim = sum([ch.binning.num_bins_total for ch in self._channels])
-        assert inv_corr_mat.shape[0] == expected_dim, (inv_corr_mat.shape, expected_dim)
+        # TODO: The checks must depend on option of handling systematics, currently only checks for Option 1b are done!
+        expected_dim = sum([ch.binning.num_bins_total * ch.total_number_of_templates for ch in self._channels])
+
+        # Option 1a:
+        # expected_dim = sum([ch.binning.num_bins_total for ch in self._channels])
 
         assert len(inv_corr_mat.shape) == 2, inv_corr_mat.shape
+        assert inv_corr_mat.shape[0] == expected_dim, (inv_corr_mat.shape, expected_dim)
         assert inv_corr_mat.shape[0] == inv_corr_mat.shape[1], inv_corr_mat.shape
 
         # Checking if matrix is symmetric.
@@ -1066,7 +1120,7 @@ class FitModel:
         # TODO: adapt nuisance parameter check to different options!
 
         nu_is = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.bin_nuisance_parameter_type)
-        number_bins_with_nuisance = sum([t.num_bin_total for ch in self._channels
+        number_bins_with_nuisance = sum([ch.binning.num_bins_total for ch in self._channels
                                          for t in ch.sub_templates if t.bin_nuisance_parameters is not None])
         assert len(nu_is) == number_bins_with_nuisance, (len(nu_is), number_bins_with_nuisance)
 
@@ -1114,23 +1168,29 @@ class FitModel:
         self._template_bin_counts = template_bin_counts
         return self._template_bin_counts
 
-    def get_template_bin_errors_sq_per_channel(self) -> List[np.ndarray]:
-        if self._template_bin_errors_sq_per_channel is not None:
-            return self._template_bin_errors_sq_per_channel
+    def get_template_bin_errors_sq_per_ch_and_temp(self) -> List[List[np.ndarray]]:
+        if self._template_bin_errors_sq_per_ch_and_temp is not None:
+            return self._template_bin_errors_sq_per_ch_and_temp
 
-        b_errs2_per_channel = [np.stack([tmp.bin_errors_sq.flatten() for tmp in ch.templates]) for ch in self._channels]
+        b_errs2_per_ch_and_temp = [[tmp.bin_errors_sq.flatten() for tmp in ch.templates] for ch in self._channels]
 
-        if not self._template_error_per_channel_shapes_checked:
-            self._check_template_bin_errors_shapes(bin_errors_per_ch=b_errs2_per_channel)
+        # Resetting statistical error for empty bins to small value != 0:
+        for stat_bin_errors_per_ch in b_errs2_per_ch_and_temp:
+            for stat_bin_errors_per_temp in stat_bin_errors_per_ch:
+                stat_bin_errors_per_temp[stat_bin_errors_per_temp == 0.] = 1e-14
 
-        self._template_bin_errors_sq_per_channel = b_errs2_per_channel
-        return self._template_bin_errors_sq_per_channel
+        b_errs2_per_channel = [np.stack(temps_in_ch) for temps_in_ch in b_errs2_per_ch_and_temp]
+        self._check_template_bin_errors_shapes(bin_errors_per_ch=b_errs2_per_channel)
+
+        self._template_bin_errors_sq_per_ch_and_temp = b_errs2_per_ch_and_temp
+        return self._template_bin_errors_sq_per_ch_and_temp
 
     def get_template_stat_error_sq_matrix_per_channel(self) -> List[np.ndarray]:
         if self._template_stat_error_sq_matrix_per_channel is not None:
             return self._template_stat_error_sq_matrix_per_channel
 
-        bin_errors_sq_per_ch = self.get_template_bin_errors_sq_per_channel()
+        bin_errors_sq_per_ch_and_temp = self.get_template_bin_errors_sq_per_ch_and_temp()
+        bin_errors_sq_per_ch = [np.stack(temps_in_ch) for temps_in_ch in bin_errors_sq_per_ch_and_temp]
         stat_err_sq_matrix_per_ch = [
             np.apply_along_axis(func1d=np.diag, axis=1, arr=stat_err_array)
             for stat_err_array in bin_errors_sq_per_ch
@@ -1140,7 +1200,7 @@ class FitModel:
         assert len(stat_err_sq_matrix_per_ch) == self.number_of_channels, \
             (len(stat_err_sq_matrix_per_ch), self.number_of_channels)
         assert all(len(matrix.shape) == 3 for matrix in stat_err_sq_matrix_per_ch), \
-            ([m.shape for m in stat_err_sq_matrix_per_ch], [len(m.shape) == 3 for m in stat_err_sq_matrix_per_ch])
+            ([m.shape for m in stat_err_sq_matrix_per_ch], [len(m.shape) for m in stat_err_sq_matrix_per_ch])
         assert all(m.shape[:-1] == a.shape for m, a in zip(stat_err_sq_matrix_per_ch, bin_errors_sq_per_ch)), \
             ([(m.shape, a.shape) for m, a in zip(stat_err_sq_matrix_per_ch, bin_errors_sq_per_ch)])
         assert all(m.shape[1] == m.shape[2] for m in stat_err_sq_matrix_per_ch), \
@@ -1148,6 +1208,36 @@ class FitModel:
 
         self._template_stat_error_sq_matrix_per_channel = stat_err_sq_matrix_per_ch
         return self._template_stat_error_sq_matrix_per_channel
+
+    def get_template_stat_error_sq_matrix_per_ch_and_temp(self) -> List[List[np.ndarray]]:
+        if self._template_stat_error_sq_matrix_per_ch_and_temp is not None:
+            return self._template_stat_error_sq_matrix_per_ch_and_temp
+
+        bin_errors_sq_per_ch_and_temp = self.get_template_bin_errors_sq_per_ch_and_temp()
+        stat_err_sq_matrix_per_ch_and_temp = [
+            [np.diag(temp_array) for temp_array in stat_err_arrays_per_temp]
+            for stat_err_arrays_per_temp in bin_errors_sq_per_ch_and_temp
+        ]
+
+        # Checking shape of matrices:
+        assert len(stat_err_sq_matrix_per_ch_and_temp) == self.number_of_channels, \
+            (len(stat_err_sq_matrix_per_ch_and_temp), self.number_of_channels)
+        assert all(len(temps_per_ch) == ch.total_number_of_templates
+                   for temps_per_ch, ch in zip(stat_err_sq_matrix_per_ch_and_temp, self._channels)), \
+            [(len(a), c.total_number_of_templates) for a, c in zip(stat_err_sq_matrix_per_ch_and_temp, self._channels)]
+        assert all(isinstance(m, np.ndarray) for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps), \
+            [type(m) for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps]
+        assert all(len(m.shape) == 2 for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps), \
+            [(m.shape, len(m.shape)) for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps]
+        assert all(all(m.shape[:-1] == a.shape for m, a in zip(ms, arrs))
+                   for ms, arrs in zip(stat_err_sq_matrix_per_ch_and_temp, bin_errors_sq_per_ch_and_temp)), \
+            ([(m.shape, a.shape) for ms, arrs in zip(stat_err_sq_matrix_per_ch_and_temp, bin_errors_sq_per_ch_and_temp)
+              for m, a in zip(ms, arrs)])
+        assert all(m.shape[0] == m.shape[1] for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps), \
+            [m.shape for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps]
+
+        self._template_stat_error_sq_matrix_per_ch_and_temp = stat_err_sq_matrix_per_ch_and_temp
+        return self._template_stat_error_sq_matrix_per_ch_and_temp
 
     def _apply_padding_to_templates(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
         if not self._template_shapes_checked:
@@ -1193,10 +1283,12 @@ class FitModel:
     def _check_template_bin_errors_shapes(self, bin_errors_per_ch: List[np.ndarray]) -> None:
         assert len(bin_errors_per_ch) == self.number_of_channels, (len(bin_errors_per_ch), self.number_of_channels)
         assert all(isinstance(a, np.ndarray) for a in bin_errors_per_ch), [type(a) for a in bin_errors_per_ch]
-        assert all(len(a.shape) == 1 for a in bin_errors_per_ch), [a.shape for a in bin_errors_per_ch]
-        assert all(a.shape[0] == ch_b.num_bins_total for a, ch_b in zip(bin_errors_per_ch, self.binning)), \
-            [(a.shape[0], ch_b.num_bins_total) for a, ch_b in zip(bin_errors_per_ch, self.binning)]
-        self._template_error_per_channel_shapes_checked = True
+        assert all(len(a.shape) == 2 for a in bin_errors_per_ch), [a.shape for a in bin_errors_per_ch]
+        assert all(a.shape[0] == ch.total_number_of_templates for a, ch in zip(bin_errors_per_ch, self._channels)), \
+            [(a.shape[0], ch.total_number_of_templates) for a, ch in zip(bin_errors_per_ch, self._channels)]
+        assert all(a.shape[1] == ch_b.num_bins_total for a, ch_b in zip(bin_errors_per_ch, self.binning)), \
+            [(a.shape[1], ch_b.num_bins_total) for a, ch_b in zip(bin_errors_per_ch, self.binning)]
+        assert all(not np.any(matrix == 0) for matrix in bin_errors_per_ch), [np.any(m == 0) for m in bin_errors_per_ch]
 
     def get_templates(self) -> np.ndarray:
         template_bin_counts = self.get_template_bin_counts()
