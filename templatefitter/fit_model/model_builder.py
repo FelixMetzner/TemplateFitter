@@ -113,6 +113,8 @@ class FitModel:
         self._template_stat_error_sq_matrix_per_channel = None
         self._template_stat_error_sq_matrix_per_ch_and_temp = None
 
+        self._relative_shape_uncertainties = None
+
         self._gauss_term_checked = False
         self._constraint_term_checked = False
         self._chi2_calculation_checked = False
@@ -776,9 +778,6 @@ class FitModel:
         #     for stat_sys, cov_matrix in zip(template_statistics_sys_per_ch, other_systematics_cov_matrix_per_ch)
         # ]
 
-        # TODO now: Entries of correlation matrices must be relative errors! Normalize with respect to bin count!
-        #           be careful to handle divisions by zero when normalizing with padded template_bin_count matrix!
-        # TODO: should be padded for easy combination with template_bin_counts...
         self._systematics_covariance_matrices_per_channel = cov_matrices_per_ch
 
         # TODO: The following combination is only valid for Option 1b!
@@ -790,6 +789,37 @@ class FitModel:
         # Option 1a:
         # inv_corr_matrices = [np.linalg.inv(cov2corr(cov_matrix)) for cov_matrix in cov_matrices_per_ch]
         # self._inverse_template_bin_correlation_matrix = block_diag(*inv_corr_matrices)
+
+    def get_relative_shape_uncertainties(self) -> np.ndarray:
+        if self._relative_shape_uncertainties is not None:
+            return self._relative_shape_uncertainties
+
+        cov_matrices_per_ch_and_temp = self._systematics_covariance_matrices_per_channel
+        # TODO: Maybe add some more checks...
+        assert cov_matrices_per_ch_and_temp is not None
+
+        template_bin_counts = self.get_template_bin_counts()
+        assert template_bin_counts is not None
+
+        # TODO: The following combination is only valid for Option 1b!
+        shape_uncertainties = np.stack([
+            np.stack([np.sqrt(np.diag(cov_for_temp)) for cov_for_temp in temps_in_ch])
+            for temps_in_ch in cov_matrices_per_ch_and_temp
+        ])
+
+        assert template_bin_counts.shape == shape_uncertainties.shape, \
+            (template_bin_counts.shape, shape_uncertainties.shape)
+        # TODO: Padding of relative_shape_uncertainties shape uncertainties is required,
+        #       if template_bin_counts also are padded!
+        relative_shape_uncertainties = np.divide(
+            x1=shape_uncertainties,
+            x2=template_bin_counts,
+            out=np.zeros_like(shape_uncertainties),
+            where=template_bin_counts!=0
+        )
+
+        self._relative_shape_uncertainties = relative_shape_uncertainties
+        return relative_shape_uncertainties
 
     def _check_systematics_uncertainty_matrices(self) -> None:
         assert len(self._systematics_covariance_matrices_per_channel) == self.number_of_channels, \
@@ -1095,11 +1125,21 @@ class FitModel:
 
         self._efficiencies_checked = True
 
-    def get_bin_nuisance_vector(self, parameter_vector: np.ndarray) -> np.ndarray:
-        return self._params.get_combined_parameters_by_index(
+    def get_nuisance_parameters(self, parameter_vector: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        nuisance_parameter_vector = self._params.get_combined_parameters_by_index(
             parameter_vector=parameter_vector,
             indices=self.get_bin_nuisance_parameter_indices()
         )
+
+        # TODO next: get matrix of bin nuisance parameters in correct shape to be used in self.get_templates()
+        new_shape = (  # TODO: As this shape is used pretty often, maybe put it into a dedicated property...
+            self.number_of_channels,
+            max(self.number_of_templates),
+            max([ch.binning.num_bins_total for ch in self._channels])
+        )
+        nuisance_parameter_matrix = np.reshape(nuisance_parameter_vector, newshape=new_shape)  # TODO
+
+        return nuisance_parameter_vector, nuisance_parameter_matrix
 
     def get_bin_nuisance_parameter_indices(self) -> List[int]:
         if self._bin_nuisance_param_indices is not None:
@@ -1290,19 +1330,24 @@ class FitModel:
             [(a.shape[1], ch_b.num_bins_total) for a, ch_b in zip(bin_errors_per_ch, self.binning)]
         assert all(not np.any(matrix == 0) for matrix in bin_errors_per_ch), [np.any(m == 0) for m in bin_errors_per_ch]
 
-    def get_templates(self) -> np.ndarray:
+    def get_templates(self, nuisance_parameters: np.ndarray) -> np.ndarray:
         template_bin_counts = self.get_template_bin_counts()
-        # TODO: Apply smearing based on bin_uncertainties.
-        # TODO: Are normed after application of corrections, but this should be done in calculate_expected_bin_count!
-        normed_smeared_templates = template_bin_counts
 
-        # TODO: Remove this, once fixed!
-        # Temporary solution for normalization:
-        normed_smeared_templates /= normed_smeared_templates.sum(axis=2)[:, :, np.newaxis]
+        # Apply shape uncertainties:
+        relative_shape_uncertainties = self.get_relative_shape_uncertainties()
 
-        return normed_smeared_templates
+        templates_with_shape_uncertainties = template_bin_counts + nuisance_parameters * relative_shape_uncertainties
 
-    def calculate_expected_bin_count(self, parameter_vector: np.ndarray) -> np.ndarray:
+        # Normalization of template bin counts with shape uncertainties to obtain the template shapes:
+        templates_with_shape_uncertainties /= templates_with_shape_uncertainties.sum(axis=2)[:, :, np.newaxis]
+
+        return templates_with_shape_uncertainties
+
+    def calculate_expected_bin_count(
+            self,
+            parameter_vector: np.ndarray,
+            nuisance_parameters: np.ndarray
+    ) -> np.ndarray:
         if not self._is_checked:
             assert self._fraction_conversion is not None
             assert isinstance(self._fraction_conversion, FractionConversionInfo), type(self._fraction_conversion)
@@ -1312,7 +1357,9 @@ class FitModel:
         efficiency_parameters = self.get_efficiencies_matrix(parameter_vector=parameter_vector)
         normed_efficiency_parameters = efficiency_parameters  # TODO: Implement normalization of efficiencies!
 
-        normed_templates = self.get_templates()
+        # TODO: add also rate uncertainties to yields!
+
+        normed_templates = self.get_templates(nuisance_parameters=nuisance_parameters)
 
         self._check_matrix_shapes(
             yield_params=yield_parameters,
@@ -1602,23 +1649,22 @@ class FitModel:
         return not (self.number_of_independent_templates == self.number_of_templates)
 
     @jit
-    def _gauss_term(self, parameter_vector: np.ndarray) -> float:
-        bin_nuisance_vector = self.get_bin_nuisance_vector(parameter_vector=parameter_vector)
-
-        if len(bin_nuisance_vector) == 0:
+    def _gauss_term(self, bin_nuisance_parameter_vector: np.ndarray) -> float:
+        if len(bin_nuisance_parameter_vector) == 0:
             return 0.
 
         if not self._gauss_term_checked:
-            assert len(bin_nuisance_vector.shape) == 1, bin_nuisance_vector.shape
+            assert len(bin_nuisance_parameter_vector.shape) == 1, bin_nuisance_parameter_vector.shape
             assert len(self._inverse_template_bin_correlation_matrix.shape) == 2, \
                 self._inverse_template_bin_correlation_matrix.shape
-            assert len(bin_nuisance_vector) == self._inverse_template_bin_correlation_matrix.shape[0], \
-                (bin_nuisance_vector.shape, self._inverse_template_bin_correlation_matrix.shape)
-            assert len(bin_nuisance_vector) == self._inverse_template_bin_correlation_matrix.shape[1], \
-                (bin_nuisance_vector.shape, self._inverse_template_bin_correlation_matrix.shape)
+            assert len(bin_nuisance_parameter_vector) == self._inverse_template_bin_correlation_matrix.shape[0], \
+                (bin_nuisance_parameter_vector.shape, self._inverse_template_bin_correlation_matrix.shape)
+            assert len(bin_nuisance_parameter_vector) == self._inverse_template_bin_correlation_matrix.shape[1], \
+                (bin_nuisance_parameter_vector.shape, self._inverse_template_bin_correlation_matrix.shape)
             self._gauss_term_checked = True
 
-        return bin_nuisance_vector @ self._inverse_template_bin_correlation_matrix @ bin_nuisance_vector
+        return bin_nuisance_parameter_vector @ self._inverse_template_bin_correlation_matrix \
+               @ bin_nuisance_parameter_vector
 
     def _constraint_term(self, parameter_vector: np.ndarray) -> float:
         if not self._has_constrained_parameters:
@@ -1639,9 +1685,15 @@ class FitModel:
 
     @jit
     def chi2(self, parameter_vector: np.ndarray) -> float:
+        nuisance_parameter_vector, nuisance_parameter_matrix = self.get_nuisance_parameters(parameter_vector)
+
+        expected_b_count = self.calculate_expected_bin_count(
+            parameter_vector=parameter_vector,
+            nuisance_parameters=nuisance_parameter_matrix
+        )
+
         chi2_data_term = np.sum(
-            (self.calculate_expected_bin_count(parameter_vector=parameter_vector)
-             - self.get_flattened_data_bin_counts()) ** 2 / (2 * self.get_squared_data_stat_errors()),
+            (expected_b_count - self.get_flattened_data_bin_counts()) ** 2 / (2 * self.get_squared_data_stat_errors()),
             axis=None
         )
 
@@ -1649,11 +1701,16 @@ class FitModel:
             assert isinstance(chi2_data_term, float), (chi2_data_term, type(chi2_data_term))
             self._chi2_calculation_checked = True
 
-        return (chi2_data_term + self._gauss_term(parameter_vector=parameter_vector)
+        return (chi2_data_term + self._gauss_term(bin_nuisance_parameter_vector=nuisance_parameter_vector)
                 + self._constraint_term(parameter_vector=parameter_vector))
 
     def nll(self, parameter_vector: np.ndarray) -> float:
-        expected_bin_count = self.calculate_expected_bin_count(parameter_vector=parameter_vector)
+        nuisance_parameter_vector, nuisance_parameter_matrix = self.get_nuisance_parameters(parameter_vector)
+
+        expected_bin_count = self.calculate_expected_bin_count(
+            parameter_vector=parameter_vector,
+            nuisance_parameters=nuisance_parameter_matrix
+        )
         poisson_term = np.sum(
             expected_bin_count - self.get_flattened_data_bin_counts()
             - xlogyx(self.get_flattened_data_bin_counts(), expected_bin_count),
@@ -1664,7 +1721,7 @@ class FitModel:
             assert isinstance(poisson_term, float), (poisson_term, type(poisson_term))
             self._nll_calculation_checked = True
 
-        return poisson_term + 0.5 * (self._gauss_term(parameter_vector=parameter_vector)
+        return poisson_term + 0.5 * (self._gauss_term(bin_nuisance_parameter_vector=nuisance_parameter_vector)
                                      + self._constraint_term(parameter_vector=parameter_vector))
 
     # Using CostFunction class name as type hint, before CostFunction is defined.
