@@ -812,8 +812,8 @@ class FitModel:
         # TODO: Padding of relative_shape_uncertainties shape uncertainties is required,
         #       if template_bin_counts also are padded!
         relative_shape_uncertainties = np.divide(
-            x1=shape_uncertainties,
-            x2=template_bin_counts,
+            shape_uncertainties,
+            template_bin_counts,
             out=np.zeros_like(shape_uncertainties),
             where=template_bin_counts!=0
         )
