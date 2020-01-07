@@ -52,7 +52,9 @@ class BinnedDistribution:
             data: Optional[DataInputType] = None,
             weights: WeightsInputType = None,
             systematics: SystematicsInputType = None,
-            data_column_names: DataColumnNamesInput = None
+            data_column_names: DataColumnNamesInput = None,
+            bin_errors_squared: Optional[np.ndarray] = None,
+            is_pre_binned: bool = False
     ) -> None:
         self._name = name
         self._binning = Binning(bins=bins, dimensions=dimensions, scope=scope, log_scale=log_scale_mask)
@@ -67,13 +69,15 @@ class BinnedDistribution:
 
         self._base_data = None
         self._is_empty = True
-        self._was_filled_from_binned = False
+        self._was_filled_from_binned = is_pre_binned
 
         self._bin_covariance_matrix = None
         self._bin_correlation_matrix = None
 
-        if data is not None:
+        if data is not None and not is_pre_binned:
             self.fill(input_data=data, weights=weights, systematics=systematics)
+        if data is not None and is_pre_binned:
+            self.fill_from_binned(input_data=data, bin_errors_squared=bin_errors_squared)
 
     def fill(
             self,
@@ -104,8 +108,12 @@ class BinnedDistribution:
 
         self.is_empty = False
 
+    def fill_from_binned(self, input_data: DataInputType, bin_errors_squared: np.ndarray) -> None:
+        # TODO
+        pass
+
     @classmethod
-    def fill_from_binned(
+    def binned_distribution_from_binned(
             cls,
             bin_counts: np.ndarray,
             bin_edges: BinEdgesType,
@@ -136,6 +144,7 @@ class BinnedDistribution:
                 raise ValueError(f"Shapes of provided bin_counts {bin_counts.shape} "
                                  f"and bin_errors_squared {bin_errors_squared.shape} does not match!")
 
+        # TODO: Use new initialize of this class to get binned_distribution_filled_from_binned!
         instance = cls(bins=bin_edges, dimensions=dimensions, name=name)
         instance._bin_counts = bin_counts
         instance._bin_errors_sq = bin_errors_squared

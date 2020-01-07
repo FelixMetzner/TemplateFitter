@@ -19,6 +19,7 @@ __all__ = [
 ]
 
 
+# TODO next: Differentiate between HistComponent with BinnedDistribution.fill and BinnedDistribution.fill_from_binned!
 class HistComponent:
     """
     Helper class for handling components of histograms.
@@ -33,7 +34,7 @@ class HistComponent:
             data_column_names: DataColumnNamesInput = None,
             color: Optional[str] = None,
             alpha: float = 1.0
-    ):
+    ) -> None:
         """
         HistComponent constructor.
 
@@ -60,6 +61,26 @@ class HistComponent:
         self._raw_weights = None
 
         self._binned_distribution = None
+
+    @classmethod
+    def create_from_fit_model(
+            cls,
+            label: str,
+            bin_counts: np.ndarray,
+            binning: Binning,
+            dimensions: int,
+            bin_errors_squared: Optional[np.ndarray] = None,
+            color: Optional[str] = None,
+            alpha: float = 1.0
+    ) -> "HistComponent":
+        # TODO
+        instance = cls(label=label, color=color, alpha=alpha)
+        instance._bin_counts = bin_counts
+        instance._bin_errors_sq = bin_errors_squared
+
+        instance.is_empty = False
+        instance._was_filled_from_binned = True
+        return instance
 
     def get_histogram_bin_count(self, binning: Binning) -> np.ndarray:
         """
