@@ -30,6 +30,8 @@ class Template(BinnedDistribution):
             scope: ScopeInputType,
             params: ParameterHandler,
             data_column_names: DataColumnNamesInput,
+            latex_label: Optional[str] = None,
+            color: Optional[str] = None,
             data: Optional[DataInputType] = None,
             weights: WeightsInputType = None,
             systematics: SystematicsInputType = None,
@@ -51,6 +53,12 @@ class Template(BinnedDistribution):
         self._serial_number = None
         self._component_serial_number = None
         self._use_other_systematics = True
+
+        self._color = color
+        if latex_label is None:
+            self._latex_label = process_name
+        else:
+            self._latex_label = latex_label
 
         self._yield_parameter = None
         self._bin_nuisance_parameters = None
@@ -101,6 +109,14 @@ class Template(BinnedDistribution):
     @property
     def process_name(self) -> str:
         return self._process_name
+
+    @property
+    def latex_label(self) -> str:
+        return self._latex_label
+
+    @property
+    def color(self) -> str:
+        return self._color
 
     @property
     def serial_number(self) -> int:

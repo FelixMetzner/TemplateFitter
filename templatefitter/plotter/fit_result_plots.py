@@ -28,9 +28,6 @@ plot_style.set_matplotlibrc_params()
 OneOrTwoAxesType = Union[AxesType, Tuple[AxesType, AxesType]]
 
 
-# TODO: Channel latex labels for plots
-# TODO: Component latex label for plots
-
 # TODO: Option to add Chi2 test
 # TODO: Option to add ratio plot
 
@@ -82,21 +79,21 @@ class FitResultPlot(HistogramPlot):
 
         for mc_channel in fit_model.mc_channels_to_plot:
             self._channel_name_list.append(mc_channel.name)
-            # TODO: Add latex label property to Channel class!
-            channel_latex_label = self._get_channel_label(key=mc_channel.name, original_label=mc_channel.label)
+            channel_latex_label = self._get_channel_label(key=mc_channel.name, original_label=mc_channel.latex_label)
             self._channel_latex_labels.update({mc_channel.name: channel_latex_label})
             mc_histogram_key = f"channel_{mc_channel.name}_mc"
-            # TODO: Loop over templates in channel and add to respective histogram!
-            # TODO: Combine templates which are part of one component?
-            self.add_component(
-                label=self._get_mc_label(key=template.name, original_label=template.label),  # TODO: Add latex label property to Template and Component class!
-                data=,
-                histogram_key=mc_histogram_key,
-                weights=,
-                systematics=,
-                hist_type="stepfilled",
-                color=self._get_mc_color(key=template.name, original_color=template.color)  # TODO: Add color property to Template and Component class!
-            )
+            for template in mc_channel.tempaltes:
+                # TODO: Combine templates which are part of one component?
+                # TODO: Add information from each template:
+                self.add_component(
+                    label=self._get_mc_label(key=template.process_name, original_label=template.latex_label),
+                    data=,
+                    histogram_key=mc_histogram_key,
+                    weights=,
+                    systematics=,
+                    hist_type="stepfilled",
+                    color=self._get_mc_color(key=template.process_name, original_color=template.color)
+                )
 
         assert list(set(self._channel_name_list)) == self._channel_name_list, self._channel_name_list
 

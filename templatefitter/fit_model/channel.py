@@ -31,7 +31,8 @@ class Channel(Sequence):
     def __init__(
             self,
             params: ParameterHandler,
-            name: Optional[str],
+            name: str,
+            latex_label: Optional[str] = None,
             components: Optional[List[Component]] = None
     ):
         self._channel_components = []
@@ -41,6 +42,11 @@ class Channel(Sequence):
         self._name = name
         self._binning = None
         self._channel_index = None
+
+        if latex_label is None:
+            self._latex_label = latex_label
+        else:
+            self._latex_label = name
 
         self._efficiency_parameters = None
 
@@ -137,6 +143,10 @@ class Channel(Sequence):
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def latex_label(self) -> str:
+        return self._latex_label
 
     @property
     def params(self) -> ParameterHandler:
