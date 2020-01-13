@@ -281,9 +281,9 @@ def run_adaptive_binning(
         slc[axis_to_update] = slice(right_bound, None, None)
         right_slices = tuple(slc)
         assert np.all(initial_hist[middle_slices] >= min_count)
-        original_edges_mid = bin_edges[left_bound:right_bound]
-        original_edges_left = bin_edges[:left_bound]
-        original_edges_right = bin_edges[right_bound:]
+        original_edges_mid = bin_edges_to_update[left_bound:right_bound]
+        original_edges_left = bin_edges_to_update[:left_bound]
+        original_edges_right = bin_edges_to_update[right_bound:]
         initial_hist_left = initial_hist[left_slices]
         initial_hist_right = initial_hist[right_slices]
 
