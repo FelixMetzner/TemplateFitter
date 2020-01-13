@@ -11,8 +11,8 @@ from typing import Optional, Tuple
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions.systematics import SystematicsInputType
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
-from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataInputType, \
-    DataColumnNamesInput
+from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, BinnedDistributionFromData, \
+    DataInputType, DataColumnNamesInput
 
 __all__ = [
     "HistComponent"
@@ -108,7 +108,7 @@ class HistComponent:
         if isinstance(self.input_data, pd.DataFrame):
             assert self.input_column_name is not None
 
-        binned_dist = BinnedDistribution(
+        binned_dist = BinnedDistributionFromData(
             bins=binning.bin_edges,
             dimensions=1,
             log_scale_mask=binning.log_scale_mask,
@@ -183,7 +183,7 @@ class HistComponent:
         if self._raw_data is None:
             if isinstance(self.input_data, pd.DataFrame) and self.input_column_name is None:
                 raise RuntimeError("input_column_name must be defined if input_data is a pandas.DataFrame!")
-            raw_data = BinnedDistribution.get_data_input(
+            raw_data = BinnedDistributionFromData.get_data_input(
                 in_data=self.input_data,
                 data_column_names=self.input_column_name
             )

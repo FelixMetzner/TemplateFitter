@@ -11,8 +11,9 @@ from templatefitter.fit_model.parameter_handler import ParameterHandler, Templat
 
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binning import BinsInputType, ScopeInputType, LogScaleInputType
-from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataInputType, \
-    SystematicsInputType, DataColumnNamesInput
+from templatefitter.binned_distributions.binned_distribution import BinnedDistributionFromData, DataInputType, \
+    DataColumnNamesInput
+from templatefitter.binned_distributions.systematics import SystematicsInputType
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -20,7 +21,7 @@ __all__ = ["Template"]
 
 
 # TODO: Check TODOs below!
-class Template(BinnedDistribution):
+class Template(BinnedDistributionFromData):
     def __init__(
             self,
             name: str,

@@ -15,8 +15,8 @@ from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binning import Binning, LogScaleInputType
 from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
-from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, DataInputType, \
-    DataColumnNamesInput
+from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, BinnedDistributionFromData, \
+    DataInputType, DataColumnNamesInput
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -487,7 +487,7 @@ class DataChannelContainer(Sequence):
                                f"{self._channels_mapping[channel_name]}th channel in the DataChannelContainer.")
 
         channel_index = self.__len__()
-        channel_distribution = BinnedDistribution(
+        channel_distribution = BinnedDistributionFromData(
             bins=binning.bin_edges,
             dimensions=binning.dimensions,
             scope=binning.range,

@@ -815,7 +815,7 @@ class FitModel:
             shape_uncertainties,
             template_bin_counts,
             out=np.zeros_like(shape_uncertainties),
-            where=template_bin_counts!=0
+            where=template_bin_counts != 0
         )
 
         self._relative_shape_uncertainties = relative_shape_uncertainties
