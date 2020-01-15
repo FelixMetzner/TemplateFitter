@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from typing import Optional, Tuple
+from abc import ABC, abstractmethod
 
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions.systematics import SystematicsInputType
@@ -19,10 +20,10 @@ __all__ = [
 ]
 
 
-# TODO next: Differentiate between HistComponent with BinnedDistribution.fill and BinnedDistribution.fill_from_binned!
-class HistComponent:
+# TODO: Differentiate between component from binned and raw Data (the latter is the only option available currently)
+class HistComponent(ABC):
     """
-    Helper class for handling components of histograms.
+    Abstract base class for helper classes for handling components of histograms.
     """
 
     def __init__(
@@ -61,26 +62,6 @@ class HistComponent:
         self._raw_weights = None
 
         self._binned_distribution = None
-
-    @classmethod
-    def create_from_fit_model(
-            cls,
-            label: str,
-            bin_counts: np.ndarray,
-            binning: Binning,
-            dimensions: int,
-            bin_errors_squared: Optional[np.ndarray] = None,
-            color: Optional[str] = None,
-            alpha: float = 1.0
-    ) -> "HistComponent":
-        # TODO
-        instance = cls(label=label, color=color, alpha=alpha)
-        instance._bin_counts = bin_counts
-        instance._bin_errors_sq = bin_errors_squared
-
-        instance.is_empty = False
-        instance._was_filled_from_binned = True
-        return instance
 
     def get_histogram_bin_count(self, binning: Binning) -> np.ndarray:
         """
@@ -256,3 +237,54 @@ class HistComponent:
         else:
             raise TypeError(f"data_column_names must be either a string, a list containing ONE string, or None.\n"
                             f"You provided {data_column_names}")
+
+
+class HistComponentFromData(HistComponent):
+    """
+    Helper class for handling components of histograms.
+    This implementation of the HistComponent class fills the histogram from data and thus allows
+    for rebinning and other more extensive modifications of the histogram.
+    """
+
+    def __init__(
+            self,
+            label: str,
+            data: DataInputType,
+            weights: WeightsInputType = None,
+            systematics: SystematicsInputType = None,
+            data_column_names: DataColumnNamesInput = None,
+            color: Optional[str] = None,
+            alpha: float = 1.0
+    ) -> None:
+        """
+        HistComponent constructor.
+
+        :param label: Component label for the histogram.
+        :param data: Data to be plotted as histogram.
+        :param weights: Weights for the events in data.
+        :param systematics: Information about the systematics associated with the data.
+        :param color: Color of the histogram component.
+        :param alpha: Alpha value of the histogram component.
+        """
+        super().__init__(
+            label=label,
+            data=data,
+            color=color,
+            alpha=alpha
+        )
+
+        self._input_data = data
+        self._input_weights = weights
+        self._input_systematics = systematics
+        self._input_column_name = self._get_data_column_name(data_column_names=data_column_names)
+
+
+class HistComponentFromHistogram(HistComponent):
+    """
+    Helper class for handling components of histograms.
+    This implementation of the HistComponent class fills the histogram from already histogrammed data.
+    The input is thus only the bin counts and the errors on the bins.
+    However, this approach does not allow for extensive modifications of the histogram, as it would be possible
+    if the underlying data is available (e.g. arbitrary rebinning is not possible).
+    """
+    pass

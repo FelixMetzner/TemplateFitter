@@ -106,7 +106,8 @@ class FitResultPlot(HistogramPlot):
             data_histogram_key = f"channel_{data_channel.name}_data"
             self.add_component(
                 label=self._get_data_label(),
-                data=data_channel.ra,
+                data=data_channel.base_data,  # TODO next: The data channels can be taken directly from the original BinnedDistributions!
+                                              #            Keep in mind, however, that these binned distributions can have weights, if they are Asimov Data samples!
                 histogram_key=data_histogram_key,
                 weights=None,
                 systematics=None,
