@@ -144,6 +144,8 @@ class StackedHistogramPlot(HistogramPlot):
             histtype=histogram.hist_type
         )
 
+        # TODO: Include uncertainties if available and wanted!
+
         ax.set_xlabel(self._variable.x_label, plot_style.xlabel_pos)
         ax.set_ylabel(self._get_y_label(normed=False, evts_or_cands=y_label), plot_style.ylabel_pos)
 
