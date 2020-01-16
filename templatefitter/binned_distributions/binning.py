@@ -245,3 +245,16 @@ class Binning:
             f"bin_edges = {self.bin_edges}"
         ]
         return string_list
+
+    def get_binning_for_one_dimension(self, dimension: int) -> "Binning":
+        assert dimension < self.dimensions, (dimension, self.dimensions)
+
+        if self.dimensions == 1 and dimension == 0:
+            return self
+
+        return Binning(
+            bins=self.bin_edges[dimension],
+            dimensions=1,
+            scope=self.range[dimension],
+            log_scale=self.log_scale_mask[dimension]
+        )
