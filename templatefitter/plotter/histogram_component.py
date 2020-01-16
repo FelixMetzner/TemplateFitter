@@ -17,7 +17,9 @@ from templatefitter.binned_distributions.binned_distribution import BinnedDistri
 
 __all__ = [
     "HistComponent",
-    "HistComponentFromData"
+    "HistComponentFromData",
+    "HistComponentFromHistogram",
+    "create_histogram_component"
 ]
 
 
@@ -439,3 +441,42 @@ class HistComponentFromHistogram(HistComponent):
 
         self._max_val = self._original_binning.range[0][1]
         return self._max_val
+
+    @property
+    def raw_data(self) -> np.ndarray:
+        raise NotImplementedError(f"This method is not implemented for the class {self.__class__.__name__}!")
+
+    @property
+    def raw_data_range(self) -> Tuple[float, float]:
+        raise NotImplementedError(f"This method is not implemented for the class {self.__class__.__name__}!")
+
+    @property
+    def raw_data_size(self) -> int:
+        raise NotImplementedError(f"This method is not implemented for the class {self.__class__.__name__}!")
+
+    @property
+    def raw_weights(self) -> np.ndarray:
+        raise NotImplementedError(f"This method is not implemented for the class {self.__class__.__name__}!")
+
+    @property
+    def raw_weights_sum(self) -> float:
+        raise NotImplementedError(f"This method is not implemented for the class {self.__class__.__name__}!")
+
+
+def create_histogram_component(*args, **kwargs) -> HistComponent:
+    try:
+        new_component = HistComponentFromData(*args, **kwargs)
+    except TypeError:
+        try:
+            new_component = HistComponentFromHistogram(*args, **kwargs)
+        except TypeError:
+            raise TypeError("Failed to create a HistComponent from the provided input.\n"
+                            "The input arguments must fit the signature of one of the HistComponent implementations:\n"
+                            "\t 1) HistComponentFromData\n"
+                            "\t 2) HistComponentFromHistogram\n"
+                            "The provided input was:\n"
+                            "\tTypes of args:\n\t\t- " + "\n\t\t- ".join([type(a) for a in args])
+                            + "\n\tTypes of kwargs:\n\t\t- "
+                            + "\n\t\t- ".join([f'{k}: {type(v)}' for k, v in kwargs.items()]))
+
+    return new_component

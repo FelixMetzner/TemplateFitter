@@ -22,7 +22,7 @@ from templatefitter.binned_distributions.distributions_utility import get_combin
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram_variable import HistVariable
-from templatefitter.plotter.histogram_component import HistComponent, HistComponentFromData
+from templatefitter.plotter.histogram_component import HistComponent, create_histogram_component
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -75,7 +75,8 @@ class Histogram:
                 raise TypeError(f"Failed to add HistComponent. A component can be added to a Histogram\n"
                                 f"\t1. by calling 'add_histogram_component' with the same signature as "
                                 f"the HistComponent constructor, or"
-                                f"\t2. by directly providing a HistComponent instance.\n"
+                                f"\t2. by directly providing a HistComponentFromData or HistComponentFromHistogram "
+                                f"instance.\n"
                                 f"You can also use the functions 'add_histogram_component_via_constructor' "
                                 f"and 'add_histogram_component_directly' directly for the respective cases!\n"
                                 f"You provided the following input, which did not match any of the two signatures:\n"
@@ -97,7 +98,7 @@ class Histogram:
         self._components.append(component)
 
     def add_histogram_component_via_constructor(self, *args, **kwargs):
-        new_component = HistComponentFromData(*args, **kwargs)
+        new_component = create_histogram_component(*args, **kwargs)
         self.add_histogram_component_directly(component=new_component)
 
     def reset_binning_to_use_raw_data_scope(self):

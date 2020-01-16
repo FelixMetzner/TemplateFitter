@@ -12,7 +12,7 @@ from typing import Optional, Union, Any, Tuple
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.systematics import SystematicsInputType
-from templatefitter.binned_distributions.binned_distribution import DataInputType
+from templatefitter.binned_distributions.binned_distribution import DataInputType, DataColumnNamesInput
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram_variable import HistVariable
@@ -75,6 +75,42 @@ class HistogramPlot(ABC):
             data=data,
             weights=weights,
             systematics=systematics,
+            data_column_names=self.variable.df_label,
+            color=color,
+            alpha=alpha
+        )
+
+    def _add_prebinned_component(
+            self,
+            label: str,
+            histogram_key: str,
+            bin_count: np.ndarray,
+            original_binning: Binning,
+            bin_errors_squared: np.ndarray = None,
+            data_column_names: DataColumnNamesInput = None,
+            hist_type: Optional[str] = None,
+            color: Optional[str] = None,
+            alpha: float = 1.0
+    ) -> None:
+        if histogram_key not in self._histograms.histogram_keys:
+            new_histogram = Histogram(variable=self.variable, hist_type=hist_type)
+            self._histograms.add_histogram(key=histogram_key, histogram=new_histogram)
+
+        if data_column_names is not None:
+            if isinstance(data_column_names, str):
+                assert data_column_names == self.variable.df_label, (data_column_names, self.variable.df_label)
+            elif isinstance(data_column_names, list):
+                assert len(data_column_names) == 1, (len(data_column_names), data_column_names)
+                assert data_column_names[0] == self.variable.df_label, (data_column_names[0], self.variable.df_label)
+            else:
+                raise RuntimeError(f"Unexpected type for argument 'data_column_names':\n"
+                                   f"Should be None, str or List[str], but is {type(data_column_names)}!")
+
+        self._histograms[histogram_key].add_histogram_component(
+            label=label,
+            bin_count=bin_count,
+            original_binning=original_binning,
+            bin_errors_squared=bin_errors_squared,
             data_column_names=self.variable.df_label,
             color=color,
             alpha=alpha

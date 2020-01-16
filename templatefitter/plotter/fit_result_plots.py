@@ -6,13 +6,11 @@ import logging
 from matplotlib import pyplot as plt, figure
 from typing import Optional, Union, Tuple, List, Dict, Any
 
-from templatefitter.binned_distributions.weights import WeightsInputType
-from templatefitter.binned_distributions.systematics import SystematicsInputType
+from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions.binned_distribution import DataInputType
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram_variable import HistVariable
-from templatefitter.plotter.histogram import Histogram, HistogramContainer
 from templatefitter.plotter.histogram_plot_base import HistogramPlot, AxesType
 
 from templatefitter.fit_model.model_builder import FitModel
@@ -82,17 +80,36 @@ class FitResultPlot(HistogramPlot):
             channel_latex_label = self._get_channel_label(key=mc_channel.name, original_label=mc_channel.latex_label)
             self._channel_latex_labels.update({mc_channel.name: channel_latex_label})
             mc_histogram_key = f"channel_{mc_channel.name}_mc"
+
+            ch_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
+            self._compare_original_binning_to_variable_binning(original_binning=ch_binning)
+
+            ch_data_column_names = mc_channel.data_column_names
+            data_column_name_for_plot = ch_data_column_names[self.reference_dimension]
+            assert data_column_name_for_plot == self.variable.df_label, \
+                (data_column_name_for_plot, self.variable.df_label, ch_data_column_names)
+
             for template in mc_channel.tempaltes:
                 # TODO: Combine templates which are part of one component?
-                # TODO: Add information from each template:
-                self.add_component(
+
+                # TODO: Get fitted template bin count (maybe reshape to get required multidimensional np.ndarray)
+                # TODO: Check if template bin count has expected shape regarding the dimensions!
+                # TODO: Do the same for the bin errors!
+
+                # TODO: Loop over all other dimensions than reference dimension.
+                # TODO: Get subsets in bins of all other dimensions and plot reference dimension
+                #       -> iterative function to get bins in each other dimension!
+
+                self._add_prebinned_component(
                     label=self._get_mc_label(key=template.process_name, original_label=template.latex_label),
-                    data=,
                     histogram_key=mc_histogram_key,
-                    weights=,
-                    systematics=,
+                    bin_count=data,
+                    original_binning=ch_binning,
+                    bin_errors_squared=bin_errors_squared,
+                    data_column_names=data_column_name_for_plot,
                     hist_type="stepfilled",
-                    color=self._get_mc_color(key=template.process_name, original_color=template.color)
+                    color=self._get_mc_color(key=template.process_name, original_color=template.color),
+                    alpha=1.0
                 )
 
         assert list(set(self._channel_name_list)) == self._channel_name_list, self._channel_name_list
@@ -104,45 +121,34 @@ class FitResultPlot(HistogramPlot):
             else:
                 channel_label_check_list.remove(data_channel.name)
             data_histogram_key = f"channel_{data_channel.name}_data"
-            self.add_component(
+
+            ch_binning = data_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
+            self._compare_original_binning_to_variable_binning(original_binning=ch_binning)
+
+            ch_data_column_names = data_channel.data_column_names
+            data_column_name_for_plot = ch_data_column_names[self.reference_dimension]
+            assert data_column_name_for_plot == self.variable.df_label, \
+                (data_column_name_for_plot, self.variable.df_label, ch_data_column_names)
+
+            # TODO: Loop over all other dimensions than reference dimension.
+            self._add_prebinned_component(
                 label=self._get_data_label(),
-                data=data_channel.base_data,  # TODO next: The data channels can be taken directly from the original BinnedDistributions!
-                                              #            Keep in mind, however, that these binned distributions can have weights, if they are Asimov Data samples!
                 histogram_key=data_histogram_key,
-                weights=None,
-                systematics=None,
+                bin_count=data,
+                original_binning=ch_binning,
+                bin_errors_squared=bin_errors_squared,
+                data_column_names=data_column_name_for_plot,
                 hist_type="stepfilled",  # TODO: Define new own hist_type for data plots!
-                color=self._get_data_color()
+                color=self._get_data_color(),
+                alpha=1.0
             )
-        pass
 
     def add_component(
             self,
             label: str,
-            data: DataInputType,
-            histogram_key: Optional[str] = None,
-            weights: WeightsInputType = None,
-            systematics: SystematicsInputType = None,
-            hist_type: Optional[str] = None,
-            color: Optional[str] = None,
-            alpha: float = 1.0
+            data: DataInputType
     ) -> None:
-        if self._is_initialized:
-            raise RuntimeError(f"The add_component method of the class {self.__class__.__name__} is only used "
-                               f"during the initialization of the class and cannot be used directly!")
-        if not isinstance(histogram_key, str):
-            raise ValueError(f"The argument 'histogram_key' of the method 'add_component' must be a string for "
-                             f"the class {self.__class__.__name__}!\nYou provided: histogram_key = {histogram_key}")
-        self._add_component(
-            label=label,
-            histogram_key=histogram_key,
-            data=data,
-            weights=weights,
-            systematics=systematics,
-            hist_type=hist_type,
-            color=color,
-            alpha=alpha
-        )
+        raise RuntimeError(f"This method should not be used in the plot class {self.__class__.__name__}!")
 
     def plot_on(self) -> Tuple[figure.Figure, OneOrTwoAxesType]:
         # TODO
@@ -151,6 +157,10 @@ class FitResultPlot(HistogramPlot):
     @property
     def number_of_channels(self) -> int:
         return len(self._channel_name_list)
+
+    @property
+    def reference_dimension(self) -> int:
+        return self._reference_dimension
 
     def _get_channel_label(self, key: str, original_label: Optional[str]) -> Optional[str]:
         if "channel_label_dict" in self._optional_arguments_dict:
@@ -207,4 +217,19 @@ class FitResultPlot(HistogramPlot):
         else:
             return original_label
 
+    def _compare_original_binning_to_variable_binning(self, original_binning: Binning) -> None:
+        assert original_binning.dimensions == 1, original_binning.dimensions
 
+        assert len(original_binning.num_bins) == 1, original_binning.num_bins
+        assert original_binning.num_bins[0] == original_binning.num_bins_total, \
+            (original_binning.num_bins, original_binning.num_bins_total)
+
+        assert original_binning.num_bins_total == self.variable.n_bins, \
+            (original_binning.num_bins_total, self.variable.n_bins)
+
+        assert len(original_binning.range) == 1, original_binning.range
+        assert original_binning.range[0] == self.variable.scope, (original_binning.range, self.variable.scope)
+
+        assert len(original_binning.log_scale_mask) == 1, original_binning.log_scale_mask
+        assert original_binning.log_scale_mask[0] == self.variable.use_log_scale, \
+            (original_binning.log_scale_mask, self.variable.use_log_scale)
