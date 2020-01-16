@@ -5,16 +5,17 @@ This package provides
 """
 
 import logging
+import numpy as np
 
 from collections import Counter
 from collections.abc import Sequence
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, Union, List, Dict, Tuple
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.weights import WeightsInputType
-from templatefitter.binned_distributions.binning import Binning, LogScaleInputType
 from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
+from templatefitter.binned_distributions.binning import Binning, LogScaleInputType, BinsInputType, ScopeInputType
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, BinnedDistributionFromData, \
     DataInputType, DataColumnNamesInput
 
@@ -401,6 +402,45 @@ class ChannelContainer(Sequence):
         return len(self._channels)
 
 
+class DataChannel(BinnedDistributionFromData):
+    def __init__(
+            self,
+            bins: BinsInputType,
+            dimensions: int,
+            scope: ScopeInputType = None,
+            log_scale_mask: LogScaleInputType = False,
+            name: Optional[str] = None,
+            data: Optional[DataInputType] = None,
+            weights: WeightsInputType = None,
+            data_column_names: DataColumnNamesInput = None
+    ) -> None:
+        super().__init__(
+            bins=bins,
+            dimensions=dimensions,
+            scope=scope,
+            log_scale_mask=log_scale_mask,
+            name=name,
+            data=data,
+            weights=weights,
+            systematics=None,
+            data_column_names=data_column_names
+        )
+
+        self._requires_rounding_due_to_weights = False if weights is None else True
+
+    @property
+    def requires_rounding_due_to_weights(self) -> bool:
+        return self._requires_rounding_due_to_weights
+
+    @property
+    def bin_counts(self) -> Union[None, np.ndarray]:
+        """ The actual bin counts of the binned distribution; rounded up, if required """
+        if self.requires_rounding_due_to_weights:
+            return np.ceil(self._bin_counts)
+
+        return self._bin_counts
+
+
 class DataChannelContainer(Sequence):
     def __init__(
             self,
@@ -409,7 +449,7 @@ class DataChannelContainer(Sequence):
             binning: Optional[List[Binning]] = None,
             column_names: Optional[Tuple[DataColumnNamesInput]] = None
     ):
-        self._channel_distributions = []  # type: List[BinnedDistribution]
+        self._channel_distributions = []  # type: List[DataChannel]
         self._channels_mapping = {}  # type: Dict[str, int]
         if channel_names is not None:
             self.add_channels(
@@ -420,8 +460,6 @@ class DataChannelContainer(Sequence):
             )
 
         super().__init__()
-
-        self._requires_rounding_due_to_weights = False
 
     def add_channels(
             self,
@@ -487,20 +525,16 @@ class DataChannelContainer(Sequence):
                                f"{self._channels_mapping[channel_name]}th channel in the DataChannelContainer.")
 
         channel_index = self.__len__()
-        channel_distribution = BinnedDistributionFromData(
+        channel_distribution = DataChannel(
             bins=binning.bin_edges,
             dimensions=binning.dimensions,
             scope=binning.range,
             name=f"data_channel_{channel_index}_{channel_name}",
             data=channel_data,
             weights=channel_weights,
-            systematics=None,
             data_column_names=column_names,
             log_scale_mask=log_scale_mask
         )
-
-        if channel_weights is not None:
-            self._requires_rounding_due_to_weights = True
 
         self._channel_distributions.append(channel_distribution)
         self._channels_mapping.update({channel_name: channel_index})
@@ -516,8 +550,8 @@ class DataChannelContainer(Sequence):
         return len(self._channel_distributions) == 0
 
     @property
-    def requires_rounding_due_to_weights(self) -> bool:
-        return self._requires_rounding_due_to_weights
+    def requires_rounding_due_to_weights(self) -> Tuple[bool, ...]:
+        return tuple([ch.requires_rounding_due_to_weights for ch in self._channel_distributions])
 
     def __getitem__(self, i) -> Optional[BinnedDistribution]:
         return self._channel_distributions[i]

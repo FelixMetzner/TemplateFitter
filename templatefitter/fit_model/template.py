@@ -283,8 +283,13 @@ class Template(BinnedDistributionFromData):
         self._use_other_systematics = boolean_value
 
     # TODO: Needs work...
-    def expected_bin_counts(self):
-        pass
+    def expected_bin_counts(self) -> np.ndarray:
+        raise NotImplementedError("TODO")
+        # TODO!
+
+    # TODO: Needs work...
+    def expected_bin_errors_squared(self) -> np.ndarray:
+        raise NotImplementedError("TODO")
         # TODO!
 
     def fractions(self):
@@ -296,5 +301,3 @@ class Template(BinnedDistributionFromData):
         )
 
         return per_bin_yields / np.sum(per_bin_yields)
-
-    # TODO: Add some function to convert to hist for plotting...

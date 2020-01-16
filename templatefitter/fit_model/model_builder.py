@@ -1435,9 +1435,6 @@ class FitModel:
         padded_flat_data_bin_counts = self._apply_padding_to_data_bin_count(bin_counts_per_channel=flat_data_bin_counts)
         data_bin_count_matrix = np.stack(padded_flat_data_bin_counts)
 
-        if self._data_channels.requires_rounding_due_to_weights:
-            data_bin_count_matrix = np.ceil(data_bin_count_matrix)
-
         if not self._data_bin_count_checked:
             self._check_bin_count_shape(bin_count=data_bin_count_matrix, where="get_flattened_data_bin_counts")
             self._data_bin_count_checked = True

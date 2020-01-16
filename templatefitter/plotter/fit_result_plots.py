@@ -3,6 +3,7 @@ Plotting tools to illustrate fit results produced with this package
 """
 import copy
 import logging
+import numpy as np
 from matplotlib import pyplot as plt, figure
 from typing import Optional, Union, Tuple, List, Dict, Any
 
@@ -73,8 +74,6 @@ class FitResultPlot(HistogramPlot):
         #       create the Histograms / the underlying BinnedDistribution
         #####
 
-        # TODO: Check that column name of reference_dimension agrees with self.variable.df_label
-
         for mc_channel in fit_model.mc_channels_to_plot:
             self._channel_name_list.append(mc_channel.name)
             channel_latex_label = self._get_channel_label(key=mc_channel.name, original_label=mc_channel.latex_label)
@@ -100,17 +99,24 @@ class FitResultPlot(HistogramPlot):
                 # TODO: Get subsets in bins of all other dimensions and plot reference dimension
                 #       -> iterative function to get bins in each other dimension!
 
-                self._add_prebinned_component(
-                    label=self._get_mc_label(key=template.process_name, original_label=template.latex_label),
-                    histogram_key=mc_histogram_key,
-                    bin_count=data,
-                    original_binning=ch_binning,
-                    bin_errors_squared=bin_errors_squared,
-                    data_column_names=data_column_name_for_plot,
-                    hist_type="stepfilled",
-                    color=self._get_mc_color(key=template.process_name, original_color=template.color),
-                    alpha=1.0
-                )
+                template_bin_count = template.expected_bin_counts()
+                template_bin_error_sq = template.expected_bin_counts()
+
+                for _ in range(1):  # TODO: Loop over all other bin-combinations
+                    current_bin_count = template_bin_count
+                    current_bin_errors_squared = template_bin_error_sq
+
+                    self._add_prebinned_component(
+                        label=self._get_mc_label(key=template.process_name, original_label=template.latex_label),
+                        histogram_key=mc_histogram_key,
+                        bin_count=current_bin_count,
+                        original_binning=ch_binning,
+                        bin_errors_squared=current_bin_errors_squared,
+                        data_column_names=data_column_name_for_plot,
+                        hist_type="stepfilled",
+                        color=self._get_mc_color(key=template.process_name, original_color=template.color),
+                        alpha=1.0
+                    )
 
         assert list(set(self._channel_name_list)) == self._channel_name_list, self._channel_name_list
 
@@ -130,18 +136,25 @@ class FitResultPlot(HistogramPlot):
             assert data_column_name_for_plot == self.variable.df_label, \
                 (data_column_name_for_plot, self.variable.df_label, ch_data_column_names)
 
+            data_bin_count = data_channel.bin_counts
+            data_bin_errors_squared = np.sqrt(data_bin_count)
+
             # TODO: Loop over all other dimensions than reference dimension.
-            self._add_prebinned_component(
-                label=self._get_data_label(),
-                histogram_key=data_histogram_key,
-                bin_count=data,
-                original_binning=ch_binning,
-                bin_errors_squared=bin_errors_squared,
-                data_column_names=data_column_name_for_plot,
-                hist_type="stepfilled",  # TODO: Define new own hist_type for data plots!
-                color=self._get_data_color(),
-                alpha=1.0
-            )
+            for _ in range(1):  # TODO: Loop over all other bin-combinations
+                current_bin_count = data_bin_count
+                current_bin_errors_squared = data_bin_errors_squared
+
+                self._add_prebinned_component(
+                    label=self._get_data_label(),
+                    histogram_key=data_histogram_key,
+                    bin_count=current_bin_count,
+                    original_binning=ch_binning,
+                    bin_errors_squared=current_bin_errors_squared,
+                    data_column_names=data_column_name_for_plot,
+                    hist_type="stepfilled",  # TODO: Define new own hist_type for data plots!
+                    color=self._get_data_color(),
+                    alpha=1.0
+                )
 
     def add_component(
             self,
