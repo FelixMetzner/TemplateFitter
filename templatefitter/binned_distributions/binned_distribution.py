@@ -194,7 +194,7 @@ class BinnedDistribution(ABC):
                                   "as it depends on the specific versions of the child classes.")
 
     @abstractmethod
-    def bin_errors_sq_with_normalization(self, normalization_factor: Optional[float]) -> Union[None, np.ndarray]:
+    def bin_errors_sq_with_normalization(self, normalization_factor: Optional[float] = None) -> Union[None, np.ndarray]:
         raise NotImplementedError("This method is not implemented for the abstract base class BinnedDistribution, "
                                   "as it depends on the specific versions of the child classes.")
 

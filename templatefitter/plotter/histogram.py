@@ -22,7 +22,7 @@ from templatefitter.binned_distributions.distributions_utility import get_combin
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram_variable import HistVariable
-from templatefitter.plotter.histogram_component import HistComponent
+from templatefitter.plotter.histogram_component import HistComponent, HistComponentFromData
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -97,7 +97,7 @@ class Histogram:
         self._components.append(component)
 
     def add_histogram_component_via_constructor(self, *args, **kwargs):
-        new_component = HistComponent(*args, **kwargs)
+        new_component = HistComponentFromData(*args, **kwargs)
         self.add_histogram_component_directly(component=new_component)
 
     def reset_binning_to_use_raw_data_scope(self):
