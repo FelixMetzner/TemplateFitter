@@ -404,7 +404,7 @@ class BinnedDistributionFromData(BinnedDistribution):
         self._bin_correlation_matrix = cov2corr(self.bin_covariance_matrix)
         return self._bin_correlation_matrix
 
-    def bin_errors_sq_with_normalization(self, normalization_factor: Optional[float]) -> Union[None, np.ndarray]:
+    def bin_errors_sq_with_normalization(self, normalization_factor: Optional[float] = None) -> Union[None, np.ndarray]:
         if self.is_empty:
             return None
 
@@ -502,8 +502,8 @@ class BinnedDistributionFromHistogram(BinnedDistribution):
                 raise ValueError(f"Shape of {parameter_name} {binned_input.shape} does not match the "
                                  f"dimensions of the BinndedDistribution instance, which is {self.dimensions}!")
             return np.expand_dims(binned_input, axis=1)
-        elif len(binned_input.shape) == 2:
-            if not self.dimensions == binned_input.shape[1]:
+        elif len(binned_input.shape) >= 2:
+            if not self.dimensions == len(binned_input.shape):
                 raise ValueError(f"Shape of {parameter_name} {binned_input.shape} does not match the "
                                  f"dimensions of the BinndedDistribution instance, which is {self.dimensions}!")
             return binned_input
@@ -537,7 +537,7 @@ class BinnedDistributionFromHistogram(BinnedDistribution):
                                   "BinnedDistributionFromHistogram which have been initialized from an already "
                                   "binned distribution.\nWhat you are trying to attempt is not possible.")
 
-    def bin_errors_sq_with_normalization(self, normalization_factor: Optional[float]) -> Union[None, np.ndarray]:
+    def bin_errors_sq_with_normalization(self, normalization_factor: Optional[float] = None) -> Union[None, np.ndarray]:
         raise NotImplementedError("The bin_errors_sq_with_normalization property is not available for "
                                   "BinnedDistributionFromHistogram which have been initialized from an already "
                                   "binned distribution.\nWhat you are trying to attempt is not possible.")
