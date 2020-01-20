@@ -3,12 +3,16 @@ Plotting tools to illustrate fit results produced with this package
 """
 import copy
 import logging
+import itertools
 import numpy as np
-from matplotlib import pyplot as plt, figure
+
+from collections import defaultdict
+from matplotlib import pyplot as plt
 from typing import Optional, Union, Tuple, List, Dict, Any
 
 from templatefitter.binned_distributions.binning import Binning
-from templatefitter.binned_distributions.binned_distribution import DataInputType
+from templatefitter.fit_model.channel import DataChannelContainer
+from templatefitter.binned_distributions.binned_distribution import DataColumnNamesInput
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram_variable import HistVariable
@@ -19,12 +23,13 @@ from templatefitter.fit_model.model_builder import FitModel
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
-    "FitResultPlot"
+    "FitResultPlot",
+    "FitResultPlotter"
 ]
 
 plot_style.set_matplotlibrc_params()
 
-OneOrTwoAxesType = Union[AxesType, Tuple[AxesType, AxesType]]
+OneOrTwoAxesType = Union[AxesType, Tuple[AxesType, AxesType]]  # TODO: is this needed?
 
 
 # TODO: Option to add Chi2 test
@@ -47,125 +52,297 @@ OneOrTwoAxesType = Union[AxesType, Tuple[AxesType, AxesType]]
 # TODO: Maybe implement method to generate BinnedDistribution from slice or projection of original BinnedDistribution.
 #########
 
+
 class FitResultPlot(HistogramPlot):
+    valid_styles = ["stacked", "summed"]
+    valid_ratio_types = ["normal", "vs_uncert"]
+    valid_gof_methods = ["pearson", "cowan", "toys"]
+
+    data_key = "data_histogram"
+    mc_key = "mc_histogram"
+    valid_histogram_keys = [data_key, mc_key]
+    required_histogram_keys = valid_histogram_keys
+
+    def __init__(self, variable: HistVariable, binning: Binning) -> None:
+        super().__init__(variable=variable)
+
+        self._binning = binning
+
+    @property
+    def binning(self) -> Optional[Binning]:
+        return self._binning
+
+    def add_component(
+            self,
+            label: str,
+            histogram_key: str,
+            bin_counts: np.ndarray,
+            bin_errors_squared: np.ndarray,
+            data_column_names: DataColumnNamesInput,
+            color: str
+    ) -> None:
+        self._check_histogram_key(histogram_key=histogram_key)
+
+        self._add_prebinned_component(
+            label=label,
+            histogram_key=histogram_key,
+            bin_counts=bin_counts,
+            original_binning=self._binning,
+            bin_errors_squared=bin_errors_squared,
+            data_column_names=data_column_names,
+            hist_type="stepfilled",  # TODO: Define own hist_type for data plots: histogram_key == data_key!
+            color=color,
+            alpha=1.0
+        )
+
+    def plot_on(
+            self,
+            ax1: Optional[AxesType] = None,
+            style: str = "stacked",
+            include_sys: bool = False,
+            markers_with_width: bool = True,
+            sum_color: str = plot_style.KITColors.kit_purple,
+            draw_legend: bool = True,
+            legend_inside: bool = True,
+            legend_cols: Optional[int] = None,
+            legend_loc: Optional[Union[int, str]] = None,
+            y_scale: float = 1.1
+    ) -> Any:
+        self._check_required_histograms()
+
+        bin_scaling = 1. / np.around(self.bin_widths / self.minimal_bin_width, decimals=0)
+
+        data_bin_count = self._histograms[self.data_key].get_bin_count_of_component(index=0)
+        data_bin_errors_sq = self._histograms[self.data_key].get_histogram_squared_bin_errors_of_component(index=0)
+
+        mc_bin_counts = self._histograms[self.mc_key].get_bin_counts()
+        mc_sum_bin_count = np.sum(np.array(mc_bin_counts), axis=0)
+        mc_sum_bin_error_sq = self._histograms[self.mc_key].get_statistical_uncertainty_per_bin()
+
+        if style.lower() == "stacked":
+            ax1.hist(
+                x=[self.bin_mids for _ in range(self._histograms[self.mc_key].number_of_components)],
+                bins=self.bin_edges,
+                weights=mc_bin_counts,
+                stacked=True,
+                edgecolor="black",
+                lw=0.3,
+                color=self._histograms[self.mc_key].colors,
+                label=self._histograms[self.mc_key].labels,
+                histtype='stepfilled'
+            )
+
+            ax1.bar(
+                x=self.bin_mids,
+                height=2 * np.sqrt(mc_sum_bin_error_sq),
+                width=self.bin_widths,
+                bottom=mc_sum_bin_count * bin_scaling - np.sqrt(mc_sum_bin_error_sq),
+                color="black",
+                hatch="///////",
+                fill=False,
+                lw=0,
+                label="MC stat. unc." if not include_sys else "MC stat. + sys. unc."
+            )
+        elif style.lower() == "summed":
+            ax1.bar(
+                x=self.bin_mids,
+                height=2 * np.sqrt(mc_sum_bin_error_sq),
+                width=self.bin_widths,
+                bottom=mc_sum_bin_count * bin_scaling - np.sqrt(mc_sum_bin_error_sq),
+                color=sum_color,
+                lw=0,
+                label="MC stat. unc." if not include_sys else "MC stat. + sys. unc."
+            )
+        else:
+            raise RuntimeError(f"Invalid style '{style.lower()}!'\n style must be one of {self.valid_styles}!")
+
+        ax1.errorbar(
+            x=self.bin_mids,
+            y=data_bin_count * bin_scaling,
+            yerr=np.sqrt(data_bin_errors_sq),
+            xerr=self.bin_widths / 2 if markers_with_width else None,
+            ls="",
+            marker=".",
+            color="black",
+            label=self._histograms[self.data_key].labels[0]
+        )
+
+        if draw_legend:
+            if style == "stacked":
+                self.draw_legend(axis=ax1, inside=legend_inside, loc=legend_loc, ncols=legend_cols,
+                                 font_size="smaller", y_axis_scale=y_scale)
+            else:
+                self.draw_legend(axis=ax1, inside=legend_inside, loc=legend_loc, ncols=legend_cols,
+                                 y_axis_scale=y_scale)
+
+    def _check_histogram_key(self, histogram_key: str) -> None:
+        assert isinstance(histogram_key, str), type(histogram_key)
+        if histogram_key not in self.valid_histogram_keys:
+            raise RuntimeError(f"Invalid histogram_key provided!\n"
+                               f"The histogram key must be one of {self.valid_histogram_keys}!\n"
+                               f"However, you provided the histogram_key {histogram_key}!")
+
+    def _check_required_histograms(self) -> None:
+        for required_hist_key in self.required_histogram_keys:
+            if required_hist_key not in self._histograms.histogram_keys:
+                raise RuntimeError(f"The required histogram key '{required_hist_key}' is not available!\n"
+                                   f"Available histogram keys: {list(self._histograms.keys())}\n"
+                                   f"Required histogram keys: {self.required_histogram_keys}")
+
+
+class FitResultPlotter:
 
     def __init__(
             self,
             variable: HistVariable,
             fit_model: FitModel,
             reference_dimension: int = 0,
+            fig_size: Tuple[float, float] = (5, 5),  # TODO: could be handled via kwargs
+            involved_hist_variables=Optional[List[HistVariable]],
             **kwargs
     ) -> None:
-        super().__init__(variable=variable)
-        self._reference_dimension = reference_dimension
+        self._variable = variable
+        self._fit_model = fit_model
+        self._reference_dimension = reference_dimension  # TODO: Reference dimension and respective variable of the fit model must be same as self.variable!
+
+        self._fig_size = fig_size
         self._optional_arguments_dict = kwargs  # type: Dict[str, Any]
 
         self._channel_name_list = []  # type: List[str]
+        self._channel_variables = {}  # type: Dict[str, HistVariable]
         self._channel_latex_labels = {}  # type: Dict[str, str]
+        self._channel_sub_bin_mapping = defaultdict(list)  # type: Dict[str: List[Optional[Tuple[int, ...]]]]
+
+        self._involved_hist_variables = involved_hist_variables
+
         self._get_histograms_from_model(fit_model=fit_model)
 
-        self._is_initialized = True
+    def plot_fit_result(self) -> None:
+        for mc_channel in self._fit_model.mc_channels_to_plot:
+            current_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
+            data_column_name_for_plot = mc_channel.data_column_names[self.reference_dimension]
+
+            data_channel = self._fit_model.data_channels_to_plot.get_channel_by_name(name=mc_channel.name)
+            data_bin_count = data_channel.bin_counts
+            data_bin_errors_squared = data_channel.bin_errors_sq
+
+            # TODO: Use channel_latex_labels for plot info...
+
+            for sub_bin_ids in self._channel_sub_bin_mapping[mc_channel.name]:
+                if sub_bin_ids is None:
+                    sub_bin_info = None
+                else:
+                    sub_bin_info = self._get_bin_infos(channel_name=mc_channel.name, bin_ids=sub_bin_ids)
+                nd_array_slices = self._get_slices(bins_in_other_dims=sub_bin_ids)
+
+                current_plot = FitResultPlot(variable=self.variable, binning=current_binning)
+
+                for template in mc_channel.templates:
+                    template_bin_count = template.expected_bin_counts()
+                    template_bin_error_sq = template.expected_bin_counts()
+
+                    subset_bin_count = template_bin_count[nd_array_slices]
+                    subset_bin_errors_squared = template_bin_error_sq[nd_array_slices]
+
+                    current_plot.add_component(
+                        label=self._get_mc_label(key=template.process_name, original_label=template.latex_label),
+                        histogram_key=FitResultPlot.mc_key,
+                        bin_counts=subset_bin_count,
+                        bin_errors_squared=subset_bin_errors_squared,
+                        data_column_names=data_column_name_for_plot,
+                        color=self._get_mc_color(key=template.process_name, original_color=template.color)
+                    )
+
+                subset_data_bin_count = data_bin_count[nd_array_slices]
+                subset_data_bin_errors_squared = data_bin_errors_squared[nd_array_slices]
+
+                current_plot.add_component(
+                    label=self._get_data_label(),
+                    histogram_key=FitResultPlot.data_key,
+                    bin_counts=subset_data_bin_count,
+                    bin_errors_squared=subset_data_bin_errors_squared,
+                    data_column_names=data_column_name_for_plot,
+                    color=self._get_data_color()
+                )
+
+                fig, axs = plt.subplots(nrows=1, ncols=1, figsize=self._fig_size, dpi=200)
+                current_plot.plot_on(
+                    ax1=axs,
+                    #  style=???,  # str = "stacked",
+                    #  include_sys=???,  # bool = False,
+                    #  markers_with_width=???,  # bool = True,
+                    #  sum_color=???,  # str = plot_style.KITColors.kit_purple,
+                    #  draw_legend=???,  # bool = True,
+                    #  legend_inside=???,  # bool = True,
+                    #  legend_cols=???,  # Optional[int] = None,
+                    #  legend_loc=???,  # Optional[Union[int, str]] = None,
+                    #  y_scale=???,  # float = 1.1
+                )
+                fig.show()
 
     def _get_histograms_from_model(self, fit_model: FitModel) -> None:
-        #####
-        # TODO: Either the projection option has to be used, or we have to create separate Histograms per bin of all
-        #       other dimensions. In any way: the dimension which should be used as reference has to be specified!
-        # TODO: The bin edges and so forth have to be chosen correctly from the Binning of the FitModel to
-        #       create the Histograms / the underlying BinnedDistribution
-        #####
 
         for mc_channel in fit_model.mc_channels_to_plot:
             self._channel_name_list.append(mc_channel.name)
             channel_latex_label = self._get_channel_label(key=mc_channel.name, original_label=mc_channel.latex_label)
             self._channel_latex_labels.update({mc_channel.name: channel_latex_label})
-            mc_histogram_key = f"channel_{mc_channel.name}_mc"
 
             ch_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
-            self._compare_original_binning_to_variable_binning(original_binning=ch_binning)
+            self._add_channel_hist_var(channel_name=mc_channel.name, original_binning=ch_binning)
 
             ch_data_column_names = mc_channel.data_column_names
             data_column_name_for_plot = ch_data_column_names[self.reference_dimension]
             assert data_column_name_for_plot == self.variable.df_label, \
                 (data_column_name_for_plot, self.variable.df_label, ch_data_column_names)
 
-            for template in mc_channel.tempaltes:
-                # TODO: Combine templates which are part of one component?
+            full_binning = mc_channel.binning
 
-                # TODO: Get fitted template bin count (maybe reshape to get required multidimensional np.ndarray)
-                # TODO: Check if template bin count has expected shape regarding the dimensions!
-                # TODO: Do the same for the bin errors!
+            other_binnings_by_dimension = {
+                dim: full_binning.num_bins for dim in range(full_binning.dimensions) if dim != self.reference_dimension
+            }
+            assert list(set(other_binnings_by_dimension.keys())) == list(other_binnings_by_dimension.keys()), \
+                other_binnings_by_dimension
 
-                # TODO: Loop over all other dimensions than reference dimension.
-                # TODO: Get subsets in bins of all other dimensions and plot reference dimension
-                #       -> iterative function to get bins in each other dimension!
-
-                template_bin_count = template.expected_bin_counts()
-                template_bin_error_sq = template.expected_bin_counts()
-
-                for _ in range(1):  # TODO: Loop over all other bin-combinations
-                    current_bin_count = template_bin_count
-                    current_bin_errors_squared = template_bin_error_sq
-
-                    self._add_prebinned_component(
-                        label=self._get_mc_label(key=template.process_name, original_label=template.latex_label),
-                        histogram_key=mc_histogram_key,
-                        bin_count=current_bin_count,
-                        original_binning=ch_binning,
-                        bin_errors_squared=current_bin_errors_squared,
-                        data_column_names=data_column_name_for_plot,
-                        hist_type="stepfilled",
-                        color=self._get_mc_color(key=template.process_name, original_color=template.color),
-                        alpha=1.0
-                    )
+            if len(other_binnings_by_dimension) == 0:
+                self._channel_sub_bin_mapping[mc_channel.name].append(None)
+            else:
+                bin_ranges = [list(range(n_bins)) for n_bins in other_binnings_by_dimension.values()]
+                all_combinations = list(itertools.product(*bin_ranges))
+                self._channel_sub_bin_mapping[mc_channel.name].extend(all_combinations)
 
         assert list(set(self._channel_name_list)) == self._channel_name_list, self._channel_name_list
 
         channel_label_check_list = copy.copy(self._channel_name_list)
         for data_channel in fit_model.data_channels_to_plot:
-            if data_channel.name not in channel_label_check_list:
-                raise RuntimeError(f"Encountered channel in data channels of fit model, which is not ")
+            data_channel_base_name = DataChannelContainer.get_base_channel_name(data_channel_name=data_channel.name)
+            if data_channel_base_name not in channel_label_check_list:
+                raise RuntimeError(f"Encountered channel in data channels of fit model, which is not known:\n"
+                                   f"\tData Channel name: {data_channel_base_name}\n"
+                                   f"List of known channels:\n\t-" + "\n\t-".join(self._channel_name_list))
             else:
-                channel_label_check_list.remove(data_channel.name)
-            data_histogram_key = f"channel_{data_channel.name}_data"
+                channel_label_check_list.remove(data_channel_base_name)
+            assert data_channel_base_name in self._channel_sub_bin_mapping.keys(), \
+                (data_channel_base_name, self._channel_sub_bin_mapping.keys())
 
             ch_binning = data_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
-            self._compare_original_binning_to_variable_binning(original_binning=ch_binning)
+            self._compare_binning_to_channel_variable_binning(channel_name=data_channel_base_name, binning=ch_binning)
 
             ch_data_column_names = data_channel.data_column_names
             data_column_name_for_plot = ch_data_column_names[self.reference_dimension]
             assert data_column_name_for_plot == self.variable.df_label, \
                 (data_column_name_for_plot, self.variable.df_label, ch_data_column_names)
 
-            data_bin_count = data_channel.bin_counts
-            data_bin_errors_squared = np.sqrt(data_bin_count)
+    @property
+    def variable(self) -> HistVariable:
+        return self._variable
 
-            # TODO: Loop over all other dimensions than reference dimension.
-            for _ in range(1):  # TODO: Loop over all other bin-combinations
-                current_bin_count = data_bin_count
-                current_bin_errors_squared = data_bin_errors_squared
+    @property
+    def channel_names(self) -> List[str]:
+        return self._channel_name_list
 
-                self._add_prebinned_component(
-                    label=self._get_data_label(),
-                    histogram_key=data_histogram_key,
-                    bin_count=current_bin_count,
-                    original_binning=ch_binning,
-                    bin_errors_squared=current_bin_errors_squared,
-                    data_column_names=data_column_name_for_plot,
-                    hist_type="stepfilled",  # TODO: Define new own hist_type for data plots!
-                    color=self._get_data_color(),
-                    alpha=1.0
-                )
-
-    def add_component(
-            self,
-            label: str,
-            data: DataInputType
-    ) -> None:
-        raise RuntimeError(f"This method should not be used in the plot class {self.__class__.__name__}!")
-
-    def plot_on(self) -> Tuple[figure.Figure, OneOrTwoAxesType]:
-        # TODO
-        pass
+    @property
+    def channel_variables(self) -> Dict[str, HistVariable]:
+        return self._channel_variables
 
     @property
     def number_of_channels(self) -> int:
@@ -174,6 +351,30 @@ class FitResultPlot(HistogramPlot):
     @property
     def reference_dimension(self) -> int:
         return self._reference_dimension
+
+    def _add_channel_hist_var(self, channel_name: str, original_binning: Binning) -> None:
+        assert channel_name not in self._channel_variables.keys(), (channel_name, self._channel_variables.keys())
+
+        assert original_binning.dimensions == 1, original_binning.dimensions
+
+        assert len(original_binning.num_bins) == 1, original_binning.num_bins
+        assert original_binning.num_bins[0] == original_binning.num_bins_total, \
+            (original_binning.num_bins, original_binning.num_bins_total)
+
+        assert len(original_binning.range) == 1, original_binning.range
+
+        assert len(original_binning.log_scale_mask) == 1, original_binning.log_scale_mask
+
+        channel_hist_var = HistVariable(
+            df_label=self.variable.df_label,
+            n_bins=original_binning.num_bins_total,
+            scope=original_binning.range[0],
+            var_name=self.variable.variable_name,
+            unit=self.variable.unit,
+            use_log_scale=original_binning.log_scale_mask[0]
+        )
+
+        self._channel_variables[channel_name] = channel_hist_var
 
     def _get_channel_label(self, key: str, original_label: Optional[str]) -> Optional[str]:
         if "channel_label_dict" in self._optional_arguments_dict:
@@ -230,19 +431,71 @@ class FitResultPlot(HistogramPlot):
         else:
             return original_label
 
-    def _compare_original_binning_to_variable_binning(self, original_binning: Binning) -> None:
-        assert original_binning.dimensions == 1, original_binning.dimensions
+    def _compare_binning_to_channel_variable_binning(self, channel_name: str, binning: Binning) -> None:
+        assert channel_name in self.channel_variables, (channel_name, list(self.channel_variables.keys()))
+        ch_variable = self.channel_variables[channel_name]
 
-        assert len(original_binning.num_bins) == 1, original_binning.num_bins
-        assert original_binning.num_bins[0] == original_binning.num_bins_total, \
-            (original_binning.num_bins, original_binning.num_bins_total)
+        assert binning.dimensions == 1, binning.dimensions
 
-        assert original_binning.num_bins_total == self.variable.n_bins, \
-            (original_binning.num_bins_total, self.variable.n_bins)
+        assert len(binning.num_bins) == 1, binning.num_bins
+        assert binning.num_bins[0] == binning.num_bins_total, (binning.num_bins, binning.num_bins_total)
 
-        assert len(original_binning.range) == 1, original_binning.range
-        assert original_binning.range[0] == self.variable.scope, (original_binning.range, self.variable.scope)
+        assert binning.num_bins_total == ch_variable.n_bins, (binning.num_bins_total, ch_variable.n_bins)
 
-        assert len(original_binning.log_scale_mask) == 1, original_binning.log_scale_mask
-        assert original_binning.log_scale_mask[0] == self.variable.use_log_scale, \
-            (original_binning.log_scale_mask, self.variable.use_log_scale)
+        assert len(binning.range) == 1, binning.range
+        assert binning.range[0] == ch_variable.scope, (binning.range, ch_variable.scope)
+
+        assert len(binning.log_scale_mask) == 1, binning.log_scale_mask
+        assert binning.log_scale_mask[0] == ch_variable.use_log_scale, \
+            (binning.log_scale_mask, ch_variable.use_log_scale)
+
+    @staticmethod
+    def _get_histogram_name(channel_name: str, is_data: bool = False, bin_id: Union[str, int, None] = None) -> str:
+        if is_data:
+            name = f"channel_{channel_name}_data"
+        else:
+            name = f"channel_{channel_name}_mc"
+
+        if bin_id is not None:
+            name += f"_bin_{bin_id}"
+
+        return name
+
+    def _get_slices(self, bins_in_other_dims: Optional[Tuple[int, ...]]) -> Tuple[slice, ...]:
+        if bins_in_other_dims is None:
+            assert self.reference_dimension == 0
+            return tuple([slice(None)])
+
+        slice_list = []
+        for dim in range(len(bins_in_other_dims) + 1):
+            if dim == self.reference_dimension:
+                slice_list.append(slice(None))
+            else:
+                slice_list.append(bins_in_other_dims[dim if dim < self.reference_dimension else dim - 1])
+
+        assert len(slice_list) == len(bins_in_other_dims) + 1, (len(slice_list), len(bins_in_other_dims))
+        return tuple(slice_list)
+
+    def _get_involved_hist_variable_latex_label(self, column_name: str) -> Optional[str]:
+        names = [hist_var.var_name for hist_var in self._involved_hist_variables if hist_var.df_label == column_name]
+        assert len(names) <= 1, (len(names), names)
+        if len(names) == 1:
+            return names[0]
+        return None
+
+    def _get_bin_infos(self, channel_name: str, bin_ids: Tuple[int, ...]) -> str:
+        dimensions = [i if i < self.reference_dimension else i + 1 for i in range(len(bin_ids))]
+        assert len(bin_ids) == len(dimensions), (len(bin_ids), len(dimensions))
+
+        mc_channel = self._fit_model.mc_channels_to_plot.get_channel_by_name(name=channel_name)
+        data_column_names = [mc_channel.data_column_names[dim] for dim in dimensions]
+        latex_names = [self._get_involved_hist_variable_latex_label(column_name=name) for name in data_column_names]
+
+        string_list = []
+        for dim, l_name, bin_n in zip(dimensions, latex_names, bin_ids):
+            if l_name is not None:
+                string_list.append(rf"{l_name} (dim {dim + 1}): Bin {bin_n+ 1}")
+            else:
+                string_list.append(f"Dimension {dim + 1}: Bin {bin_n + 1}")
+
+        return "\n".join(string_list)

@@ -284,11 +284,13 @@ class Template(BinnedDistributionFromData):
 
     # TODO: Needs work...
     def expected_bin_counts(self) -> np.ndarray:
+        return self.bin_counts
         raise NotImplementedError("TODO")
         # TODO!
 
     # TODO: Needs work...
     def expected_bin_errors_squared(self) -> np.ndarray:
+        return self.bin_errors_sq
         raise NotImplementedError("TODO")
         # TODO!
 

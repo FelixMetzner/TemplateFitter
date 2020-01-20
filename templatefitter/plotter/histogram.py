@@ -131,6 +131,12 @@ class Histogram:
     def get_bin_count_of_component(self, index: int) -> np.ndarray:
         return self._components[index].get_histogram_bin_count(binning=self.binning)
 
+    def get_histogram_squared_bin_errors_of_component(self, index: int, normalization_factor: float) -> np.ndarray:
+        return self._components[index].get_histogram_squared_bin_errors(
+            binning=self.binning,
+            normalization_factor=normalization_factor
+        )
+
     def get_statistical_uncertainty_per_bin(self, normalization_factor: Optional[float] = None) -> np.ndarray:
         return np.sum([
             component.get_histogram_squared_bin_errors(binning=self.binning, normalization_factor=normalization_factor)

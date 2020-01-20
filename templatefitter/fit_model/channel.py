@@ -442,6 +442,9 @@ class DataChannel(BinnedDistributionFromData):
 
 
 class DataChannelContainer(Sequence):
+
+    data_channel_name_prefix = "data_channel"
+
     def __init__(
             self,
             channel_names: Optional[List[str]] = None,
@@ -529,7 +532,7 @@ class DataChannelContainer(Sequence):
             bins=binning.bin_edges,
             dimensions=binning.dimensions,
             scope=binning.range,
-            name=f"data_channel_{channel_index}_{channel_name}",
+            name=self._create_data_channel_name(base_channel_name=channel_name, channel_index=channel_index),
             data=channel_data,
             weights=channel_weights,
             data_column_names=column_names,
@@ -552,6 +555,25 @@ class DataChannelContainer(Sequence):
     @property
     def requires_rounding_due_to_weights(self) -> Tuple[bool, ...]:
         return tuple([ch.requires_rounding_due_to_weights for ch in self._channel_distributions])
+
+    def _create_data_channel_name(self, base_channel_name: str, channel_index: int) -> str:
+        return f"{self.data_channel_name_prefix}_{channel_index}_{base_channel_name}"
+
+    @staticmethod
+    def get_base_channel_name(data_channel_name: str) -> str:
+        split_res = data_channel_name.split(f"{DataChannelContainer.data_channel_name_prefix}_", 1)
+        assert not split_res[0], split_res
+        assert split_res[1], split_res
+        split_res = split_res[1].split("_", 1)
+        assert split_res[0].isdigit(), split_res
+        return split_res[1]
+
+    def get_channel_by_name(self, name: str) -> DataChannel:
+        if name not in self.data_channel_names:
+            raise KeyError(f"The DataChannel of the name '{name}' is not known.\n"
+                           f"Available channel names are: {self.data_channel_names}")
+
+        return self._channel_distributions[self._channels_mapping[name]]
 
     def __getitem__(self, i) -> Optional[BinnedDistribution]:
         return self._channel_distributions[i]

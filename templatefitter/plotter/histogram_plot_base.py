@@ -84,7 +84,7 @@ class HistogramPlot(ABC):
             self,
             label: str,
             histogram_key: str,
-            bin_count: np.ndarray,
+            bin_counts: np.ndarray,
             original_binning: Binning,
             bin_errors_squared: np.ndarray = None,
             data_column_names: DataColumnNamesInput = None,
@@ -108,7 +108,7 @@ class HistogramPlot(ABC):
 
         self._histograms[histogram_key].add_histogram_component(
             label=label,
-            bin_count=bin_count,
+            bin_counts=bin_counts,
             original_binning=original_binning,
             bin_errors_squared=bin_errors_squared,
             data_column_names=self.variable.df_label,

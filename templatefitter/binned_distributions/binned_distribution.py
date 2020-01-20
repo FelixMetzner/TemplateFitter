@@ -477,6 +477,10 @@ class BinnedDistributionFromHistogram(BinnedDistribution):
 
         bin_counts = self.check_and_get_binned_input(binned_input=in_data, parameter_name="input_data")
 
+        while bin_counts.shape[-1] == 1:
+            axis = len(bin_counts.shape) - 1
+            bin_counts = np.squeeze(bin_counts, axis=axis)
+
         assert bin_counts.shape == self.num_bins, (bin_counts.shape, self.num_bins)
 
         if bin_errors_squared is None:
@@ -486,6 +490,10 @@ class BinnedDistributionFromHistogram(BinnedDistribution):
                 binned_input=bin_errors_squared,
                 parameter_name="bin_errors_squared"
             )
+
+        while bin_errors_sq.shape[-1] == 1:
+            axis = len(bin_errors_sq.shape) - 1
+            bin_errors_sq = np.squeeze(bin_errors_sq, axis=axis)
 
         assert bin_errors_sq.shape == self.num_bins, (bin_errors_sq.shape, self.num_bins)
 
