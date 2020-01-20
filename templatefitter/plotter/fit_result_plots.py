@@ -235,7 +235,7 @@ class FitResultPlotter:
                     sub_bin_info = self._get_bin_infos(channel_name=mc_channel.name, bin_ids=sub_bin_ids)
                 nd_array_slices = self._get_slices(bins_in_other_dims=sub_bin_ids)
 
-                current_plot = FitResultPlot(variable=self.variable, binning=current_binning)
+                current_plot = FitResultPlot(variable=self.channel_variables[mc_channel.name], binning=current_binning)
 
                 for template in mc_channel.templates:
                     template_bin_count = template.expected_bin_counts()
