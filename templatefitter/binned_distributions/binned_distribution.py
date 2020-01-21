@@ -216,7 +216,7 @@ class BinnedDistribution(ABC):
 
     def _check_shapes(self) -> None:
         assert self.shape == self.num_bins, (self.shape, self.num_bins)
-        assert sum(self.shape) == self.num_bins_total, (self.shape, self.num_bins_total)
+        assert np.prod(self.shape) == self.num_bins_total, (self.shape, self.num_bins_total)
 
     def _init_data_column_names(self, data_column_names: DataColumnNamesInput, data: Optional[DataInputType]):
         if isinstance(data_column_names, str):

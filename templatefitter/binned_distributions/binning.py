@@ -65,7 +65,7 @@ class Binning:
                 if scope_input is None:
                     raise ValueError(num_error_txt)
                 assert isinstance(scope_input, tuple) and len(scope_input) == 2, (type(scope_input), scope_input)
-                assert all(isinstance(scp, float) for scp in scope_input), scope_input
+                assert all(isinstance(scp, (float, int)) for scp in scope_input), scope_input
                 self._num_bins = (bins_input,)
                 self._bin_edges = (self._get_bin_edges(scope=scope_input, bins=bins_input, log=self.log_scale_mask[0]),)
             elif isinstance(bins_input, tuple):
@@ -112,7 +112,7 @@ class Binning:
                     assert all(isinstance(scp, tuple) and len(scp) == 2 for scp in scope_input), scope_input
                     assert all(scp[0] == edges[0] for scp, edges in zip(scope_input, bins_input)), scope_error_txt
                     assert all(scp[1] == edges[-1] for scp, edges in zip(scope_input, bins_input)), scope_error_txt
-                self._num_bins = (len(edges) - 1 for edges in bins_input)
+                self._num_bins = tuple([len(edges) - 1 for edges in bins_input])
                 self._bin_edges = bins_input
             else:
                 raise ValueError(error_txt)
@@ -208,7 +208,7 @@ class Binning:
 
     @property
     def num_bins_total(self) -> int:
-        return sum(self._num_bins)
+        return int(np.prod(self._num_bins))
 
     @property
     def bin_edges(self) -> BinEdgesType:

@@ -183,7 +183,7 @@ class FitResultPlotter:
             fit_model: FitModel,
             reference_dimension: int = 0,
             fig_size: Tuple[float, float] = (5, 5),  # TODO: could be handled via kwargs
-            involved_hist_variables=Optional[List[HistVariable]],
+            involved_hist_variables: Optional[List[HistVariable]] = None,
             **kwargs
     ) -> None:
         self._variable = variable
@@ -199,7 +199,7 @@ class FitResultPlotter:
         self._channel_latex_labels = {}  # type: Dict[str, str]
         self._channel_sub_bin_mapping = defaultdict(list)  # type: Dict[str: List[Optional[Tuple[int, ...]]]]
 
-        self._involved_hist_variables = involved_hist_variables
+        self._involved_hist_variables = involved_hist_variables  # type: Optional[List[HistVariable]]
 
         self._get_histograms_from_model(fit_model=fit_model)
 
@@ -284,7 +284,8 @@ class FitResultPlotter:
             full_binning = mc_channel.binning
 
             other_binnings_by_dimension = {
-                dim: full_binning.num_bins for dim in range(full_binning.dimensions) if dim != self.reference_dimension
+                dim: full_binning.num_bins[dim]
+                for dim in range(full_binning.dimensions) if dim != self.reference_dimension
             }
             assert list(set(other_binnings_by_dimension.keys())) == list(other_binnings_by_dimension.keys()), \
                 other_binnings_by_dimension
@@ -463,6 +464,8 @@ class FitResultPlotter:
         return tuple(slice_list)
 
     def _get_involved_hist_variable_latex_label(self, column_name: str) -> Optional[str]:
+        if self._involved_hist_variables is None:
+            return None
         names = [hist_var.var_name for hist_var in self._involved_hist_variables if hist_var.df_label == column_name]
         assert len(names) <= 1, (len(names), names)
         if len(names) == 1:
