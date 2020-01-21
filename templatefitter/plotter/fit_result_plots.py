@@ -29,28 +29,13 @@ __all__ = [
 
 plot_style.set_matplotlibrc_params()
 
-OneOrTwoAxesType = Union[AxesType, Tuple[AxesType, AxesType]]  # TODO: is this needed?
-
-
 # TODO: Option to add Chi2 test
 # TODO: Option to add ratio plot
-
-# TODO: Option to use initial values for plotting
 
 # TODO: Provide option to use dict to add latex labels to channels with mapping {channel.name: latex_label_raw_string}
 # TODO: Provide option to use dict for colors of with mapping {template.name: color_string}
 
-
-#########
-# TODO: We need a HistComponent which is generated from a binned distribution. For this HistComponent, everything
-#       is already fixed: Binning, BinCount, etc...
-#       - we can check if the variables df_label is in the BinnedDistributions data_column_names
-#       - we can check if the binning is the same as defined in the variable!
-#       -> Need to differentiate between HistComponent types!
-#       -> Need to update Histogram.add_histogram_component method accordingly
-#
 # TODO: Maybe implement method to generate BinnedDistribution from slice or projection of original BinnedDistribution.
-#########
 
 
 class FitResultPlot(HistogramPlot):
@@ -203,7 +188,8 @@ class FitResultPlotter:
     ) -> None:
         self._variable = variable
         self._fit_model = fit_model
-        self._reference_dimension = reference_dimension  # TODO: Reference dimension and respective variable of the fit model must be same as self.variable!
+        self._reference_dimension = reference_dimension
+        # TODO: Reference dimension and respective variable of the fit model must be same as self.variable!
 
         self._fig_size = fig_size
         self._optional_arguments_dict = kwargs  # type: Dict[str, Any]
@@ -217,7 +203,7 @@ class FitResultPlotter:
 
         self._get_histograms_from_model(fit_model=fit_model)
 
-    def plot_fit_result(self) -> None:
+    def plot_fit_result(self, use_initial_values: bool = False) -> None:
         for mc_channel in self._fit_model.mc_channels_to_plot:
             current_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
             data_column_name_for_plot = mc_channel.data_column_names[self.reference_dimension]
@@ -238,8 +224,8 @@ class FitResultPlotter:
                 current_plot = FitResultPlot(variable=self.channel_variables[mc_channel.name], binning=current_binning)
 
                 for template in mc_channel.templates:
-                    template_bin_count = template.expected_bin_counts()
-                    template_bin_error_sq = template.expected_bin_counts()
+                    template_bin_count = template.expected_bin_counts(use_initial_values=use_initial_values)
+                    template_bin_error_sq = template.expected_bin_errors_squared(use_initial_values=use_initial_values)
 
                     subset_bin_count = template_bin_count[nd_array_slices]
                     subset_bin_errors_squared = template_bin_error_sq[nd_array_slices]

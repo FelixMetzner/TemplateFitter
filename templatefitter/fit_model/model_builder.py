@@ -1660,8 +1660,8 @@ class FitModel:
                 (bin_nuisance_parameter_vector.shape, self._inverse_template_bin_correlation_matrix.shape)
             self._gauss_term_checked = True
 
-        return bin_nuisance_parameter_vector @ self._inverse_template_bin_correlation_matrix \
-               @ bin_nuisance_parameter_vector
+        return (bin_nuisance_parameter_vector @ self._inverse_template_bin_correlation_matrix
+                @ bin_nuisance_parameter_vector)
 
     def _constraint_term(self, parameter_vector: np.ndarray) -> float:
         if not self._has_constrained_parameters:

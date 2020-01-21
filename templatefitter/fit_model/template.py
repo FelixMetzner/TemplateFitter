@@ -2,6 +2,7 @@
 Template Class to be used in fit models.
 """
 
+import copy
 import logging
 import numpy as np
 
@@ -20,7 +21,6 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = ["Template"]
 
 
-# TODO: Check TODOs below!
 class Template(BinnedDistributionFromData):
     def __init__(
             self,
@@ -282,24 +282,33 @@ class Template(BinnedDistributionFromData):
     def use_other_systematics(self, boolean_value) -> None:
         self._use_other_systematics = boolean_value
 
-    # TODO: Needs work...
-    def expected_bin_counts(self) -> np.ndarray:
-        return self.bin_counts
-        raise NotImplementedError("TODO")
-        # TODO!
+    def expected_bin_counts(self, use_initial_values: bool = False) -> np.ndarray:
+        """
+        This function is only used to plot the individual templates in the FitResultPlot.
+        During the fit, all bin counts are handled in one matrix.
+        :return: np.ndarray containing the bin counts for this template
+        """
+        template_shape = copy.copy(self.bin_counts)
+        template_shape = template_shape / template_shape.sum()
+        # TODO: Add fractions
+        # TODO: Add nuisance parameters to get shape change due to uncertainties
 
-    # TODO: Needs work...
-    def expected_bin_errors_squared(self) -> np.ndarray:
+        if use_initial_values:
+            template_yield = self.params.get_parameters_by_index(indices=self.yield_index)
+            template_efficiency = self.params.get_parameters_by_index(indices=self.efficiency_index)
+        else:
+            template_yield = self.yield_parameter.initial_value
+            template_efficiency = self.efficiency_parameter.initial_value
+
+        return template_shape * template_yield * template_efficiency
+
+    def expected_bin_errors_squared(self, use_initial_values: bool = False) -> np.ndarray:
+        """
+        This function is only used to plot the uncertainty of the individual templates in the FitResultPlot.
+        During the fit, the uncertainties are handled via matrices and nuisance parameters.
+        :return: np.ndarray containing the squared bin uncertainties for this template
+        """
+        if use_initial_values:
+            return self.bin_errors_sq
         return self.bin_errors_sq
-        raise NotImplementedError("TODO")
-        # TODO!
-
-    def fractions(self):
-        # TODO: Should be able to calculate its own bin yields from parameters for plotting and so on...
-        #       So maybe adapt this method to achieve this.
-        per_bin_yields = (
-                self.bin_counts_flattened
-                * (1. + self._params.get_parameters_by_index(self.bin_parameter_indices) * self._relative_errors)
-        )
-
-        return per_bin_yields / np.sum(per_bin_yields)
+        # TODO: Do this properly!
