@@ -264,7 +264,6 @@ class FitResultPlotter:
                     #  legend_loc=???,  # Optional[Union[int, str]] = None,
                     #  y_scale=???,  # float = 1.1
                 )
-                fig.show()
 
     def _get_histograms_from_model(self, fit_model: FitModel) -> None:
 

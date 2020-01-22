@@ -294,11 +294,11 @@ class Template(BinnedDistributionFromData):
         # TODO: Add nuisance parameters to get shape change due to uncertainties
 
         if use_initial_values:
-            template_yield = self.params.get_parameters_by_index(indices=self.yield_index)
-            template_efficiency = self.params.get_parameters_by_index(indices=self.efficiency_index)
-        else:
             template_yield = self.yield_parameter.initial_value
             template_efficiency = self.efficiency_parameter.initial_value
+        else:
+            template_yield = self.params.get_parameters_by_index(indices=self.yield_index)
+            template_efficiency = self.params.get_parameters_by_index(indices=self.efficiency_index)
 
         return template_shape * template_yield * template_efficiency
 
