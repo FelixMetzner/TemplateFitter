@@ -268,6 +268,8 @@ class FitResultPlotter:
                 )
 
                 axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
+
+                # TODO: Move this info to some other place!
                 if sub_bin_info:
                     axs.set_title(sub_bin_info, loc="left", fontsize=8, color=plot_style.KITColors.dark_grey)
 
@@ -488,6 +490,8 @@ class FitResultPlotter:
 
         string_list = []
         for dim, l_name, bin_n in zip(dimensions, latex_names, bin_ids):
+            # TODO: Add total number of bins: bin 1 -> bin 1 of 6
+            # TODO: Add range of bin: bin 1 of 6 -> bin 1 of 6: [0.2, 0.6] GeV
             if l_name is not None:
                 string_list.append(rf"{l_name} (dim. {dim + 1}): Bin {bin_n+ 1}")
             else:

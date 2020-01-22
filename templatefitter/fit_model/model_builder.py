@@ -22,6 +22,7 @@ from templatefitter.binned_distributions.binned_distribution import DataInputTyp
 from templatefitter.fit_model.channel import ChannelContainer, Channel, DataChannelContainer
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
 
+
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = ["FitModel"]
@@ -38,8 +39,6 @@ __all__ = ["FitModel"]
 #           ratio = yield_2 / yield_1 -> yield_2 = ratio * yield_1
 #           => (yield_i, yield_1, yield_1, yield_j, ...)^T * (1, 1, ratio, 1, ...)^T
 
-# TODO: Define method to plot initial and fitted model vs data distribution
-#       => use histogram for plotting!
 
 # TODO: Maybe the FitModel could produce a Model object, which is a container that holds all
 #       the necessary information and can be used to recreate the model.
@@ -296,8 +295,9 @@ class FitModel:
             if not (isinstance(templates, list)
                     and all(isinstance(t, Template) or isinstance(t, int) or isinstance(t, str) for t in templates)):
                 raise ValueError("The argument 'templates 'takes a list of Templates, integers or strings, but you "
-                                 "provided " + f"an object of type {type(templates)}" if not isinstance(templates, list)
-                                 else f"a list containing the types {[type(t) for t in templates]}")
+                                 "provided "
+                                 + (f"an object of type {type(templates)}" if not isinstance(templates, list)
+                                    else f"a list containing the types {[type(t) for t in templates]}"))
             if shared_yield is None and len(templates) > 1:
                 raise ValueError("If you want to directly create and add a component, you have to specify whether the "
                                  "templates of the component shall share their yields via the boolean parameter "
@@ -368,6 +368,7 @@ class FitModel:
             channel: Optional[Channel] = None,
             name: Optional[str] = None,
             components: Optional[List[Union[int, str, Component]]] = None,
+            latex_label: Optional[str] = None
     ) -> Union[int, Tuple[int, Channel]]:
         self._check_is_not_finalized()
         creates_new_channel = False
@@ -421,7 +422,7 @@ class FitModel:
                     raise ValueError(f"Unexpected type {type(component)} for element of provided list of components.")
 
             creates_new_channel = True
-            channel = Channel(params=self._params, name=name, components=component_list)
+            channel = Channel(params=self._params, name=name, components=component_list, latex_label=latex_label)
         else:
             raise ValueError(input_error_text)
 
@@ -757,8 +758,9 @@ class FitModel:
         #     for ch_i, ch in enumerate(self._channels)
         # ]
 
-        assert all(all(stat_m.shape == o_cov_m.shape for stat_m, o_cov_m in zip(stat_ms, o_cov_ms))
-                   for stat_ms, o_cov_ms in zip(template_statistics_sys_per_ch, other_sys_cov_matrix_per_ch_and_temp)), \
+        assert all(
+            all(stat_m.shape == o_cov_m.shape for stat_m, o_cov_m in zip(stat_ms, o_cov_ms))
+            for stat_ms, o_cov_ms in zip(template_statistics_sys_per_ch, other_sys_cov_matrix_per_ch_and_temp)), \
             [[(a.shape, b.shape) for a, b in zip(stat_ms, o_cov_ms)]
              for stat_ms, o_cov_ms in zip(template_statistics_sys_per_ch, other_sys_cov_matrix_per_ch_and_temp)]
 
