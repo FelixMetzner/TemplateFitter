@@ -119,9 +119,14 @@ class Component:
                                  f"{[p.parameter_type for p in fraction_parameters]}!")
 
             self._fraction_parameters = fraction_parameters
-            for template, fraction_parameter in zip(self._templates[:-1], fraction_parameters):
-                template.fraction_parameter = fraction_parameters
+
             # For the last template of the component the template.fraction_parameter remains unset.
+            for template, fraction_parameter in zip(self._templates[:-1], fraction_parameters):
+                template.fraction_parameter = fraction_parameter
+
+            # Instead all other fraction parameters for this component are added, which is required for the calculation
+            # of the bin counts for the illustration of the fit result.
+            self._templates[-1].other_fraction_parameters = fraction_parameters
 
         else:
             if not (fraction_parameters is None

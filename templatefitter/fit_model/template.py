@@ -65,6 +65,7 @@ class Template(BinnedDistributionFromData):
         self._bin_nuisance_parameters = None
         self._efficiency_parameter = None
         self._fraction_parameter = None
+        self._other_fraction_parameters = None  #: type Optional[List[TemplateParameter]]
 
         self._template_index = None
         self._component_index = None
@@ -188,28 +189,34 @@ class Template(BinnedDistributionFromData):
         )
         self._fraction_parameter = fraction_parameter
 
-    @staticmethod
-    def _template_parameter_setter_check(
-            input_parameter: TemplateParameter,
-            parameter_type: str,
-            parameter_name: str
-    ) -> None:
-        assert parameter_type in ParameterHandler.parameter_types, \
-            f"parameter_type must be one of {ParameterHandler.parameter_types}, you provided {parameter_type}!"
-
-        if not isinstance(input_parameter, TemplateParameter):
-            raise ValueError(f"The {parameter_name} can only be set to a TemplateParameter. "
-                             f"You provided an object of type {type(input_parameter)}!")
-        if input_parameter.parameter_type != parameter_type:
-            raise ValueError(f"The {parameter_name} can only be set to a TemplateParameter of type {parameter_type}."
-                             f"However, the provided TemplateParameter is of parameter_type "
-                             f"{input_parameter.parameter_type}...")
-
     @property
     def fraction_index(self) -> Optional[int]:
         if self._fraction_parameter is None:
             return None
         return self._fraction_parameter.index
+
+    @property
+    def other_fraction_parameters(self) -> Optional[List[TemplateParameter]]:
+        return self._other_fraction_parameters
+
+    @other_fraction_parameters.setter
+    def other_fraction_parameters(self, other_fraction_parameters: List[TemplateParameter]) -> None:
+        if self._other_fraction_parameters is not None:
+            raise RuntimeError(f"Trying to reset list of other fraction parameters of template {self.name}.")
+
+        for other_fraction_param in other_fraction_parameters:
+            self._template_parameter_setter_check(
+                input_parameter=other_fraction_param,
+                parameter_type=ParameterHandler.fraction_parameter_type,
+                parameter_name="elements of other_fraction_parameters"
+            )
+        self._other_fraction_parameters = other_fraction_parameters
+
+    @property
+    def other_fractions_indices(self) -> Optional[List[int]]:
+        if self._other_fraction_parameters is None:
+            return None
+        return [other_fraction_param.index for other_fraction_param in self._other_fraction_parameters]
 
     @property
     def bin_nuisance_parameters(self) -> Optional[List[TemplateParameter]]:
@@ -290,7 +297,6 @@ class Template(BinnedDistributionFromData):
         """
         template_shape = copy.copy(self.bin_counts)
         template_shape = template_shape / template_shape.sum()
-        # TODO: Add fractions
         # TODO: Add nuisance parameters to get shape change due to uncertainties
 
         if use_initial_values:
@@ -300,7 +306,9 @@ class Template(BinnedDistributionFromData):
             template_yield = self.params.get_parameters_by_index(indices=self.yield_index)
             template_efficiency = self.params.get_parameters_by_index(indices=self.efficiency_index)
 
-        return template_shape * template_yield * template_efficiency
+        template_fraction = self.get_fraction_for_expected_bin_counts(use_initial_values=use_initial_values)
+
+        return template_shape * template_yield * template_fraction * template_efficiency
 
     def expected_bin_errors_squared(self, use_initial_values: bool = False) -> np.ndarray:
         """
@@ -312,3 +320,42 @@ class Template(BinnedDistributionFromData):
             return self.bin_errors_sq
         return self.bin_errors_sq
         # TODO: Do this properly!
+
+    def get_fraction_for_expected_bin_counts(self, use_initial_values: bool = False) -> float:
+        template_fraction = 1.
+        if self.fraction_parameter is not None:
+            assert self.other_fraction_parameters is None
+            if use_initial_values:
+                template_fraction = self.fraction_parameter.initial_value
+            else:
+                template_fraction = self.params.get_parameters_by_index(indices=self.fraction_index)
+        if self.other_fraction_parameters is not None:
+            assert self.fraction_parameter is None
+            if use_initial_values:
+                for other_fraction_parameter in self.other_fraction_parameters:
+                    template_fraction -= other_fraction_parameter.initial_value
+            else:
+                for other_fraction_index in self.other_fractions_indices:
+                    template_fraction -= self.params.get_parameters_by_index(indices=other_fraction_index)
+
+        assert template_fraction >= 0., (template_fraction, self.fraction_index, self.other_fractions_indices)
+        assert template_fraction <= 1., (template_fraction, self.fraction_index, self.other_fractions_indices)
+
+        return template_fraction
+
+    @staticmethod
+    def _template_parameter_setter_check(
+            input_parameter: TemplateParameter,
+            parameter_type: str,
+            parameter_name: str
+    ) -> None:
+        assert parameter_type in ParameterHandler.parameter_types, \
+            f"parameter_type must be one of {ParameterHandler.parameter_types}, you provided {parameter_type}!"
+
+        if not isinstance(input_parameter, TemplateParameter):
+            raise ValueError(f"The {parameter_name} can only be set to a TemplateParameter. "
+                             f"You provided an object of type {type(input_parameter)}!")
+        if input_parameter.parameter_type != parameter_type:
+            raise ValueError(f"The {parameter_name} can only be set to a TemplateParameter of type {parameter_type}."
+                             f"However, the provided TemplateParameter is of parameter_type "
+                             f"{input_parameter.parameter_type}...")
