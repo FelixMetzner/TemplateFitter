@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 from typing import Optional, Union, Tuple, List, Dict, Any
 
 from templatefitter.binned_distributions.binning import Binning
-from templatefitter.fit_model.channel import DataChannelContainer
+from templatefitter.fit_model.channel import Channel, DataChannelContainer
 from templatefitter.binned_distributions.binned_distribution import DataColumnNamesInput
 
 from templatefitter.plotter import plot_style
@@ -160,6 +160,9 @@ class FitResultPlot(HistogramPlot):
                 self.draw_legend(axis=ax1, inside=legend_inside, loc=legend_loc, ncols=legend_cols,
                                  y_axis_scale=y_scale)
 
+        ax1.set_ylabel(self._get_y_label(normed=False), plot_style.ylabel_pos)
+        ax1.set_xlabel(self._variable.x_label, plot_style.xlabel_pos)
+
     def _check_histogram_key(self, histogram_key: str) -> None:
         assert isinstance(histogram_key, str), type(histogram_key)
         if histogram_key not in self.valid_histogram_keys:
@@ -196,7 +199,6 @@ class FitResultPlotter:
 
         self._channel_name_list = []  # type: List[str]
         self._channel_variables = {}  # type: Dict[str, HistVariable]
-        self._channel_latex_labels = {}  # type: Dict[str, str]
         self._channel_sub_bin_mapping = defaultdict(list)  # type: Dict[str: List[Optional[Tuple[int, ...]]]]
 
         self._involved_hist_variables = involved_hist_variables  # type: Optional[List[HistVariable]]
@@ -265,12 +267,14 @@ class FitResultPlotter:
                     #  y_scale=???,  # float = 1.1
                 )
 
+                axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
+                if sub_bin_info:
+                    axs.set_title(sub_bin_info, loc="left", fontsize=8, color=plot_style.KITColors.dark_grey)
+
     def _get_histograms_from_model(self, fit_model: FitModel) -> None:
 
         for mc_channel in fit_model.mc_channels_to_plot:
             self._channel_name_list.append(mc_channel.name)
-            channel_latex_label = self._get_channel_label(key=mc_channel.name, original_label=mc_channel.latex_label)
-            self._channel_latex_labels.update({mc_channel.name: channel_latex_label})
 
             ch_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
             self._add_channel_hist_var(channel_name=mc_channel.name, original_binning=ch_binning)
@@ -362,18 +366,21 @@ class FitResultPlotter:
 
         self._channel_variables[channel_name] = channel_hist_var
 
-    def _get_channel_label(self, key: str, original_label: Optional[str]) -> Optional[str]:
+    def _get_channel_label(self, channel: Channel) -> Optional[str]:
         if "channel_label_dict" in self._optional_arguments_dict:
             channel_label_dict = self._optional_arguments_dict["channel_label_dict"]
             assert isinstance(channel_label_dict, dict), (channel_label_dict, type(channel_label_dict))
             assert all(isinstance(k, str) for k in channel_label_dict.keys()), list(channel_label_dict.keys())
             assert all(isinstance(v, str) for v in channel_label_dict.values()), list(channel_label_dict.values())
-            if key not in channel_label_dict.keys():
-                raise KeyError(f"No entry for the key {key} in the provided channel_label_dict!\nchannel_label_dict:"
-                               f"\n\t" + "\n\t".join([f"{k}: {v}" for k, v in channel_label_dict.items()]))
-            return channel_label_dict[key]
+            if channel.name not in channel_label_dict.keys():
+                raise KeyError(f"No entry for the channel {channel.name} in the provided channel_label_dict!\n"
+                               f"channel_label_dict:\n\t"
+                               + "\n\t".join([f"{k}: {v}" for k, v in channel_label_dict.items()]))
+            return channel_label_dict[channel.name]
+        elif channel.latex_label is not None:
+            return channel.latex_label
         else:
-            return original_label
+            return channel.name
 
     def _get_data_color(self) -> str:
         if "data_color" in self._optional_arguments_dict:
@@ -465,7 +472,7 @@ class FitResultPlotter:
     def _get_involved_hist_variable_latex_label(self, column_name: str) -> Optional[str]:
         if self._involved_hist_variables is None:
             return None
-        names = [hist_var.var_name for hist_var in self._involved_hist_variables if hist_var.df_label == column_name]
+        names = [h_var.variable_name for h_var in self._involved_hist_variables if h_var.df_label == column_name]
         assert len(names) <= 1, (len(names), names)
         if len(names) == 1:
             return names[0]
@@ -482,7 +489,7 @@ class FitResultPlotter:
         string_list = []
         for dim, l_name, bin_n in zip(dimensions, latex_names, bin_ids):
             if l_name is not None:
-                string_list.append(rf"{l_name} (dim {dim + 1}): Bin {bin_n+ 1}")
+                string_list.append(rf"{l_name} (dim. {dim + 1}): Bin {bin_n+ 1}")
             else:
                 string_list.append(f"Dimension {dim + 1}: Bin {bin_n + 1}")
 

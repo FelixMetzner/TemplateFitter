@@ -295,9 +295,7 @@ class Template(BinnedDistributionFromData):
         During the fit, all bin counts are handled in one matrix.
         :return: np.ndarray containing the bin counts for this template
         """
-        template_shape = copy.copy(self.bin_counts)
-        template_shape = template_shape / template_shape.sum()
-        # TODO: Add nuisance parameters to get shape change due to uncertainties
+        template_shape = self.get_template_shape_for_expected_bin_counts(use_initial_values=use_initial_values)
 
         if use_initial_values:
             template_yield = self.yield_parameter.initial_value
@@ -320,6 +318,14 @@ class Template(BinnedDistributionFromData):
             return self.bin_errors_sq
         return self.bin_errors_sq
         # TODO: Do this properly!
+
+    def get_template_shape_for_expected_bin_counts(self, use_initial_values: bool = False) -> np.ndarray:
+        template_shape = copy.copy(self.bin_counts)
+        template_shape = template_shape / template_shape.sum()
+
+        # TODO: Add shape change due to nuisance parameters!
+
+        return template_shape
 
     def get_fraction_for_expected_bin_counts(self, use_initial_values: bool = False) -> float:
         template_fraction = 1.
