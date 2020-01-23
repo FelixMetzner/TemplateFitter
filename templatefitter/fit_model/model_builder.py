@@ -1135,9 +1135,28 @@ class FitModel:
         )
 
         new_nuisance_matrix_shape = self._get_nuisance_matrix_shape()
+        complex_reshaping_required = not all(n_bins == self.number_of_bins_flattened_per_channel[0]
+                                             for n_bins in self.number_of_bins_flattened_per_channel)
 
-        # TODO next: get matrix of bin nuisance parameters in correct shape to be used in self.get_templates()
-        nuisance_parameter_matrix = np.reshape(nuisance_parameter_vector, newshape=new_nuisance_matrix_shape)
+        if complex_reshaping_required:
+            num_bins_times_templates = np.array(self.number_of_bins_flattened_per_channel) \
+                                             * np.array(self.number_of_templates)
+
+            cum_sum_of_bins = np.cumsum(num_bins_times_templates)
+            split_indices, check_sum = np.split(cum_sum_of_bins, [len(cum_sum_of_bins) - 1])
+            assert check_sum[0] == sum(num_bins_times_templates), \
+                (check_sum, sum(num_bins_times_templates), num_bins_times_templates)
+
+            assert len(nuisance_parameter_vector) == check_sum[0], (len(nuisance_parameter_vector), check_sum[0])
+
+            nuisance_param_vectors_per_ch = np.split(nuisance_parameter_vector, split_indices)
+            assert all(len(nus_v) == n_bins
+                       for nus_v, n_bins in zip(nuisance_param_vectors_per_ch, num_bins_times_templates)), \
+                ([(len(nv), nb) for nv, nb in zip(nuisance_param_vectors_per_ch, num_bins_times_templates)])
+            padded_nuisance_param_vectors = pad_sequences(nuisance_param_vectors_per_ch, padding='post')
+            nuisance_parameter_matrix = np.reshape(padded_nuisance_param_vectors, newshape=new_nuisance_matrix_shape)
+        else:
+            nuisance_parameter_matrix = np.reshape(nuisance_parameter_vector, newshape=new_nuisance_matrix_shape)
 
         return nuisance_parameter_vector, nuisance_parameter_matrix
 
@@ -1162,7 +1181,7 @@ class FitModel:
         nuisance_matrix_shape = (
             self.number_of_channels,
             max(self.number_of_templates),
-            max([ch.binning.num_bins_total for ch in self._channels])
+            self.max_number_of_bins_flattened
         )
 
         self._nuisance_matrix_shape = nuisance_matrix_shape
@@ -1505,6 +1524,10 @@ class FitModel:
     @property
     def max_number_of_bins_flattened(self) -> int:
         return max(ch_binning.num_bins_total for ch_binning in self.binning)
+
+    @property
+    def number_of_bins_flattened_per_channel(self) -> List[int]:
+        return [ch_binning.num_bins_total for ch_binning in self.binning]
 
     @property
     def number_of_components(self) -> Tuple[int, ...]:
