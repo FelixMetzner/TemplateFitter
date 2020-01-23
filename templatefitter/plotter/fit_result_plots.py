@@ -203,6 +203,8 @@ class FitResultPlotter:
 
         self._involved_hist_variables = involved_hist_variables  # type: Optional[List[HistVariable]]
 
+        self._other_binnings_info = self._initialize_other_binnings_info()  # type: Dict[str, Dict[int, Dict[str, Any]]]
+
         self._get_histograms_from_model(fit_model=fit_model)
 
     def plot_fit_result(self, use_initial_values: bool = False) -> None:
@@ -213,8 +215,6 @@ class FitResultPlotter:
             data_channel = self._fit_model.data_channels_to_plot.get_channel_by_name(name=mc_channel.name)
             data_bin_count = data_channel.bin_counts
             data_bin_errors_squared = data_channel.bin_errors_sq
-
-            # TODO: Use channel_latex_labels for plot info...
 
             for sub_bin_ids in self._channel_sub_bin_mapping[mc_channel.name]:
                 if sub_bin_ids is None:
@@ -267,11 +267,19 @@ class FitResultPlotter:
                     #  y_scale=???,  # float = 1.1
                 )
 
-                axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
+                bin_info_pos = "right"
+                if bin_info_pos == "left":
+                    axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
+                else:
+                    fig.suptitle(self._get_channel_label(channel=mc_channel), x=0.9, horizontalalignment="right")
 
-                # TODO: Move this info to some other place!
                 if sub_bin_info:
-                    axs.set_title(sub_bin_info, loc="left", fontsize=8, color=plot_style.KITColors.dark_grey)
+                    info_title = sub_bin_info
+                    if axs.get_ylim()[1] > 0.85e4 and bin_info_pos == "left":
+                        padding = " " * 9
+                        info_title = "\n".join([padding + info for info in sub_bin_info.split("\n")])
+
+                    axs.set_title(info_title, loc=bin_info_pos, fontsize=6, color=plot_style.KITColors.dark_grey)
 
     def _get_histograms_from_model(self, fit_model: FitModel) -> None:
 
@@ -286,19 +294,11 @@ class FitResultPlotter:
             assert data_column_name_for_plot == self.variable.df_label, \
                 (data_column_name_for_plot, self.variable.df_label, ch_data_column_names)
 
-            full_binning = mc_channel.binning
-
-            other_binnings_by_dimension = {
-                dim: full_binning.num_bins[dim]
-                for dim in range(full_binning.dimensions) if dim != self.reference_dimension
-            }
-            assert list(set(other_binnings_by_dimension.keys())) == list(other_binnings_by_dimension.keys()), \
-                other_binnings_by_dimension
-
-            if len(other_binnings_by_dimension) == 0:
+            if len(self._other_binnings_info[mc_channel.name]) == 0:
                 self._channel_sub_bin_mapping[mc_channel.name].append(None)
             else:
-                bin_ranges = [list(range(n_bins)) for n_bins in other_binnings_by_dimension.values()]
+                bin_ranges = [list(range(dim_info["number_of_bins"]))
+                              for dim_info in self._other_binnings_info[mc_channel.name].values()]
                 all_combinations = list(itertools.product(*bin_ranges))
                 self._channel_sub_bin_mapping[mc_channel.name].extend(all_combinations)
 
@@ -444,6 +444,39 @@ class FitResultPlotter:
         assert binning.log_scale_mask[0] == ch_variable.use_log_scale, \
             (binning.log_scale_mask, ch_variable.use_log_scale)
 
+    def _initialize_other_binnings_info(self) -> Dict[str, Dict[int, Dict[str, Any]]]:
+        assert isinstance(self._fit_model, FitModel), type(self._fit_model)
+
+        other_binnings_info = {}
+        for mc_channel in self._fit_model.mc_channels_to_plot:
+            ch_name = mc_channel.name
+            assert ch_name not in other_binnings_info, (ch_name, other_binnings_info.keys())
+            other_binnings_info[ch_name] = {}
+
+            ch_full_binning = mc_channel.binning
+
+            for dim in range(ch_full_binning.dimensions):
+                if dim is self.reference_dimension:
+                    continue
+
+                assert dim not in other_binnings_info[ch_name], (dim, other_binnings_info[ch_name].keys())
+                other_binnings_info[ch_name][dim] = {}
+
+                other_binnings_info[ch_name][dim].update({"number_of_bins": ch_full_binning.num_bins[dim]})
+                bin_edge_pairs = [
+                    (ch_full_binning.bin_edges[dim][i], ch_full_binning.bin_edges[dim][i + 1])
+                    for i in range(ch_full_binning.num_bins[dim])
+                ]
+                other_binnings_info[ch_name][dim].update({"bin_boarders": bin_edge_pairs})
+
+            dim_keys = other_binnings_info[ch_name].keys()
+            assert list(set(dim_keys)) == list(dim_keys), dim_keys
+
+        ch_keys = other_binnings_info.keys()
+        assert list(set(ch_keys)) == list(ch_keys), ch_keys
+
+        return other_binnings_info
+
     @staticmethod
     def _get_histogram_name(channel_name: str, is_data: bool = False, bin_id: Union[str, int, None] = None) -> str:
         if is_data:
@@ -480,6 +513,15 @@ class FitResultPlotter:
             return names[0]
         return None
 
+    def _get_involved_hist_variable_unit(self, column_name: str) -> Optional[str]:
+        if self._involved_hist_variables is None:
+            return None
+        units = [h_var.unit for h_var in self._involved_hist_variables if h_var.df_label == column_name]
+        assert len(units) <= 1, (len(units), units)
+        if len(units) == 1:
+            return units[0]
+        return None
+
     def _get_bin_infos(self, channel_name: str, bin_ids: Tuple[int, ...]) -> str:
         dimensions = [i if i < self.reference_dimension else i + 1 for i in range(len(bin_ids))]
         assert len(bin_ids) == len(dimensions), (len(bin_ids), len(dimensions))
@@ -487,14 +529,21 @@ class FitResultPlotter:
         mc_channel = self._fit_model.mc_channels_to_plot.get_channel_by_name(name=channel_name)
         data_column_names = [mc_channel.data_column_names[dim] for dim in dimensions]
         latex_names = [self._get_involved_hist_variable_latex_label(column_name=name) for name in data_column_names]
+        units = [self._get_involved_hist_variable_unit(column_name=name) for name in data_column_names]
 
         string_list = []
-        for dim, l_name, bin_n in zip(dimensions, latex_names, bin_ids):
-            # TODO: Add total number of bins: bin 1 -> bin 1 of 6
-            # TODO: Add range of bin: bin 1 of 6 -> bin 1 of 6: [0.2, 0.6] GeV
+        for dim, bin_n, l_name, unit in zip(dimensions, bin_ids, latex_names, units):
+            n_bins_total_in_this_dim = self._other_binnings_info[channel_name][dim]["number_of_bins"]
+            bin_range = self._other_binnings_info[channel_name][dim]["bin_boarders"][bin_n]
             if l_name is not None:
-                string_list.append(rf"{l_name} (dim. {dim + 1}): Bin {bin_n+ 1}")
+                info_str = rf"{l_name} (Dim. {dim + 1}): Bin {bin_n+ 1}/{n_bins_total_in_this_dim}"
             else:
-                string_list.append(f"Dimension {dim + 1}: Bin {bin_n + 1}")
+                info_str = f"Dimension {dim + 1}: Bin {bin_n + 1}/{n_bins_total_in_this_dim}"
+
+            info_str += f": [{bin_range[0]:.2f}, {bin_range[1]:.2f}]"
+            if unit is not None:
+                info_str += rf" {unit}"
+
+            string_list.append(info_str)
 
         return "\n".join(string_list)
