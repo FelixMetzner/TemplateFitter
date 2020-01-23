@@ -100,6 +100,7 @@ class FitModel:
 
         self._bin_nuisance_param_indices = None
         self._bin_nuisance_params_checked = False
+        self._nuisance_matrix_shape = None
 
         self._constraint_indices = None
         self._constraint_values = None
@@ -1133,13 +1134,10 @@ class FitModel:
             indices=self.get_bin_nuisance_parameter_indices()
         )
 
+        new_nuisance_matrix_shape = self._get_nuisance_matrix_shape()
+
         # TODO next: get matrix of bin nuisance parameters in correct shape to be used in self.get_templates()
-        new_shape = (  # TODO: As this shape is used pretty often, maybe put it into a dedicated property...
-            self.number_of_channels,
-            max(self.number_of_templates),
-            max([ch.binning.num_bins_total for ch in self._channels])
-        )
-        nuisance_parameter_matrix = np.reshape(nuisance_parameter_vector, newshape=new_shape)  # TODO
+        nuisance_parameter_matrix = np.reshape(nuisance_parameter_vector, newshape=new_nuisance_matrix_shape)
 
         return nuisance_parameter_vector, nuisance_parameter_matrix
 
@@ -1156,6 +1154,19 @@ class FitModel:
 
         self._bin_nuisance_param_indices = bin_nuisance_param_indices
         return bin_nuisance_param_indices
+
+    def _get_nuisance_matrix_shape(self) -> Tuple[int, ...]:
+        if self._nuisance_matrix_shape is not None:
+            return self._nuisance_matrix_shape
+
+        nuisance_matrix_shape = (
+            self.number_of_channels,
+            max(self.number_of_templates),
+            max([ch.binning.num_bins_total for ch in self._channels])
+        )
+
+        self._nuisance_matrix_shape = nuisance_matrix_shape
+        return nuisance_matrix_shape
 
     def _check_bin_nuisance_parameters(self) -> None:
         # TODO now: adapt nuisance parameter check to option 1a!

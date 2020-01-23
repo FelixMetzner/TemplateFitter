@@ -296,7 +296,7 @@ class FitResultPlotter:
                 all_combinations = list(itertools.product(*bin_ranges))
                 self._channel_sub_bin_mapping[mc_channel.name].extend(all_combinations)
 
-        assert list(set(self._channel_name_list)) == self._channel_name_list, self._channel_name_list
+        assert len(set(self._channel_name_list)) == len(self._channel_name_list), self._channel_name_list
 
         channel_label_check_list = copy.copy(self._channel_name_list)
         for data_channel in fit_model.data_channels_to_plot:
@@ -464,10 +464,10 @@ class FitResultPlotter:
                 other_binnings_info[ch_name][dim].update({"bin_boarders": bin_edge_pairs})
 
             dim_keys = other_binnings_info[ch_name].keys()
-            assert list(set(dim_keys)) == list(dim_keys), dim_keys
+            assert len(set(dim_keys)) == len(dim_keys), dim_keys
 
         ch_keys = other_binnings_info.keys()
-        assert list(set(ch_keys)) == list(ch_keys), ch_keys
+        assert len(set(ch_keys)) == len(ch_keys), ch_keys
 
         return other_binnings_info
 
