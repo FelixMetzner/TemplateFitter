@@ -32,11 +32,6 @@ plot_style.set_matplotlibrc_params()
 # TODO: Option to add Chi2 test
 # TODO: Option to add ratio plot
 
-# TODO: Provide option to use dict to add latex labels to channels with mapping {channel.name: latex_label_raw_string}
-# TODO: Provide option to use dict for colors of with mapping {template.name: color_string}
-
-# TODO: Maybe implement method to generate BinnedDistribution from slice or projection of original BinnedDistribution.
-
 
 class FitResultPlot(HistogramPlot):
     valid_styles = ["stacked", "summed"]
@@ -192,7 +187,6 @@ class FitResultPlotter:
         self._variable = variable
         self._fit_model = fit_model
         self._reference_dimension = reference_dimension
-        # TODO: Reference dimension and respective variable of the fit model must be same as self.variable!
 
         self._fig_size = fig_size
         self._optional_arguments_dict = kwargs  # type: Dict[str, Any]
