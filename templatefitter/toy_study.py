@@ -27,7 +27,7 @@ class ToyStudy:
     """
 
     def __init__(self, templates, minimizer_id):
-        self._templates = templates
+        self._templates = templates  # TODO: this should be a channel container, maybe...
         self._minimizer_id = minimizer_id
         self._toy_results = {"parameters": [], "uncertainties": []}
         self._is_fitted = False
@@ -60,6 +60,7 @@ class ToyStudy:
         for _ in range(max_tries):
             try:
 
+                # TODO: Templates.generate_toy_dataset() does not exist in this version, yet!
                 self._templates.add_data(**self._templates.generate_toy_dataset())
 
                 fitter = TemplateFitter(
