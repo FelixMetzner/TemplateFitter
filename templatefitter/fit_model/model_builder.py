@@ -805,20 +805,24 @@ class FitModel:
         assert template_bin_counts is not None
 
         # TODO: The following combination is only valid for Option 1b!
-        shape_uncertainties = np.stack([
-            np.stack([np.sqrt(np.diag(cov_for_temp)) for cov_for_temp in temps_in_ch])
-            for temps_in_ch in cov_matrices_per_ch_and_temp
-        ])
+
+        padded_shape_uncertainties_per_ch = [
+            np.stack(pad_sequences(
+                [np.sqrt(np.diag(cov_for_temp)) for cov_for_temp in temps_in_ch],
+                padding="post", maxlen=self.max_number_of_bins_flattened, value=0., dtype='float64',
+            )) for temps_in_ch in cov_matrices_per_ch_and_temp
+        ]
+
+        shape_uncertainties = np.stack(padded_shape_uncertainties_per_ch)
 
         assert template_bin_counts.shape == shape_uncertainties.shape, \
             (template_bin_counts.shape, shape_uncertainties.shape)
-        # TODO: Padding of relative_shape_uncertainties shape uncertainties is required,
-        #       if template_bin_counts also are padded!
+
         relative_shape_uncertainties = np.divide(
             shape_uncertainties,
             template_bin_counts,
             out=np.zeros_like(shape_uncertainties),
-            where=template_bin_counts != 0
+            where=template_bin_counts != 0.
         )
 
         self._relative_shape_uncertainties = relative_shape_uncertainties
@@ -1090,7 +1094,7 @@ class FitModel:
         eff_params_array_list = np.split(eff_params_array, self._efficiency_reshaping_indices)
 
         if self._efficiency_padding_required:
-            shaped_effs_matrix = pad_sequences(eff_params_array_list, padding='post')
+            shaped_effs_matrix = pad_sequences(eff_params_array_list, padding='post', dtype="float64")
         else:
             shaped_effs_matrix = np.stack(eff_params_array_list)
 
@@ -1153,7 +1157,9 @@ class FitModel:
             assert all(len(nus_v) == n_bins
                        for nus_v, n_bins in zip(nuisance_param_vectors_per_ch, num_bins_times_templates)), \
                 ([(len(nv), nb) for nv, nb in zip(nuisance_param_vectors_per_ch, num_bins_times_templates)])
-            padded_nuisance_param_vectors = pad_sequences(nuisance_param_vectors_per_ch, padding='post')
+
+            padded_nuisance_param_vectors = pad_sequences(nuisance_param_vectors_per_ch, padding='post', dtype="int32")
+
             nuisance_parameter_matrix = np.reshape(padded_nuisance_param_vectors, newshape=new_nuisance_matrix_shape)
         else:
             nuisance_parameter_matrix = np.reshape(nuisance_parameter_vector, newshape=new_nuisance_matrix_shape)
