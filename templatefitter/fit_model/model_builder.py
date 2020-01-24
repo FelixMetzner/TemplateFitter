@@ -1374,7 +1374,8 @@ class FitModel:
         # Apply shape uncertainties:
         relative_shape_uncertainties = self.get_relative_shape_uncertainties()
 
-        templates_with_shape_uncertainties = template_bin_counts + nuisance_parameters * relative_shape_uncertainties
+        templates_with_shape_uncertainties = (template_bin_counts
+                                              * (1. + nuisance_parameters * relative_shape_uncertainties))
 
         # Normalization of template bin counts with shape uncertainties to obtain the template shapes:
         templates_with_shape_uncertainties /= templates_with_shape_uncertainties.sum(axis=2)[:, :, np.newaxis]
@@ -1750,6 +1751,7 @@ class FitModel:
             parameter_vector=parameter_vector,
             nuisance_parameters=nuisance_parameter_matrix
         )
+
         poisson_term = np.sum(
             expected_bin_count - self.get_flattened_data_bin_counts()
             - xlogyx(self.get_flattened_data_bin_counts(), expected_bin_count),
