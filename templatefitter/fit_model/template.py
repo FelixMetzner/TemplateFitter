@@ -314,18 +314,40 @@ class Template(BinnedDistributionFromData):
         During the fit, the uncertainties are handled via matrices and nuisance parameters.
         :return: np.ndarray containing the squared bin uncertainties for this template
         """
-        if use_initial_values:
-            return self.bin_errors_sq
-        return self.bin_errors_sq
-        # TODO: Do this properly!
+        relative_uncertainties = self._get_relative_uncertainties_for_plotting()
+        return self.expected_bin_counts(use_initial_values=use_initial_values) * relative_uncertainties
 
     def get_template_shape_for_expected_bin_counts(self, use_initial_values: bool = False) -> np.ndarray:
-        template_shape = copy.copy(self.bin_counts)
-        template_shape = template_shape / template_shape.sum()
+        template_bin_count = copy.copy(self.bin_counts)
 
-        # TODO: Add shape change due to nuisance parameters!
+        if not use_initial_values and self.bin_nuisance_parameters is not None:
+            # TODO: This has to be updated once different versions of the handling of nuisance parameters are in place.
+            nuisance_parameters = self.params.get_parameters_by_index(indices=self.bin_nuisance_parameter_indices)
+            relative_shape_uncertainties = self._get_relative_uncertainties_for_plotting()
+            template_bin_count *= 1. + nuisance_parameters * relative_shape_uncertainties
 
+        template_shape = template_bin_count / template_bin_count.sum()
         return template_shape
+
+    def _get_relative_uncertainties_for_plotting(self) -> np.ndarray:
+        template_bin_count = copy.copy(self.bin_counts)
+
+        stat_errors_sq = self.bin_errors_sq
+        if self.use_other_systematics:
+            sys_errors_sq = np.diag(self.bin_covariance_matrix)
+            assert len(stat_errors_sq) == len(sys_errors_sq), (len(stat_errors_sq), len(sys_errors_sq))
+            uncertainties_sq = stat_errors_sq + sys_errors_sq
+        else:
+            uncertainties_sq = stat_errors_sq
+
+        uncertainties = np.sqrt(uncertainties_sq)
+        relative_shape_uncertainties = np.divide(
+            uncertainties,
+            template_bin_count,
+            out=np.zeros_like(uncertainties),
+            where=template_bin_count != 0.
+        )
+        return relative_shape_uncertainties
 
     def get_fraction_for_expected_bin_counts(self, use_initial_values: bool = False) -> float:
         template_fraction = 1.
