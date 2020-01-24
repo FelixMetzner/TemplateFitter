@@ -254,6 +254,9 @@ class ParameterHandler:
     def conversion_matrix(self) -> np.ndarray:
         return self._floating_conversion_matrix
 
+    def get_combined_parameters(self, parameter_vector: np.ndarray) -> np.ndarray:
+        return parameter_vector @ self.conversion_matrix + self.conversion_vector
+
     def get_combined_parameters_by_index(
             self,
             parameter_vector: np.ndarray,
@@ -261,7 +264,7 @@ class ParameterHandler:
     ) -> np.ndarray:
         # This getter combines floating parameters provided via the argument 'parameter_vector' and fixed parameters
         # and then yields the parameters with the indices provided via the 'indices' argument.
-        return (parameter_vector @ self.conversion_matrix + self.conversion_vector)[indices]
+        return self.get_combined_parameters(parameter_vector=parameter_vector)[indices]
 
     def get_combined_parameters_by_slice(
             self,
@@ -270,7 +273,7 @@ class ParameterHandler:
     ) -> np.ndarray:
         # This getter combines floating parameters provided via the argument 'parameter_vector' and fixed parameters
         # and then yields the parameters for the slicing provided via the 'slicing' argument.
-        return (parameter_vector @ self.conversion_matrix + self.conversion_vector)[slicing[0]:slicing[1]]
+        return self.get_combined_parameters(parameter_vector=parameter_vector)[slicing[0]:slicing[1]]
 
     def _check_parameter_conversion(self) -> None:
         assert self._floating_mask is not None
