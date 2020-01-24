@@ -262,12 +262,12 @@ class FitResultPlotter:
                 )
 
                 bin_info_pos = "right"
-                if bin_info_pos == "left":
+                if bin_info_pos == "left" or sub_bin_info is None:
                     axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
                 else:
                     fig.suptitle(self._get_channel_label(channel=mc_channel), x=0.9, horizontalalignment="right")
 
-                if sub_bin_info:
+                if sub_bin_info is not None:
                     info_title = sub_bin_info
                     if axs.get_ylim()[1] > 0.85e4 and bin_info_pos == "left":
                         padding = " " * 9
@@ -516,9 +516,11 @@ class FitResultPlotter:
             return units[0]
         return None
 
-    def _get_bin_infos(self, channel_name: str, bin_ids: Tuple[int, ...]) -> str:
-        dimensions = [i if i < self.reference_dimension else i + 1 for i in range(len(bin_ids))]
+    def _get_bin_infos(self, channel_name: str, bin_ids: Tuple[int, ...]) -> Optional[str]:
+        dimensions = [i for i in self._other_binnings_info[channel_name].keys() if i is not None]
         assert len(bin_ids) == len(dimensions), (len(bin_ids), len(dimensions))
+        if len(dimensions) == 0:
+            return None
 
         mc_channel = self._fit_model.mc_channels_to_plot.get_channel_by_name(name=channel_name)
         data_column_names = [mc_channel.data_column_names[dim] for dim in dimensions]
