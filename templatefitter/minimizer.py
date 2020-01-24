@@ -134,8 +134,8 @@ class MinimizerParameters:
             return self.names.index(param_id)
         else:
             raise ValueError(
-                "Specify the parameter either by its name (as str) or by "
-                "its index (as int)."
+                f"Specify the parameter either by its name (as str) or by its index (as int). "
+                f"The provided value {param_id} of type {type(param_id)} is not valid!"
             )
 
     @property
