@@ -49,6 +49,7 @@ class MinimizerParameters:
     def __init__(self, names: List[str]) -> None:
         self._names = names
         self._number_of_params = len(names)
+        self._fixed_params = [False for _ in self._names]
 
         self._values = np.zeros(self._number_of_params)
         self._errors = np.zeros(self._number_of_params)
@@ -138,6 +139,13 @@ class MinimizerParameters:
                 f"The provided value {param_id} of type {type(param_id)} is not valid!"
             )
 
+    def set_param_fixed(self, param_id: Union[int, str]) -> None:
+        param_index = self.param_id_to_index(param_id)
+        self._fixed_params[param_index] = True
+
+    def release_params(self) -> None:
+        self._fixed_params = [False for _ in self.names]
+
     @property
     def names(self) -> List[str]:
         """list of str: List of parameter names."""
@@ -147,6 +155,11 @@ class MinimizerParameters:
     def num_params(self) -> int:
         """int: Number of parameters."""
         return self._number_of_params
+
+    @property
+    def num_params_not_fixed(self) -> int:
+        """int: Number of parameters."""
+        return self.num_params - sum(self.fixed_params)
 
     @property
     def values(self) -> np.ndarray:
@@ -179,9 +192,9 @@ class MinimizerParameters:
 
     @covariance.setter
     def covariance(self, new_covariance: np.ndarray) -> None:
-        if not new_covariance.shape == (self.num_params, self.num_params):
+        if not new_covariance.shape == (self.num_params_not_fixed, self.num_params_not_fixed):
             raise ValueError(f"Shape of new covariance matrix {new_covariance.shape} must match "
-                             f"the number of parameters {self.num_params}")
+                             f"the number of not fixed parameters {self.num_params_not_fixed}")
         self._covariance = new_covariance
 
     @property
@@ -191,10 +204,14 @@ class MinimizerParameters:
 
     @correlation.setter
     def correlation(self, new_correlation: np.ndarray) -> None:
-        if not new_correlation.shape == (self.num_params, self.num_params):
+        if not new_correlation.shape == (self.num_params_not_fixed, self.num_params_not_fixed):
             raise ValueError(f"Shape of new correlation matrix {new_correlation.shape} must match "
-                             f"the number of parameters {self.num_params}")
+                             f"the number of not fixed parameters {self.num_params_not_fixed}")
         self._correlation = new_correlation
+
+    @property
+    def fixed_params(self) -> List[bool]:
+        return self._fixed_params
 
 
 class MinimizeResult(NamedTuple):
@@ -215,7 +232,6 @@ class AbstractMinimizer(ABC):
         self._params = MinimizerParameters(param_names)
 
         # this lists can be different for different minimizer implementations
-        self._fixed_params = list()
         self._param_bounds = [(None, None) for _ in self._params.names]  # type: List[BoundType]
 
         self._fcn_min_val = None
@@ -228,13 +244,24 @@ class AbstractMinimizer(ABC):
     def minimize(self, initial_param_values: np.ndarray, verbose: bool = False, **kwargs) -> MinimizeResult:
         pass
 
-    @abstractmethod
     def set_param_fixed(self, param_id: Union[int, str]) -> None:
-        pass
+        """
+        Fixes specified parameter to it's initial value given in
+        `initial_param_values`.
 
-    @abstractmethod
+        Parameters
+        ----------
+        param_id : int or str
+            Parameter identifier, which can be it's name or its index
+            in `param_names`.
+        """
+        self.params.set_param_fixed(param_id=param_id)
+
     def release_params(self) -> None:
-        pass
+        """
+        Removes all constraint specified.
+        """
+        self.params.release_params()
 
     def set_param_bounds(self, param_id: Union[int, str], bounds: BoundType) -> None:
         """
@@ -305,7 +332,6 @@ class AbstractMinimizer(ABC):
 class IMinuitMinimizer(AbstractMinimizer):
     def __init__(self, fcn: Callable, param_names):
         super().__init__(fcn, param_names)
-        self._fixed_params = [False for _ in self.params.names]
 
     def minimize(
             self,
@@ -319,7 +345,7 @@ class IMinuitMinimizer(AbstractMinimizer):
             initial_param_values,  # parameter 'start'
             error=0.05 * initial_param_values,
             errordef=error_def,
-            fix=self._fixed_params,
+            fix=self._get_fixed_params(),
             name=self.params.names,
             limit=self._param_bounds,
             print_level=1 if verbose else 0,
@@ -342,12 +368,8 @@ class IMinuitMinimizer(AbstractMinimizer):
 
         return MinimizeResult(m.fval, self._params, self._success)
 
-    def set_param_fixed(self, param_id: Union[int, str]) -> None:
-        param_index = self.params.param_id_to_index(param_id)
-        self._fixed_params[param_index] = True
-
-    def release_params(self) -> None:
-        self._fixed_params = [False for _ in self.params.names]
+    def _get_fixed_params(self) -> List[bool]:
+        return self.params.fixed_params
 
 
 class ScipyMinimizer(AbstractMinimizer):
@@ -437,25 +459,8 @@ class ScipyMinimizer(AbstractMinimizer):
 
         return result
 
-    def set_param_fixed(self, param_id: Union[int, str]) -> None:
-        """
-        Fixes specified parameter to it's initial value given in
-        `initial_param_values`.
-
-        Parameters
-        ----------
-        param_id : int or str
-            Parameter identifier, which can be it's name or its index
-            in `param_names`.
-        """
-        param_index = self.params.param_id_to_index(param_id)
-        self._fixed_params.append(param_index)
-
-    def release_params(self) -> None:
-        """
-        Removes all constraint specified.
-        """
-        self._fixed_params = list()
+    def _get_fixed_params(self) -> List[int]:
+        return [index for index, fixed in enumerate(self.params.fixed_params) if fixed]
 
     def _create_constraints(self, initial_param_values: np.ndarray) -> List[Dict[str, Union[str, Callable]]]:
         """
@@ -476,7 +481,7 @@ class ScipyMinimizer(AbstractMinimizer):
         """
         constraints = list()
 
-        for fixed_param in self._fixed_params:
+        for fixed_param in self._get_fixed_params():
             constraints.append({
                 "type": "eq",
                 "fun": lambda x: x[fixed_param] - initial_param_values[fixed_param],
