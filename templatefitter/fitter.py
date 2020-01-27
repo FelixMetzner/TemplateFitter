@@ -44,6 +44,7 @@ class TemplateFitter:
 
         self._fit_model = fit_model
         self._nll = self._fit_model.create_nll()
+        self._nll_creator = self._fit_model.create_nll
         self._minimizer_id = minimizer_id
 
         self._fit_result = None
@@ -85,7 +86,7 @@ class TemplateFitter:
         """
         minimizer = minimizer_factory(
             minimizer_id=self._minimizer_id,
-            fcn=self._nll,
+            fcn=self._nll_creator(fix_nuisance_parameters=fix_nui_params),
             names=self._nll.param_names
         )
 
@@ -216,7 +217,7 @@ class TemplateFitter:
 
         minimizer = minimizer_factory(
             minimizer_id=self._minimizer_id,
-            fcn=self._nll,
+            fcn=self._nll_creator(fix_nuisance_parameters=fix_nui_params),
             names=self._nll.param_names
         )
 
@@ -345,7 +346,7 @@ class TemplateFitter:
         # perform the nominal minimization
         minimizer = minimizer_factory(
             minimizer_id=self._minimizer_id,
-            fcn=self._nll,
+            fcn=self._nll_creator(fix_nuisance_parameters=fix_nui_params),
             names=self._nll.param_names
         )
 
@@ -369,7 +370,7 @@ class TemplateFitter:
 
         minimizer = minimizer_factory(
             minimizer_id=self._minimizer_id,
-            fcn=self._nll,
+            fcn=self._nll_creator(fix_nuisance_parameters=fix_nui_params),
             names=self._nll.param_names
         )
 
