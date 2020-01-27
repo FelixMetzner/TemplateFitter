@@ -1765,12 +1765,12 @@ class FitModel:
         return poisson_term + 0.5 * (self._gauss_term(bin_nuisance_parameter_vector=nuisance_parameter_vector)
                                      + self._constraint_term(parameter_vector=parameter_vector))
 
-    # Using CostFunction class name as type hint, before CostFunction is defined.
-    def create_nll(self) -> "CostFunction":
+    # Using AbstractCostFunction class name as type hint, before AbstractCostFunction is defined.
+    def create_nll(self) -> "AbstractCostFunction":
         return NLLCostFunction(self, parameter_handler=self._params)
 
-    # Using CostFunction class name as type hint, before CostFunction is defined.
-    def create_chi2(self) -> "CostFunction":
+    # Using AbstractCostFunction class name as type hint, before AbstractCostFunction is defined.
+    def create_chi2(self) -> "AbstractCostFunction":
         return Chi2CostFunction(self, parameter_handler=self._params)
 
     def update_parameters(self, parameter_vector: np.ndarray) -> None:
@@ -1836,7 +1836,7 @@ class FitModel:
     #     # determine expected amount of events in each bin
 
 
-class AbstractTemplateCostFunction(ABC):
+class AbstractCostFunction(ABC):
     """
     Abstract base class for all cost function to estimate yields using the template method.
     """
@@ -1859,7 +1859,7 @@ class AbstractTemplateCostFunction(ABC):
         raise NotImplementedError(f"{self.__class__.__name__} is an abstract base class.")
 
 
-class Chi2CostFunction(AbstractTemplateCostFunction):
+class Chi2CostFunction(AbstractCostFunction):
     def __init__(self, model: FitModel, parameter_handler: ParameterHandler) -> None:
         super().__init__(model=model, parameter_handler=parameter_handler)
 
@@ -1867,7 +1867,7 @@ class Chi2CostFunction(AbstractTemplateCostFunction):
         return self._model.chi2(x)
 
 
-class NLLCostFunction(AbstractTemplateCostFunction):
+class NLLCostFunction(AbstractCostFunction):
     def __init__(self, model: FitModel, parameter_handler: ParameterHandler) -> None:
         super().__init__(model=model, parameter_handler=parameter_handler)
 
