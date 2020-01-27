@@ -323,7 +323,12 @@ class Template(BinnedDistributionFromData):
         if not use_initial_values and self.bin_nuisance_parameters is not None:
             # TODO: This has to be updated once different versions of the handling of nuisance parameters are in place.
             nuisance_parameters = self.params.get_parameters_by_index(indices=self.bin_nuisance_parameter_indices)
+            nuisance_parameters = np.reshape(nuisance_parameters, newshape=self.num_bins)
             relative_shape_uncertainties = self._get_relative_uncertainties_for_plotting()
+            assert template_bin_count.shape == relative_shape_uncertainties.shape, \
+                (template_bin_count.shape, relative_shape_uncertainties.shape)
+            assert template_bin_count.shape == nuisance_parameters.shape, \
+                (template_bin_count.shape, nuisance_parameters.shape)
             template_bin_count *= 1. + nuisance_parameters * relative_shape_uncertainties
 
         template_shape = template_bin_count / template_bin_count.sum()
@@ -334,8 +339,8 @@ class Template(BinnedDistributionFromData):
 
         stat_errors_sq = self.bin_errors_sq
         if self.use_other_systematics:
-            sys_errors_sq = np.diag(self.bin_covariance_matrix)
-            assert len(stat_errors_sq) == len(sys_errors_sq), (len(stat_errors_sq), len(sys_errors_sq))
+            sys_errors_sq = np.reshape(np.diag(self.bin_covariance_matrix), newshape=self.num_bins)
+            assert stat_errors_sq.shape == sys_errors_sq.shape, (stat_errors_sq.shape, sys_errors_sq.shape)
             uncertainties_sq = stat_errors_sq + sys_errors_sq
         else:
             uncertainties_sq = stat_errors_sq
