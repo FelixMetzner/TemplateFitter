@@ -1782,9 +1782,10 @@ class FitModel:
             return self._floating_nuisance_parameter_indices
         all_bin_nuisance_parameter_indices = self.get_bin_nuisance_parameter_indices()
         floating_nuisance_parameter_indices = []
-        for floating_index, all_index in enumerate(all_bin_nuisance_parameter_indices):
+        for all_index in all_bin_nuisance_parameter_indices:
             if self._params.floating_parameter_mask[all_index]:
-                floating_nuisance_parameter_indices.append(floating_index)
+                index = sum(self._params.floating_parameter_mask[:all_index + 1]) - 1
+                floating_nuisance_parameter_indices.append(index)
 
         self._floating_nuisance_parameter_indices = floating_nuisance_parameter_indices
         return floating_nuisance_parameter_indices
