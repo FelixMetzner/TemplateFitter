@@ -1781,12 +1781,12 @@ class FitModel:
                                      + self._constraint_term(parameter_vector=parameter_vector))
 
     # Using AbstractCostFunction class name as type hint, before AbstractCostFunction is defined.
-    def create_nll(self) -> "AbstractCostFunction":
-        return NLLCostFunction(self, parameter_handler=self._params)
+    def create_nll(self, fix_nuisance_parameters: bool = False) -> "AbstractCostFunction":
+        return NLLCostFunction(self, parameter_handler=self._params, fix_nuisance_parameters=fix_nuisance_parameters)
 
     # Using AbstractCostFunction class name as type hint, before AbstractCostFunction is defined.
-    def create_chi2(self) -> "AbstractCostFunction":
-        return Chi2CostFunction(self, parameter_handler=self._params)
+    def create_chi2(self, fix_nuisance_parameters: bool = False) -> "AbstractCostFunction":
+        return Chi2CostFunction(self, parameter_handler=self._params, fix_nuisance_parameters=fix_nuisance_parameters)
 
     def update_parameters(self, parameter_vector: np.ndarray) -> None:
         self._params.update_parameters(parameter_vector=parameter_vector)
@@ -1857,9 +1857,15 @@ class AbstractCostFunction(ABC):
     Abstract base class for all cost function to estimate yields using the template method.
     """
 
-    def __init__(self, model: FitModel, parameter_handler: ParameterHandler) -> None:
+    def __init__(
+            self,
+            model: FitModel,
+            parameter_handler: ParameterHandler,
+            fix_nuisance_parameters: bool = False
+    ) -> None:
         self._model = model
         self._params = parameter_handler
+        self._fix_nui_params = fix_nuisance_parameters
 
     @property
     def x0(self) -> np.ndarray:
@@ -1876,16 +1882,10 @@ class AbstractCostFunction(ABC):
 
 
 class Chi2CostFunction(AbstractCostFunction):
-    def __init__(self, model: FitModel, parameter_handler: ParameterHandler) -> None:
-        super().__init__(model=model, parameter_handler=parameter_handler)
-
     def __call__(self, x) -> float:
-        return self._model.chi2(x)
+        return self._model.chi2(x, fix_nuisance_parameters=self._fix_nui_params)
 
 
 class NLLCostFunction(AbstractCostFunction):
-    def __init__(self, model: FitModel, parameter_handler: ParameterHandler) -> None:
-        super().__init__(model=model, parameter_handler=parameter_handler)
-
     def __call__(self, x) -> float:
-        return self._model.nll(x)
+        return self._model.nll(x, fix_nuisance_parameters=self._fix_nui_params)
