@@ -112,6 +112,7 @@ class FitModel:
         self._template_bin_errors_sq_per_ch_and_temp = None
         self._template_stat_error_sq_matrix_per_channel = None
         self._template_stat_error_sq_matrix_per_ch_and_temp = None
+        self._template_shape = None
 
         self._relative_shape_uncertainties = None
 
@@ -1368,17 +1369,25 @@ class FitModel:
             [(a.shape[1], ch_b.num_bins_total) for a, ch_b in zip(bin_errors_per_ch, self.binning)]
         assert all(not np.any(matrix == 0) for matrix in bin_errors_per_ch), [np.any(m == 0) for m in bin_errors_per_ch]
 
-    def get_templates(self, nuisance_parameters: np.ndarray) -> np.ndarray:
+    def get_templates(self, nuisance_parameters: Optional[np.ndarray]) -> np.ndarray:
+        if nuisance_parameters is None and self._template_shape is not None:
+            return self._template_shape
+
         template_bin_counts = self.get_template_bin_counts()
 
-        # Apply shape uncertainties:
-        relative_shape_uncertainties = self.get_relative_shape_uncertainties()
-
-        templates_with_shape_uncertainties = (template_bin_counts
-                                              * (1. + nuisance_parameters * relative_shape_uncertainties))
+        if nuisance_parameters is not None:
+            # Apply shape uncertainties:
+            relative_shape_uncertainties = self.get_relative_shape_uncertainties()
+            templates_with_shape_uncertainties = (template_bin_counts
+                                                  * (1. + nuisance_parameters * relative_shape_uncertainties))
+        else:
+            templates_with_shape_uncertainties = template_bin_counts
 
         # Normalization of template bin counts with shape uncertainties to obtain the template shapes:
         templates_with_shape_uncertainties /= templates_with_shape_uncertainties.sum(axis=2)[:, :, np.newaxis]
+
+        if nuisance_parameters is None:
+            self._template_shape = templates_with_shape_uncertainties
 
         return templates_with_shape_uncertainties
 
