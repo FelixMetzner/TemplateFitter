@@ -96,8 +96,15 @@ class FitResultPlot(HistogramPlot):
         data_bin_errors_sq = self._histograms[self.data_key].get_histogram_squared_bin_errors_of_component(index=0)
 
         mc_bin_counts = self._histograms[self.mc_key].get_bin_counts()
+        # clean_mc_bin_counts = [np.where(bc < 0., 0., bc) for bc in mc_bin_counts]
+
         mc_sum_bin_count = np.sum(np.array(mc_bin_counts), axis=0)
         mc_sum_bin_error_sq = self._histograms[self.mc_key].get_statistical_uncertainty_per_bin()
+
+        bar_bottom = mc_sum_bin_count * bin_scaling - np.sqrt(mc_sum_bin_error_sq)
+        height_corr = np.where(bar_bottom < 0., bar_bottom, 0.)
+        bar_bottom[bar_bottom < 0.] = 0.
+        bar_height = 2 * np.sqrt(mc_sum_bin_error_sq) - height_corr
 
         if style.lower() == "stacked":
             ax1.hist(
@@ -114,9 +121,9 @@ class FitResultPlot(HistogramPlot):
 
             ax1.bar(
                 x=self.bin_mids,
-                height=2 * np.sqrt(mc_sum_bin_error_sq),
+                height=bar_height,
                 width=self.bin_widths,
-                bottom=mc_sum_bin_count * bin_scaling - np.sqrt(mc_sum_bin_error_sq),
+                bottom=bar_bottom,
                 color="black",
                 hatch="///////",
                 fill=False,
@@ -126,9 +133,9 @@ class FitResultPlot(HistogramPlot):
         elif style.lower() == "summed":
             ax1.bar(
                 x=self.bin_mids,
-                height=2 * np.sqrt(mc_sum_bin_error_sq),
+                height=bar_height,
                 width=self.bin_widths,
-                bottom=mc_sum_bin_count * bin_scaling - np.sqrt(mc_sum_bin_error_sq),
+                bottom=bar_bottom,
                 color=sum_color,
                 lw=0,
                 label="MC stat. unc." if not include_sys else "MC stat. + sys. unc."
