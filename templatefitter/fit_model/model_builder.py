@@ -1733,8 +1733,11 @@ class FitModel:
         return constraint_term
 
     @jit
-    def chi2(self, parameter_vector: np.ndarray) -> float:
-        nuisance_parameter_vector, nuisance_parameter_matrix = self.get_nuisance_parameters(parameter_vector)
+    def chi2(self, parameter_vector: np.ndarray, fix_nuisance_parameters: bool = False) -> float:
+        if fix_nuisance_parameters:
+            nuisance_parameter_vector, nuisance_parameter_matrix = (np.array([]), None)
+        else:
+            nuisance_parameter_vector, nuisance_parameter_matrix = self.get_nuisance_parameters(parameter_vector)
 
         expected_b_count = self.calculate_expected_bin_count(
             parameter_vector=parameter_vector,
@@ -1753,8 +1756,11 @@ class FitModel:
         return (chi2_data_term + self._gauss_term(bin_nuisance_parameter_vector=nuisance_parameter_vector)
                 + self._constraint_term(parameter_vector=parameter_vector))
 
-    def nll(self, parameter_vector: np.ndarray) -> float:
-        nuisance_parameter_vector, nuisance_parameter_matrix = self.get_nuisance_parameters(parameter_vector)
+    def nll(self, parameter_vector: np.ndarray, fix_nuisance_parameters: bool = False) -> float:
+        if fix_nuisance_parameters:
+            nuisance_parameter_vector, nuisance_parameter_matrix = (np.array([]), None)
+        else:
+            nuisance_parameter_vector, nuisance_parameter_matrix = self.get_nuisance_parameters(parameter_vector)
 
         expected_bin_count = self.calculate_expected_bin_count(
             parameter_vector=parameter_vector,
