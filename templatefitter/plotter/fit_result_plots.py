@@ -1,6 +1,7 @@
 """
 Plotting tools to illustrate fit results produced with this package
 """
+import os
 import copy
 import logging
 import itertools
@@ -208,7 +209,12 @@ class FitResultPlotter:
 
         self._get_histograms_from_model(fit_model=fit_model)
 
-    def plot_fit_result(self, use_initial_values: bool = False) -> None:
+    def plot_fit_result(
+            self,
+            use_initial_values: bool = False,
+            output_dir_path: Optional[Union[str, os.PathLike]] = None,
+            output_name_tag: Optional[str] = None
+    ) -> None:
         for mc_channel in self._fit_model.mc_channels_to_plot:
             current_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
             data_column_name_for_plot = mc_channel.data_column_names[self.reference_dimension]
@@ -217,7 +223,7 @@ class FitResultPlotter:
             data_bin_count = data_channel.bin_counts
             data_bin_errors_squared = data_channel.bin_errors_sq
 
-            for sub_bin_ids in self._channel_sub_bin_mapping[mc_channel.name]:
+            for counter, sub_bin_ids in enumerate(self._channel_sub_bin_mapping[mc_channel.name]):
                 if sub_bin_ids is None:
                     sub_bin_info = None
                 else:
@@ -281,6 +287,16 @@ class FitResultPlotter:
                         info_title = "\n".join([padding + info for info in sub_bin_info.split("\n")])
 
                     axs.set_title(info_title, loc=bin_info_pos, fontsize=6, color=plot_style.KITColors.dark_grey)
+
+                if output_dir_path is not None:
+                    assert output_name_tag is not None, \
+                        f"Parameter output_name_tag must be provided if output_dir_path is not None!"
+                    os.makedirs(output_dir_path, exist_ok=True)
+                    add_info = ""
+                    if use_initial_values:
+                        add_info = "_with_initial_values"
+                    filename = f"fit_result_plot_{output_name_tag}_{mc_channel.name}_bin_{counter}{add_info}.pdf"
+                    fig.savefig(os.path.join(output_dir_path, filename), bbox_inches="tight")
 
     def _get_histograms_from_model(self, fit_model: FitModel) -> None:
 
