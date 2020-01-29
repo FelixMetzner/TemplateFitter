@@ -16,6 +16,7 @@ from templatefitter.fit_model.channel import Channel, DataChannelContainer
 from templatefitter.binned_distributions.binned_distribution import DataColumnNamesInput
 
 from templatefitter.plotter import plot_style
+from templatefitter.plotter.plot_utilities import export
 from templatefitter.plotter.histogram_variable import HistVariable
 from templatefitter.plotter.histogram_plot_base import HistogramPlot, AxesType
 
@@ -291,12 +292,13 @@ class FitResultPlotter:
                 if output_dir_path is not None:
                     assert output_name_tag is not None, \
                         f"Parameter output_name_tag must be provided if output_dir_path is not None!"
-                    os.makedirs(output_dir_path, exist_ok=True)
+
                     add_info = ""
                     if use_initial_values:
                         add_info = "_with_initial_values"
-                    filename = f"fit_result_plot_{output_name_tag}_{mc_channel.name}_bin_{counter}{add_info}.pdf"
-                    fig.savefig(os.path.join(output_dir_path, filename), bbox_inches="tight")
+                    filename = f"fit_result_plot_{output_name_tag}_{mc_channel.name}_bin_{counter}{add_info}"
+
+                    export(fig=fig, filename=filename, target_dir=output_dir_path)
 
     def _get_histograms_from_model(self, fit_model: FitModel) -> None:
 

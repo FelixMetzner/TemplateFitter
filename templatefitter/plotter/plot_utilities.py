@@ -34,8 +34,7 @@ def export(
     Default is './plots/'.
     :return: None
     """
-    if not os.path.isdir(target_dir):
-        os.makedirs(target_dir)
+    os.makedirs(target_dir, exist_ok=True)
 
     for file_format in file_formats:
         fig.savefig(os.path.join(target_dir, f'{filename}{file_format}'), bbox_inches="tight")
