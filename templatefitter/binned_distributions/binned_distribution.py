@@ -334,7 +334,10 @@ class BinnedDistributionFromData(BinnedDistribution):
         elif isinstance(in_data, pd.DataFrame):
             if data_column_names is None:
                 raise ValueError("If data is provided as pandas data frame, data_column_names must be provided too!")
-            assert all(c in in_data.columns for c in data_column_names), (data_column_names, in_data.columns)
+            if isinstance(data_column_names, str):
+                assert data_column_names in in_data.columns, (data_column_names, in_data.columns)
+            else:
+                assert all(c in in_data.columns for c in data_column_names), (data_column_names, in_data.columns)
             data = in_data[data_column_names].values
         elif isinstance(in_data, np.ndarray):
             data = in_data
