@@ -74,7 +74,7 @@ class SimpleHistogramPlot(HistogramPlot):
         for histogram in self._histograms.histograms:
             assert histogram.number_of_components == 1, histogram.number_of_components
             ax.hist(
-                x=np.ones(histogram.binning.num_bins[0]),
+                x=histogram.binning.bin_mids[0],
                 bins=self.bin_edges,
                 density=normed,
                 weights=histogram.get_bin_count_of_component(index=0),
@@ -133,7 +133,7 @@ class StackedHistogramPlot(HistogramPlot):
         histogram = self._histograms.histograms[0]
 
         ax.hist(
-            x=[np.ones(len(bin_count)) for bin_count in histogram.get_bin_counts],
+            x=[histogram.binning.bin_mids[0] for _ in histogram.get_bin_counts],
             bins=self.bin_edges,
             weights=histogram.get_bin_counts,
             stacked=True,
