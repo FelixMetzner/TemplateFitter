@@ -3,6 +3,7 @@ Contains abstract base class for histogram plots --- HistogramPlot.
 """
 import logging
 import numpy as np
+import matplotlib as mpl
 import matplotlib.axes._axes as axes
 
 from abc import ABC, abstractmethod
@@ -22,12 +23,14 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "HistogramPlot",
-    "AxesType"
+    "AxesType",
+    "FigureType"
 ]
 
 plot_style.set_matplotlibrc_params()
 
 AxesType = axes.Axes
+FigureType = figure.Figure
 
 
 class HistogramPlot(ABC):
@@ -43,10 +46,10 @@ class HistogramPlot(ABC):
         self._variable = variable  # type: HistVariable
         self._histograms = HistogramContainer()
 
-        self._last_figure = None  # type: Optional[figure.Figure]
+        self._last_figure = None  # type: Optional[FigureType]
 
     @abstractmethod
-    def plot_on(self) -> Union[AxesType, Tuple[figure.Figure, Tuple[AxesType, AxesType]], Any]:
+    def plot_on(self) -> Union[AxesType, Tuple[FigureType, Tuple[AxesType, AxesType]], Any]:
         raise NotImplementedError(f"The 'plot_on' method is not implemented for the class {self.__class__.__name__}!")
 
     @abstractmethod
@@ -211,5 +214,5 @@ class HistogramPlot(ABC):
 
             axis.legend(frameon=False, loc=loc, ncol=ncols, bbox_to_anchor=bbox_to_anchor_tuple)
 
-    def get_last_figure(self) -> Optional[figure.Figure]:
+    def get_last_figure(self) -> Optional[FigureType]:
         return self._last_figure
