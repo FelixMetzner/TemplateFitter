@@ -10,7 +10,11 @@ from typing import Optional, Union, List, Tuple, Dict, NamedTuple
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["ParameterHandler", "TemplateParameter", "ModelParameter"]
+__all__ = [
+    "ParameterHandler",
+    "TemplateParameter",
+    "ModelParameter"
+]
 
 
 class ParameterInfo(NamedTuple):

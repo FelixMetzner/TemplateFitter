@@ -25,7 +25,9 @@ from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelPa
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["FitModel"]
+__all__ = [
+    "FitModel"
+]
 
 
 # TODO: Not yet considered are Yield Ratios:
