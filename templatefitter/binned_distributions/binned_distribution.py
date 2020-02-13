@@ -330,6 +330,9 @@ class BinnedDistributionFromData(BinnedDistribution):
             data_column_names: DataColumnNamesInput = None
     ) -> np.ndarray:
         if isinstance(in_data, pd.Series):
+            if data_column_names is not None and in_data.name not in data_column_names:
+                logging.warn(f"The data series name '{in_data.name}' is not in the data_column_names "
+                             f"{data_column_names}.\nMake sure you provided the data for the correct variable.")
             data = in_data.values
         elif isinstance(in_data, pd.DataFrame):
             if data_column_names is None:
