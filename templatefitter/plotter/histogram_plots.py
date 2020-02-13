@@ -130,7 +130,7 @@ class StackedHistogramPlot(HistogramPlot):
             _, ax = plt.subplots()
         self._last_figure = ax.get_figure()
 
-        histogram = self._histograms.histograms[0]
+        histogram = list(self._histograms.histograms)[0]
 
         ax.hist(
             x=[histogram.binning.bin_mids[0] for _ in histogram.get_bin_counts],
