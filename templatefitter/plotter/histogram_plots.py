@@ -133,9 +133,9 @@ class StackedHistogramPlot(HistogramPlot):
         histogram = list(self._histograms.histograms)[0]
 
         ax.hist(
-            x=[histogram.binning.bin_mids[0] for _ in histogram.get_bin_counts],
+            x=[histogram.binning.bin_mids[0] for _ in histogram.get_bin_counts()],
             bins=self.bin_edges,
-            weights=histogram.get_bin_counts,
+            weights=histogram.get_bin_counts(),
             stacked=True,
             edgecolor="black",
             lw=0.3,
