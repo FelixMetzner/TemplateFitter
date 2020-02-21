@@ -97,13 +97,13 @@ class FitResultPlot(HistogramPlot):
         data_bin_count = self._histograms[self.data_key].get_bin_count_of_component(index=0)
         data_bin_errors_sq = self._histograms[self.data_key].get_histogram_squared_bin_errors_of_component(index=0)
 
-        mc_bin_counts = self._histograms[self.mc_key].get_bin_counts()
+        mc_bin_counts = self._histograms[self.mc_key].get_bin_counts(factor=bin_scaling)
         # clean_mc_bin_counts = [np.where(bc < 0., 0., bc) for bc in mc_bin_counts]
 
         mc_sum_bin_count = np.sum(np.array(mc_bin_counts), axis=0)
         mc_sum_bin_error_sq = self._histograms[self.mc_key].get_statistical_uncertainty_per_bin()
 
-        bar_bottom = mc_sum_bin_count * bin_scaling - np.sqrt(mc_sum_bin_error_sq)
+        bar_bottom = mc_sum_bin_count - np.sqrt(mc_sum_bin_error_sq)
         height_corr = np.where(bar_bottom < 0., bar_bottom, 0.)
         bar_bottom[bar_bottom < 0.] = 0.
         bar_height = 2 * np.sqrt(mc_sum_bin_error_sq) - height_corr
