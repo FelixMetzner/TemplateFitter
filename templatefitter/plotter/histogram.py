@@ -125,8 +125,11 @@ class Histogram:
         )
         self._binning = new_binning
 
-    def get_bin_counts(self) -> List[np.ndarray]:
-        return [component.get_histogram_bin_count(binning=self.binning) for component in self._components]
+    def get_bin_counts(self, factor: Optional[float] = None) -> List[np.ndarray]:
+        if factor is None:
+            return [component.get_histogram_bin_count(binning=self.binning) for component in self._components]
+        else:
+            return [component.get_histogram_bin_count(binning=self.binning) * factor for component in self._components]
 
     def get_bin_count_of_component(self, index: int) -> np.ndarray:
         return self._components[index].get_histogram_bin_count(binning=self.binning)

@@ -279,7 +279,7 @@ class DataMCHistogramPlot(HistogramPlot):
             ax1.hist(
                 x=[self.bin_mids for _ in range(self._histograms[self.mc_key].number_of_components)],
                 bins=self.bin_edges,
-                weights=self._histograms[self.mc_key].get_bin_counts() * bin_scaling * norm_factor,
+                weights=self._histograms[self.mc_key].get_bin_counts(factor=bin_scaling * norm_factor),
                 stacked=True,
                 edgecolor="black",
                 lw=0.3,
