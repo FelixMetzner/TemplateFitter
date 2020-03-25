@@ -1699,7 +1699,7 @@ class FitModel:
         ), "\n".join([f"{i}] <= {t}" for i, t in zip(self.number_of_independent_templates, self.number_of_templates)])
         return not (self.number_of_independent_templates == self.number_of_templates)
 
-    @jit
+    @jit(forceobj=True)
     def _gauss_term(self, bin_nuisance_parameter_vector: np.ndarray) -> float:
         if len(bin_nuisance_parameter_vector) == 0:
             return 0.
@@ -1734,7 +1734,7 @@ class FitModel:
 
         return constraint_term
 
-    @jit
+    @jit(forceobj=True)
     def chi2(self, parameter_vector: np.ndarray, fix_nuisance_parameters: bool = False) -> float:
         if fix_nuisance_parameters:
             nuisance_parameter_vector, nuisance_parameter_matrix = (np.array([]), None)
