@@ -440,6 +440,20 @@ class DataChannel(BinnedDistributionFromData):
 
         return self._bin_counts
 
+    @property
+    def bin_errors_sq(self) -> Union[None, np.ndarray]:
+        """ The squared errors on the bin counts of the binned distribution """
+        if self.requires_rounding_due_to_weights:
+            return np.ceil(self._bin_counts)
+
+        return self._bin_errors_sq
+
+    @property
+    def bin_errors(self) -> Union[None, np.ndarray]:
+        if self.bin_errors_sq is None:
+            return None
+        return np.sqrt(self.bin_errors_sq)
+
 
 class DataChannelContainer(Sequence):
 
