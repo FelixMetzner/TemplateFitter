@@ -552,6 +552,36 @@ class FitModel:
             )
         self._has_data = True
 
+
+    def add_asimov_data_from_templates(self, round_bin_counts: bool = True) -> None:
+        self._check_is_not_finalized()
+        assert self._data_channels.is_empty
+        if self._has_data is True:
+            raise RuntimeError("Data has already been added to this model!\nThe following channels are registered:\n\t-"
+                               + "\n\t-".join(self._data_channels.data_channel_names))
+
+        for channel in self._channels:
+
+            channel_data = None
+            for template in channel.templates:
+                if channel_data is None:
+                    channel_data = template.bin_counts
+                else:
+                    channel_data += template.bin_counts
+
+            self._data_channels.add_channel(
+                channel_name=channel.name,
+                channel_data=channel_data,
+                channel_weights=np.ones_like(channel_data) if round_bin_counts else None,
+                binning=channel.binning,
+                column_names=channel.data_column_names
+            )
+        self._has_data = True
+
+    def add_toy_data_from_templates(self, round_bin_counts: bool = True) -> None:
+        raise NotImplementedError()
+        self._data_channels = DataChannelContainer()
+
     def finalize_model(self) -> None:
         if not self._has_data:
             raise RuntimeError("You have not added data, yet, so the model can not be finalized, yet!\n"
