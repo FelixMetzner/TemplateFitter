@@ -547,9 +547,10 @@ class FitModel:
             self._data_channels.add_channel(
                 channel_name=channel_name,
                 channel_data=channel_data,
-                channel_weights=None if channel_weights is None else channel_weights[channel_name],
+                from_data=True,
                 binning=mc_channel.binning,
-                column_names=mc_channel.data_column_names
+                column_names=mc_channel.data_column_names,
+                channel_weights=None if channel_weights is None else channel_weights[channel_name]
             )
         self._has_data = True
 
@@ -571,10 +572,11 @@ class FitModel:
 
             self._data_channels.add_channel(
                 channel_name=channel.name,
-                channel_data=channel_data,
-                channel_weights=np.ones_like(channel_data) if round_bin_counts else None,
+                channel_data=np.ceil(channel_data) if round_bin_counts else channel_data,
+                from_data=False,
                 binning=channel.binning,
-                column_names=channel.data_column_names
+                column_names=channel.data_column_names,
+                channel_weights=None
             )
         self._has_data = True
 

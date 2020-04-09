@@ -155,14 +155,17 @@ class DataChannelContainer(Sequence):
             channel_names: Optional[List[str]] = None,
             channel_data: Optional[List[DataInputType]] = None,
             binning: Optional[List[Binning]] = None,
-            column_names: Optional[Tuple[DataColumnNamesInput]] = None
+            column_names: Optional[Tuple[DataColumnNamesInput]] = None,
+            from_data: Optional[bool] = None,
     ):
         self._channel_distributions = []  # type: Union[List[DataChannelFromData], List[DataChannelFromHistogram]]
         self._channels_mapping = {}  # type: Dict[str, int]
         if channel_names is not None:
+            assert from_data is not None, "Parameter from_data must be set if DataChannelContainer is filled directly!"
             self.add_channels(
                 channel_names=channel_names,
                 channel_data=channel_data,
+                from_data=from_data,
                 binning=binning,
                 column_names=column_names
             )
@@ -173,6 +176,7 @@ class DataChannelContainer(Sequence):
             self,
             channel_names: List[str],
             channel_data: List[DataInputType],
+            from_data: bool,
             binning: List[Binning],
             column_names: Tuple[DataColumnNamesInput],
             channel_weights: Optional[List[WeightsInputType]] = None
@@ -209,9 +213,10 @@ class DataChannelContainer(Sequence):
             channel_index = self.add_channel(
                 channel_name=name,
                 channel_data=data,
-                channel_weights=weights,
+                from_data=from_data,
                 binning=binning,
-                column_names=cols
+                column_names=cols,
+                channel_weights=weights
             )
             channel_indices.append(channel_index)
         assert len(set(channel_indices)) == len(channel_indices), channel_indices
@@ -247,6 +252,7 @@ class DataChannelContainer(Sequence):
                 log_scale_mask=log_scale_mask
             )
         else:
+            assert channel_weights is None, channel_weights
             channel_distribution = DataChannelFromHistogram(
                 bins=binning.bin_edges,
                 dimensions=binning.dimensions,
