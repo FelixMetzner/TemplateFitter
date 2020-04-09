@@ -265,7 +265,7 @@ class FitResultPlotter:
                 fig, axs = plt.subplots(nrows=1, ncols=1, figsize=self._fig_size, dpi=200)
                 current_plot.plot_on(
                     ax1=axs,
-                    #  style=???,  # str = "stacked",
+                    #  style=???,  # str = "stacked",  # TODO: Include summed style
                     #  include_sys=???,  # bool = False,
                     #  markers_with_width=???,  # bool = True,
                     #  sum_color=???,  # str = plot_style.KITColors.kit_purple,

@@ -5,6 +5,7 @@ Class which defines the fit model by combining templates and handles the computa
 import logging
 import operator
 import numpy as np
+import scipy.stats as scipy_stats
 
 from numba import jit
 from scipy.linalg import block_diag
@@ -76,6 +77,7 @@ class FitModel:
         self._channels = ChannelContainer()
 
         self._data_channels = DataChannelContainer()
+        self._original_data_channels = None  # type: Optional[DataChannelContainer]
         self._data_bin_counts = None
         self._data_bin_count_checked = False
         self._data_stat_errors_sq = None
@@ -125,6 +127,9 @@ class FitModel:
         self._nll_calculation_checked = False
 
         self._floating_nuisance_parameter_indices = None
+
+        # Setting a random seed for the toy data set generation with scypi
+        np.random.seed(seed=7694747)
 
     def add_model_parameter(
             self,
@@ -581,8 +586,34 @@ class FitModel:
         self._has_data = True
 
     def add_toy_data_from_templates(self, round_bin_counts: bool = True) -> None:
-        raise NotImplementedError()
+        if self._original_data_channels is None and self._data_channels is not None:
+            # Backing up original data_channels
+            self._original_data_channels = self._data_channels
+
         self._data_channels = DataChannelContainer()
+
+        for channel in self._channels:
+            channel_data = None
+            for template in channel.templates:
+                if channel_data is None:
+                    channel_data = template.bin_counts
+                else:
+                    channel_data += template.bin_counts
+
+            if round_bin_counts:
+                channel_data = np.ceil(channel_data)
+
+            toy_data = scipy_stats.poisson.rvs(channel_data)
+
+            self._data_channels.add_channel(
+                channel_name=channel.name,
+                channel_data=toy_data,
+                from_data=False,
+                binning=channel.binning,
+                column_names=channel.data_column_names,
+                channel_weights=None
+            )
+        self._has_data = True
 
     def finalize_model(self) -> None:
         if not self._has_data:
