@@ -5,26 +5,21 @@ This package provides
 """
 
 import logging
-import numpy as np
 
 from collections import Counter
 from collections.abc import Sequence
-from typing import Optional, Union, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
-from templatefitter.binned_distributions.weights import WeightsInputType
+from templatefitter.binned_distributions.binning import Binning
 from templatefitter.fit_model.parameter_handler import ParameterHandler, TemplateParameter
-from templatefitter.binned_distributions.binning import Binning, LogScaleInputType, BinsInputType, ScopeInputType
-from templatefitter.binned_distributions.binned_distribution import BinnedDistribution, BinnedDistributionFromData, \
-    DataInputType, DataColumnNamesInput
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "Channel",
-    "ChannelContainer",
-    "DataChannelContainer"
+    "ChannelContainer"
 ]
 
 
@@ -400,197 +395,3 @@ class ChannelContainer(Sequence):
 
     def __len__(self) -> int:
         return len(self._channels)
-
-
-class DataChannel(BinnedDistributionFromData):
-    def __init__(
-            self,
-            bins: BinsInputType,
-            dimensions: int,
-            scope: ScopeInputType = None,
-            log_scale_mask: LogScaleInputType = False,
-            name: Optional[str] = None,
-            data: Optional[DataInputType] = None,
-            weights: WeightsInputType = None,
-            data_column_names: DataColumnNamesInput = None
-    ) -> None:
-        super().__init__(
-            bins=bins,
-            dimensions=dimensions,
-            scope=scope,
-            log_scale_mask=log_scale_mask,
-            name=name,
-            data=data,
-            weights=weights,
-            systematics=None,
-            data_column_names=data_column_names
-        )
-
-        self._requires_rounding_due_to_weights = False if weights is None else True
-
-    @property
-    def requires_rounding_due_to_weights(self) -> bool:
-        return self._requires_rounding_due_to_weights
-
-    @property
-    def bin_counts(self) -> Union[None, np.ndarray]:
-        """ The actual bin counts of the binned distribution; rounded up, if required """
-        if self.requires_rounding_due_to_weights:
-            return np.ceil(self._bin_counts)
-
-        return self._bin_counts
-
-    @property
-    def bin_errors_sq(self) -> Union[None, np.ndarray]:
-        """ The squared errors on the bin counts of the binned distribution """
-        if self.requires_rounding_due_to_weights:
-            return np.ceil(self._bin_counts)
-
-        return self._bin_errors_sq
-
-    @property
-    def bin_errors(self) -> Union[None, np.ndarray]:
-        if self.bin_errors_sq is None:
-            return None
-        return np.sqrt(self.bin_errors_sq)
-
-
-class DataChannelContainer(Sequence):
-
-    data_channel_name_prefix = "data_channel"
-
-    def __init__(
-            self,
-            channel_names: Optional[List[str]] = None,
-            channel_data: Optional[List[DataInputType]] = None,
-            binning: Optional[List[Binning]] = None,
-            column_names: Optional[Tuple[DataColumnNamesInput]] = None
-    ):
-        self._channel_distributions = []  # type: List[DataChannel]
-        self._channels_mapping = {}  # type: Dict[str, int]
-        if channel_names is not None:
-            self.add_channels(
-                channel_names=channel_names,
-                channel_data=channel_data,
-                binning=binning,
-                column_names=column_names
-            )
-
-        super().__init__()
-
-    def add_channels(
-            self,
-            channel_names: List[str],
-            channel_data: List[DataInputType],
-            binning: List[Binning],
-            column_names: Tuple[DataColumnNamesInput],
-            channel_weights: Optional[List[WeightsInputType]] = None
-    ) -> List[int]:
-        if not len(channel_names) == len(channel_data):
-            raise ValueError(f"You must provide a channel_name for each channel_data set, "
-                             f"but provided {len(channel_names)} names and {len(channel_data)} data sets.")
-        if not len(channel_data) == len(binning):
-            raise ValueError(f"You must provide a binning definition for each channel_data set, "
-                             f"but provided {len(binning)} Binning objects and {len(channel_data)} data sets.")
-        if not len(channel_data) == len(column_names):
-            raise ValueError(f"You must provide a set of column_names for each channel_data set, "
-                             f"but provided {len(column_names)} column_name and {len(channel_data)} data sets.")
-        if not ((channel_weights is None) or (len(channel_data) == len(channel_weights))):
-            raise ValueError(f"You must provide a set of channel_weights for each channel_data set or "
-                             f"set channel_weights to None, but you provided {len(channel_weights)} channel_weights "
-                             f"and {len(channel_data)} data sets.")
-        if not all(name not in self._channels_mapping.keys() for name in channel_names):
-            raise ValueError(f"Data channels with the name(s) "
-                             f"{[c for c in channel_names if c in self._channels_mapping]} have already been "
-                             f"registered to the DataChannelContainer with the indices "
-                             f"{[self._channels_mapping[c] for c in channel_names if c in self._channels_mapping]}.")
-        if not len(set(channel_names)) == len(channel_names):
-            raise ValueError(f"The channel_names must be unique, but the provided list is not:\n\t{channel_names}")
-
-        if channel_weights is None:
-            ch_weights = [None for _ in range(len(channel_names))]
-        else:
-            ch_weights = channel_weights
-
-        channel_indices = []
-
-        for name, data, weights, binning, cols in zip(channel_names, channel_data, ch_weights, binning, column_names):
-            channel_index = self.add_channel(
-                channel_name=name,
-                channel_data=data,
-                channel_weights=weights,
-                binning=binning,
-                column_names=cols
-            )
-            channel_indices.append(channel_index)
-        assert len(set(channel_indices)) == len(channel_indices), channel_indices
-        assert len(channel_names) == len(channel_indices), (len(channel_names), len(channel_indices))
-
-        return channel_indices
-
-    def add_channel(
-            self,
-            channel_name: str,
-            channel_data: DataInputType,
-            binning: Binning,
-            column_names: DataColumnNamesInput,
-            channel_weights: Optional[WeightsInputType] = None,
-            log_scale_mask: LogScaleInputType = False
-    ) -> int:
-        if channel_name in self._channels_mapping.keys():
-            raise RuntimeError(f"Trying to add channel with name '{channel_name}' that is already assigned to the "
-                               f"{self._channels_mapping[channel_name]}th channel in the DataChannelContainer.")
-
-        channel_index = self.__len__()
-        channel_distribution = DataChannel(
-            bins=binning.bin_edges,
-            dimensions=binning.dimensions,
-            scope=binning.range,
-            name=self._create_data_channel_name(base_channel_name=channel_name, channel_index=channel_index),
-            data=channel_data,
-            weights=channel_weights,
-            data_column_names=column_names,
-            log_scale_mask=log_scale_mask
-        )
-
-        self._channel_distributions.append(channel_distribution)
-        self._channels_mapping.update({channel_name: channel_index})
-
-        return channel_index
-
-    @property
-    def data_channel_names(self) -> List[str]:
-        return [str(name) for name in self._channels_mapping.keys()]
-
-    @property
-    def is_empty(self) -> bool:
-        return len(self._channel_distributions) == 0
-
-    @property
-    def requires_rounding_due_to_weights(self) -> Tuple[bool, ...]:
-        return tuple([ch.requires_rounding_due_to_weights for ch in self._channel_distributions])
-
-    def _create_data_channel_name(self, base_channel_name: str, channel_index: int) -> str:
-        return f"{self.data_channel_name_prefix}_{channel_index}_{base_channel_name}"
-
-    @staticmethod
-    def get_base_channel_name(data_channel_name: str) -> str:
-        split_res = data_channel_name.split(f"{DataChannelContainer.data_channel_name_prefix}_", 1)
-        assert not split_res[0], split_res
-        assert split_res[1], split_res
-        split_res = split_res[1].split("_", 1)
-        assert split_res[0].isdigit(), split_res
-        return split_res[1]
-
-    def get_channel_by_name(self, name: str) -> DataChannel:
-        if name not in self.data_channel_names:
-            raise KeyError(f"The DataChannel of the name '{name}' is not known.\n"
-                           f"Available channel names are: {self.data_channel_names}")
-
-        return self._channel_distributions[self._channels_mapping[name]]
-
-    def __getitem__(self, i) -> Optional[BinnedDistribution]:
-        return self._channel_distributions[i]
-
-    def __len__(self) -> int:
-        return len(self._channel_distributions)

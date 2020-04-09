@@ -11,8 +11,9 @@ from collections import defaultdict
 from matplotlib import pyplot as plt
 from typing import Optional, Union, Tuple, List, Dict, Any
 
+from templatefitter.fit_model.channel import Channel
 from templatefitter.binned_distributions.binning import Binning
-from templatefitter.fit_model.channel import Channel, DataChannelContainer
+from templatefitter.fit_model.data_channel import DataChannelContainer
 from templatefitter.binned_distributions.binned_distribution import DataColumnNamesInput
 
 from templatefitter.plotter import plot_style

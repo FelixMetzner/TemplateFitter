@@ -17,9 +17,10 @@ from templatefitter.utility import xlogyx, cov2corr
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
 from templatefitter.binned_distributions.binning import Binning
+from templatefitter.fit_model.data_channel import DataChannelContainer
+from templatefitter.fit_model.channel import ChannelContainer, Channel
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType
-from templatefitter.fit_model.channel import ChannelContainer, Channel, DataChannelContainer
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
 
 
@@ -561,7 +562,6 @@ class FitModel:
                                + "\n\t-".join(self._data_channels.data_channel_names))
 
         for channel in self._channels:
-
             channel_data = None
             for template in channel.templates:
                 if channel_data is None:

@@ -5,7 +5,7 @@ Class providing a generalized weights object.
 import logging
 import numpy as np
 import pandas as pd
-from typing import Union, Optional
+from typing import Union, Optional, Any
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -25,6 +25,7 @@ class Weights:
             data_input: Optional[pd.DataFrame] = None
     ) -> None:
         self._weights = None
+        self.check_input_type(weight_input=weight_input)
         self._init_weights(weight_input=weight_input, data=data, data_input=data_input)
 
     def _init_weights(
@@ -66,3 +67,8 @@ class Weights:
 
     def get_weights(self) -> np.ndarray:
         return self._weights
+
+    @staticmethod
+    def check_input_type(weight_input: Any) -> None:
+        acceptable_types = tuple([type(None), float, str, type(pd.Series), type(np.ndarray)])
+        assert isinstance(weight_input, acceptable_types), (type(weight_input), acceptable_types)
