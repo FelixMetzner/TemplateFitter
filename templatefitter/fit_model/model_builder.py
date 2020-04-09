@@ -563,7 +563,7 @@ class FitModel:
     def add_asimov_data_from_templates(self, round_bin_counts: bool = True) -> None:
         self._check_is_not_finalized()
         assert self._data_channels.is_empty
-        if self._has_data is True:
+        if self._has_data:
             raise RuntimeError("Data has already been added to this model!\nThe following channels are registered:\n\t-"
                                + "\n\t-".join(self._data_channels.data_channel_names))
 
@@ -613,6 +613,11 @@ class FitModel:
                 column_names=channel.data_column_names,
                 channel_weights=None
             )
+
+        # Resetting data bin count and data bin error cache
+        self._data_stat_errors_sq = None
+        self._data_bin_counts = None
+
         self._has_data = True
 
     def finalize_model(self) -> None:
