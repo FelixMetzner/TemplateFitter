@@ -1651,6 +1651,10 @@ class FitModel:
     def number_of_fraction_parameters(self) -> Tuple[int, ...]:
         return tuple(sum([comp.required_fraction_parameters for comp in ch.components]) for ch in self._channels)
 
+    @property
+    def is_finalized(self) -> bool:
+        return self._is_initialized
+
     def _get_channel_with_max_number_of_templates(self) -> Tuple[int, int]:
         channel_with_max, max_number_of_templates = max(enumerate(self.number_of_templates), key=operator.itemgetter(1))
         return channel_with_max, max_number_of_templates

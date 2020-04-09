@@ -14,9 +14,6 @@ __all__ = [
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 
-# TODO!!!!!
-
-
 class ToyStudy:
     """
     This class helps you to perform toy monte carlo studies
@@ -69,17 +66,17 @@ class ToyStudy:
         """
         for _ in range(max_tries):
             try:
+                self._fit_model.add_toy_data_from_templates(round_bin_counts=True)
+                if not self._fit_model.is_finalized:
+                    self._fit_model.finalize_model()
 
-                # TODO: Templates.generate_toy_dataset() does not exist in this version, yet!
-                self._templates.add_data(**self._templates.generate_toy_dataset())
-
-                fitter = TemplateFitter(
-                    self._templates, minimizer_id=self._minimizer_id
+                fitter = TemplateFitter(fit_model=self._fit_model, minimizer_id=self._minimizer_id)
+                result = fitter.do_fit(
+                    update_templates=False,
+                    verbose=False,
+                    get_hesse=get_hesse,
+                    fix_nui_params=True
                 )
-                result = fitter.do_fit(update_templates=False,
-                                       verbose=False,
-                                       get_hesse=get_hesse,
-                                       fix_nui_params=True)
 
                 self._toy_results["parameters"].append(result.params.values)
                 self._toy_results["uncertainties"].append(result.params.errors)
