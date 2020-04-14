@@ -593,11 +593,13 @@ class FitModel:
         self._data_channels = DataChannelContainer()
 
         for channel in self._channels:
-            channel_data = None
+            channel_data = None  # type: Optional[np.ndarray]
             for template in channel.templates:
                 if channel_data is None:
                     channel_data = template.bin_counts
                 else:
+                    assert channel_data.shape == template.bin_counts.shape, \
+                        (channel_data.shape, template.bin_counts.shape)
                     channel_data += template.bin_counts
 
             if round_bin_counts:
@@ -607,7 +609,7 @@ class FitModel:
 
             self._data_channels.add_channel(
                 channel_name=channel.name,
-                channel_data=toy_data,
+                channel_data=np.ceil(toy_data) if round_bin_counts else toy_data,
                 from_data=False,
                 binning=channel.binning,
                 column_names=channel.data_column_names,
