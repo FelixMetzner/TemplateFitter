@@ -318,6 +318,16 @@ class ParameterHandler:
     def get_parameters_by_index(self, indices: Union[int, List[int]]) -> Union[np.ndarray, float]:
         return self._np_pars[indices]
 
+    def get_parameters_by_name(self, parameter_names: Union[str, List[str]]) -> Union[np.ndarray, float]:
+        if isinstance(parameter_names, list):
+            indices = [self.get_index(name=name) for name in parameter_names]
+        elif isinstance(parameter_names, str):
+            indices = self.get_index(name=parameter_names)
+        else:
+            raise ValueError(f"Expecting string or list of strings for argument 'parameter_names'!\n"
+                             f"You provided {parameter_names}")
+        return self._np_pars[indices]
+
     def get_parameter_infos_by_index(self, indices: Union[int, List[int]]) -> List[ParameterInfo]:
         if isinstance(indices, list):
             return [self._parameter_infos[i] for i in indices]
@@ -325,6 +335,18 @@ class ParameterHandler:
             return [self._parameter_infos[indices]]
         else:
             raise ValueError(f"Expecting integer or list of integers for argument 'indices'!\nYou provided {indices}")
+
+    def get_parameter_infos_by_name(
+            self,
+            parameter_names: Union[str, List[str]]
+    ) -> Union[List[ParameterInfo], ParameterInfo]:
+        if isinstance(parameter_names, list):
+            return [self._parameter_infos[self.get_index(name=name)] for name in parameter_names]
+        elif isinstance(parameter_names, str):
+            return [self._parameter_infos[self.get_index(name=parameter_names)]]
+        else:
+            raise ValueError(f"Expecting string or list of strings for argument 'parameter_names'!\n"
+                             f"You provided {parameter_names}")
 
     def get_parameter_indices_for_type(self, parameter_type: str) -> List[int]:
         if parameter_type not in ParameterHandler.parameter_types:

@@ -89,11 +89,10 @@ class ToyStudy:
 
         raise RuntimeError("Experiment exceed max number of retries.")
 
-    # TODO
     def do_background_linearity_test(
             self,
-            signal_id: str,
-            background_id: str,
+            signal_process_name: str,
+            background_process_name: str,
             limits: Tuple[float, float],
             n_points: int = 10,
             n_exp: int = 200
@@ -101,11 +100,10 @@ class ToyStudy:
         """
         Parameters
         ----------
-        signal_id : str
-            Name of the template for which the linearity test
-            should be performed.
-        background_id : str
-            Name of the template which is the background to the template
+        signal_process_name : str
+            Name of the process for which the linearity test should be performed.
+        background_process_name : str
+            Name of the process which is the background to the template
             for which the linearity test should be performed.
         limits : tuple of float
             Range where the yield parameter will be tested in.
@@ -122,20 +120,20 @@ class ToyStudy:
         param_points = np.linspace(start=limits[0], stop=limits[1], num=n_points)  # type: np.ndarray
         assert isinstance(param_points, np.ndarray), type(param_points)
 
-        logging.info(f"Performing linearity test for parameter: {signal_id}")
+        logging.info(f"Performing linearity test for yield parameter of the process: {signal_process_name}")
 
         for param_point in tqdm.tqdm(param_points, desc="Linearity Test Progress"):
             self._reset_state()
-            self._templates.reset_parameters()
+            self._fit_model.reset_parameters_to_initial_values()
 
-            self._templates.set_yield(background_id, param_point)
+            self._fit_model.set_yield(process_name=background_process_name, new_initial_value=param_point)
 
             for _ in tqdm.tqdm(range(n_exp), desc="Experiment Progress"):
                 self._experiment(get_hesse=False)
 
             self._is_fitted = True
 
-            params, _ = self.get_toy_results(signal_id)
+            params, _ = self.get_toy_results(signal_process_name)
             param_fit_results.append(float(np.mean(params)))
             param_fit_errors.append(float(np.std(params)))
 
@@ -146,7 +144,7 @@ class ToyStudy:
 
     def do_linearity_test(
             self,
-            process_id: str,
+            process_name: str,
             limits: Tuple[float, float],
             n_points: int = 10,
             n_exp: int = 200
@@ -158,8 +156,8 @@ class ToyStudy:
 
         Parameters
         ----------
-        process_id : str
-            Name of the template for which the linearity test
+        process_name : str
+            Process name of the template for which the linearity test
             should be performed.
         limits : tuple of float
             Range where the yield parameter will be tested in.
@@ -172,8 +170,8 @@ class ToyStudy:
             Default is 200.
         """
         return self.do_background_linearity_test(
-            signal_id=process_id,
-            background_id=process_id,
+            signal_process_name=process_name,
+            background_process_name=process_name,
             limits=limits,
             n_points=n_points,
             n_exp=n_exp
@@ -197,14 +195,14 @@ class ToyStudy:
         self._check_state()
         return np.array(self._toy_results["uncertainties"])
 
-    def get_toy_results(self, process_id: str) -> Tuple[np.ndarray, np.ndarray]:
+    def get_toy_results(self, process_name: str) -> Tuple[np.ndarray, np.ndarray]:
         """
         Returns results from the toy Monte Carlo study.
 
         Parameters
         ----------
-        process_id : int, list of int
-            Index or indices of the parameter of interest.
+        process_name : str, list of str
+            Name or names of the parameter(s) of interest.
 
         Returns
         -------
@@ -216,16 +214,17 @@ class ToyStudy:
             specified by `param_index`. Shape is (`n_exp`, `len(param_index)`).
         """
         self._check_state()
-        process_id = self._templates.process_to_index(process_id)
-        parameters = self.result_parameters[:, process_id]
-        uncertainties = self.result_uncertainties[:, process_id]
+        parameter_name = self._fit_model.get_yield_parameter_name_from_process(process_name=process_name)
+        parameter_index = self._fit_model.get_parameter_index(parameter_name=parameter_name)
+        parameters = self.result_parameters[:, parameter_index]
+        uncertainties = self.result_uncertainties[:, parameter_index]
 
         assert len(parameters.shape) == 1, parameters.shape
         assert len(uncertainties.shape) == 1, uncertainties.shape
 
         return parameters, uncertainties
 
-    def get_toy_result_pulls(self, process_id: str) -> np.ndarray:
+    def get_toy_result_pulls(self, process_name: str) -> np.ndarray:
         """
         Returns pulls of the results from the toy Monte Carlo study. The pull is defined as
 
@@ -235,8 +234,8 @@ class ToyStudy:
 
         Parameters
         ----------
-        process_id : int, list of int
-            Index or indices of the parameter of interest.
+        process_name : str, list of str
+            Process name of list of process names for the yield parameters of interest.
 
         Returns
         -------
@@ -246,9 +245,9 @@ class ToyStudy:
         """
 
         self._check_state()
-        parameters, uncertainties = self.get_toy_results(process_id)
+        parameters, uncertainties = self.get_toy_results(process_name=process_name)
         # TODO: this works only for template yield, for nuisance parameters I have to change this
-        expected_yield = self._templates.get_yield(process_id)
+        expected_yield = self._fit_model.get_yield(process_name=process_name)
 
         return (parameters - expected_yield) / uncertainties
 

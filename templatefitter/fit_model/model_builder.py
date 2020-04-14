@@ -1683,6 +1683,18 @@ class FitModel:
             raise ValueError(f"Expected string or integer for argument 'name_or_index'\n"
                              f"However, {name_or_index} of type {type(name_or_index)} was provided!")
 
+    def get_templates_by_process_name(self, process_name: str) -> List[Template]:
+        temp_list = []
+        for template in self._templates:
+            if template.process_name == process_name:
+                temp_list.append(template)
+
+        if len(temp_list) == 0:
+            available_processes = list(set([t.process_name for t in self._templates]))
+            raise RuntimeError(f"No templates with process name '{process_name}' could be found.\n"
+                               f"The following process names are registered:\n\t" + "\n\t- ".join(available_processes))
+        return temp_list
+
     def get_component(self, name_or_index: Union[str, int]) -> Component:
         if isinstance(name_or_index, int):
             assert name_or_index < len(self._components), (name_or_index, len(self._components))
@@ -1883,11 +1895,34 @@ class FitModel:
     def names_of_floating_parameters(self) -> List[str]:
         return self._params.get_floating_parameter_names()
 
+    def get_parameter_index(self, parameter_name: str) -> int:
+        return self._params.get_index(name=parameter_name)
+
     def set_initial_parameter_value(self, parameter_name: str, new_initial_value: float) -> None:
+        self._params.set_parameter_initial_value(parameter_name=parameter_name, new_initial_value=new_initial_value)
+
+    def get_yield_parameter_name_from_process(self, process_name: str) -> str:
+        templates = self.get_templates_by_process_name(process_name=process_name)
+        parameter_name = templates[0].yield_parameter.name
+        assert all(t.yield_parameter.name == parameter_name for t in templates), \
+            (process_name, [t.yield_parameter.name for t in templates])
+        assert all(t.yield_parameter.index == templates[0].yield_parameter.index for t in templates), \
+            (process_name, [t.yield_parameter.index for t in templates])
+        return parameter_name
+
+    def get_yield(self, process_name: str) -> float:
+        parameter_name = self.get_yield_parameter_name_from_process(process_name=process_name)
+        return self._params.get_parameters_by_name(parameter_names=parameter_name)
+
+    def set_yield(self, process_name: str, new_initial_value: float) -> None:
+        parameter_name = self.get_yield_parameter_name_from_process(process_name=process_name)
         self._params.set_parameter_initial_value(parameter_name=parameter_name, new_initial_value=new_initial_value)
 
     def reset_initial_parameter_value(self, parameter_name: str) -> None:
         self._params.reset_parameter_initial_value(parameter_name=parameter_name)
+
+    def reset_parameters_to_initial_values(self) -> None:
+        self._params.reset_parameters_to_initial_values()
 
     @property
     def mc_channels_to_plot(self) -> ChannelContainer:
