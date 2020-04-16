@@ -7,7 +7,7 @@ This package provides
 import logging
 import numpy as np
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from collections.abc import Sequence
 from typing import Optional, Union, List, Dict, Tuple
 
@@ -61,6 +61,8 @@ class DataChannelFromData(BinnedDistributionFromData, DataChannel):
     ) -> None:
         Weights.check_input_type(weight_input=weights)
 
+        self._rounded = False if weights is None else True
+
         super().__init__(
             bins=bins,
             dimensions=dimensions,
@@ -81,7 +83,6 @@ class DataChannelFromData(BinnedDistributionFromData, DataChannel):
         mro = tuple(f"{c.__module__}.{c.__name__}" for c in self.__class__.__mro__)
         assert mro.index(cls1) < mro.index(cls2) < mro.index(cls3), mro
 
-        self._rounded = False if weights is None else True
         self._from_data = True
 
     @property
