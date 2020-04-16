@@ -2,6 +2,7 @@
 Class which defines the fit model by combining templates and handles the computation.
 """
 
+import copy
 import logging
 import operator
 import numpy as np
@@ -571,7 +572,7 @@ class FitModel:
             channel_data = None
             for template in channel.templates:
                 if channel_data is None:
-                    channel_data = template.bin_counts
+                    channel_data = copy.copy(template.bin_counts)
                 else:
                     channel_data += template.bin_counts
 
@@ -596,7 +597,7 @@ class FitModel:
             channel_data = None  # type: Optional[np.ndarray]
             for template in channel.templates:
                 if channel_data is None:
-                    channel_data = template.bin_counts
+                    channel_data = copy.copy(template.bin_counts)
                 else:
                     assert channel_data.shape == template.bin_counts.shape, \
                         (channel_data.shape, template.bin_counts.shape)
