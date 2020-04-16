@@ -72,6 +72,21 @@ class Binning:
                 if all(isinstance(bin_num, float) for bin_num in bins_input):
                     self._num_bins = (len(bins_input) - 1,)
                     self._bin_edges = (bins_input,)
+                elif len(bins_input) == 1 and isinstance(bins_input[0], int):
+                    if scope_input is None:
+                        raise ValueError(num_error_txt)
+                    assert isinstance(scope_input, tuple), (type(scope_input), scope_input)
+                    if len(scope_input) == 1 and isinstance(scope_input[0], tuple):
+                        assert len(scope_input[0]) == 2, scope_input
+                        assert all(isinstance(scp, (float, int)) for scp in scope_input[0]), scope_input
+                        scope_1d = scope_input[0]
+                    elif len(scope_input) == 2 and all(isinstance(scp, (float, int)) for scp in scope_input):
+                        scope_1d = scope_input
+                    else:
+                        raise ValueError(scope_error_txt)
+                    self._num_bins = (bins_input[0],)
+                    edges = self._get_bin_edges(scope=scope_1d, bins=bins_input[0], log=self.log_scale_mask[0])
+                    self._bin_edges = (edges,)
                 elif (all(isinstance(bi, tuple) for bi in bins_input) and len(bins_input) == 1
                       and all(isinstance(be, float) for be in bins_input[0])):
                     self._num_bins = (len(bins_input[0]) - 1,)
