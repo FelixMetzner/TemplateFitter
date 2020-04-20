@@ -2,6 +2,8 @@
 Implementation of a minimizer class based on the scipy.optimize.minimize function.
 """
 
+import os
+import json
 import logging
 import tabulate
 import functools
@@ -213,12 +215,98 @@ class MinimizerParameters:
     def fixed_params(self) -> List[bool]:
         return self._fixed_params
 
+    @staticmethod
+    def _dict_key_mapping() -> Dict[str, str]:
+        return {
+            "names": "names",
+            "num_params": "number_of_parameters",
+            "num_params_not_fixed": "number_of_parameters_not_fixed",
+            "fixed_params": "fixed_parameters_map",
+            "values": "parameter_values",
+            "errors": "parameter_errors",
+            "covariance": "covariance_matrix",
+            "correlation": "correlation_matrix"
+        }
+
+    @property
+    def as_dict(self) -> Dict[Any, Any]:
+        dict_key_map = self._dict_key_mapping()
+        self_as_dict = {
+            dict_key_map["names"]: self.names,
+            dict_key_map["num_params"]: self.num_params,
+            dict_key_map["num_params_not_fixed"]: self.num_params_not_fixed,
+            dict_key_map["fixed_params"]: self.fixed_params,
+            dict_key_map["values"]: self.values.tolist(),
+            dict_key_map["errors"]: self.errors.tolist(),
+            dict_key_map["covariance"]: self.covariance.tolist(),
+            dict_key_map["correlation"]: self.correlation.tolist()
+        }
+        return self_as_dict
+
+    @classmethod
+    def initialize_from_dict(cls, dictionary: Dict[Any, Any]) -> "MinimizerParameters":
+        km =MinimizerParameters._dict_key_mapping()
+        assert all(key in dictionary.keys() for key in km.values())
+
+        assert len(dictionary[km["names"]]) == dictionary[km["num_params"]]
+        instance = cls(names=dictionary[km["names"]])
+
+        instance._fixed_params = dictionary[km["fixed_params"]]
+        assert instance.num_params_not_fixed == dictionary[km["num_params_not_fixed"]]
+
+        assert len(dictionary[km["values"]]) == dictionary[km["num_params"]]
+        instance.values = np.ndarray(dictionary[km["values"]])
+        assert len(dictionary[km["errors"]]) == dictionary[km["num_params"]]
+        instance.errors = np.ndarray(dictionary[km["errors"]])
+
+        assert len(dictionary[km["covariance"]]) == dictionary[km["num_params"]]
+        assert all(isinstance(cov_row, list) for cov_row in dictionary[km["covariance"]])
+        assert all(len(cov_row) == dictionary[km["num_params"]] for cov_row in dictionary[km["covariance"]])
+        instance.covariance = np.array(dictionary[km["covariance"]])
+
+        assert len(dictionary[km["correlation"]]) == dictionary[km["num_params"]]
+        assert all(isinstance(cor_row, list) for cor_row in dictionary[km["correlation"]])
+        assert all(len(cor_row) == dictionary[km["num_params"]] for cor_row in dictionary[km["correlation"]])
+        instance.correlation = np.array(dictionary[km["correlation"]])
+
+        return instance
 
 class MinimizeResult(NamedTuple):
     """NamedTuple storing the minimization results."""
     fcn_min_val: float
     params: MinimizerParameters
     success: bool
+
+    @property
+    def as_dict(self) -> Dict[Any, Any]:
+        return {
+            "fcn_min_val": self.fcn_min_val,
+            "params": self.params.as_dict,
+            "success": self.success,
+        }
+
+    def save_to(self, path: Union[str, os.fspath, os.PathLike], overwrite: bool = False) -> None:
+        if not overwrite and os.path.exists(path=path):
+            raise RuntimeError(f"Trying to overwrite existing file {path}, but overwrite is set to False!")
+        with open(file=path, mode="w") as fp:
+            json.dump(obj=self.as_dict, fp=fp, indent=2)
+
+    @classmethod
+    def load_from(cls, path: Union[str, os.fspath, os.PathLike]) -> "MinimizeResult":
+        assert os.path.exists(path=path), path
+        with open(file=path, mode="r") as fp:
+            restored_dict = json.load(fp)
+
+        assert isinstance(restored_dict, dict), type(restored_dict)
+        assert all(k in restored_dict.keys() for k in ["fcn_min_val", "params", "success"]), restored_dict.keys()
+        params = MinimizerParameters.initialize_from_dict(dictionary=restored_dict["params"])
+
+        instance = cls(
+            fcn_min_val=restored_dict["fcn_min_val"],
+            params=params,
+            success=restored_dict["success"]
+        )
+        return instance
 
 
 MinimizeResult.fcn_min_val.__doc__ = """float: Estimated minimum of the objective function."""

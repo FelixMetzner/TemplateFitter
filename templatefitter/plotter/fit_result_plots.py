@@ -216,7 +216,9 @@ class FitResultPlotter:
             use_initial_values: bool = False,
             output_dir_path: Optional[Union[str, os.PathLike]] = None,
             output_name_tag: Optional[str] = None
-    ) -> None:
+    ) -> Dict[str, List[Union[str, os.PathLike]]]:
+        output_lists = {"pdf": [], "png": []}
+
         for mc_channel in self._fit_model.mc_channels_to_plot:
             current_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
             data_column_name_for_plot = mc_channel.data_column_names[self.reference_dimension]
@@ -300,6 +302,10 @@ class FitResultPlotter:
                     filename = f"fit_result_plot_{output_name_tag}_{mc_channel.name}_bin_{counter}{add_info}"
 
                     export(fig=fig, filename=filename, target_dir=output_dir_path)
+                    output_lists["pdf"].append(os.path.join(output_dir_path, f"{filename}.pdf"))
+                    output_lists["png"].append(os.path.join(output_dir_path, f"{filename}.png"))
+
+        return output_lists
 
     def _get_histograms_from_model(self, fit_model: FitModel) -> None:
 
