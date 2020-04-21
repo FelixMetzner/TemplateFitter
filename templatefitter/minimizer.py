@@ -255,9 +255,9 @@ class MinimizerParameters:
         assert instance.num_params_not_fixed == dictionary[km["num_params_not_fixed"]]
 
         assert len(dictionary[km["values"]]) == dictionary[km["num_params"]]
-        instance.values = np.ndarray(dictionary[km["values"]])
+        instance.values = np.array(dictionary[km["values"]])
         assert len(dictionary[km["errors"]]) == dictionary[km["num_params"]]
-        instance.errors = np.ndarray(dictionary[km["errors"]])
+        instance.errors = np.array(dictionary[km["errors"]])
 
         assert len(dictionary[km["covariance"]]) == dictionary[km["num_params"]]
         assert all(isinstance(cov_row, list) for cov_row in dictionary[km["covariance"]])
