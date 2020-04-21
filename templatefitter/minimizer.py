@@ -259,14 +259,14 @@ class MinimizerParameters:
         assert len(dictionary[km["errors"]]) == dictionary[km["num_params"]]
         instance.errors = np.array(dictionary[km["errors"]])
 
-        assert len(dictionary[km["covariance"]]) == dictionary[km["num_params"]]
+        assert len(dictionary[km["covariance"]]) == dictionary[km["num_params_not_fixed"]]
         assert all(isinstance(cov_row, list) for cov_row in dictionary[km["covariance"]])
-        assert all(len(cov_row) == dictionary[km["num_params"]] for cov_row in dictionary[km["covariance"]])
+        assert all(len(cov_row) == dictionary[km["num_params_not_fixed"]] for cov_row in dictionary[km["covariance"]])
         instance.covariance = np.array(dictionary[km["covariance"]])
 
-        assert len(dictionary[km["correlation"]]) == dictionary[km["num_params"]]
+        assert len(dictionary[km["correlation"]]) == dictionary[km["num_params_not_fixed"]]
         assert all(isinstance(cor_row, list) for cor_row in dictionary[km["correlation"]])
-        assert all(len(cor_row) == dictionary[km["num_params"]] for cor_row in dictionary[km["correlation"]])
+        assert all(len(cor_row) == dictionary[km["num_params_not_fixed"]] for cor_row in dictionary[km["correlation"]])
         instance.correlation = np.array(dictionary[km["correlation"]])
 
         return instance
