@@ -219,6 +219,9 @@ class FitResultPlotter:
     ) -> Dict[str, List[Union[str, os.PathLike]]]:
         output_lists = {"pdf": [], "png": []}
 
+        if (output_dir_path is not None) and (output_name_tag is not None):
+            raise ValueError(f"Parameter output_name_tag must be provided if output_dir_path is not None!")
+
         for mc_channel in self._fit_model.mc_channels_to_plot:
             current_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
             data_column_name_for_plot = mc_channel.data_column_names[self.reference_dimension]
@@ -293,8 +296,7 @@ class FitResultPlotter:
                     axs.set_title(info_title, loc=bin_info_pos, fontsize=6, color=plot_style.KITColors.dark_grey)
 
                 if output_dir_path is not None:
-                    assert output_name_tag is not None, \
-                        f"Parameter output_name_tag must be provided if output_dir_path is not None!"
+                    assert output_name_tag is not None
 
                     add_info = ""
                     if use_initial_values:
@@ -304,6 +306,86 @@ class FitResultPlotter:
                     export(fig=fig, filename=filename, target_dir=output_dir_path)
                     output_lists["pdf"].append(os.path.join(output_dir_path, f"{filename}.pdf"))
                     output_lists["png"].append(os.path.join(output_dir_path, f"{filename}.png"))
+
+        return output_lists
+
+    def plot_fit_result_projections(self,
+            project_to: int,
+            use_initial_values: bool = False,
+            output_dir_path: Optional[Union[str, os.PathLike]] = None,
+            output_name_tag: Optional[str] = None
+    ) -> Dict[str, List[Union[str, os.PathLike]]]:
+        output_lists = {"pdf": [], "png": []}
+
+        if (output_dir_path is not None) and (output_name_tag is not None):
+            raise ValueError(f"Parameter output_name_tag must be provided if output_dir_path is not None!")
+
+        for mc_channel in self._fit_model.mc_channels_to_plot:
+            binning = mc_channel.binning.get_binning_for_one_dimension(dimension=project_to)
+            data_column_name_for_plot = mc_channel.data_column_names[project_to]
+
+            data_channel = self._fit_model.data_channels_to_plot.get_channel_by_name(name=mc_channel.name)
+
+            data_bin_count, data_bin_errors_squared = data_channel.project_onto_dimension(
+                bin_counts=data_channel.bin_counts,
+                dimension=project_to,
+                bin_errors_squared=data_channel.bin_errors_sq
+            )
+
+            plot = FitResultPlot(variable=self.channel_variables[mc_channel.name], binning=binning)
+
+            for template in mc_channel.templates:
+                template_bin_count, template_bin_error_sq = template.project_onto_dimension(
+                    bin_counts=template.expected_bin_counts(use_initial_values=use_initial_values),
+                    dimension=project_to,
+                    bin_errors_squared=template.expected_bin_errors_squared(use_initial_values=use_initial_values)
+                )
+
+                plot.add_component(
+                    label=self._get_mc_label(key=template.process_name, original_label=template.latex_label),
+                    histogram_key=FitResultPlot.mc_key,
+                    bin_counts=template_bin_count,
+                    bin_errors_squared=template_bin_error_sq,
+                    data_column_names=data_column_name_for_plot,
+                    color=self._get_mc_color(key=template.process_name, original_color=template.color)
+                )
+
+            plot.add_component(
+                label=self._get_data_label(),
+                histogram_key=FitResultPlot.data_key,
+                bin_counts=data_bin_count,
+                bin_errors_squared=data_bin_errors_squared,
+                data_column_names=data_column_name_for_plot,
+                color=self._get_data_color()
+            )
+
+            fig, axs = plt.subplots(nrows=1, ncols=1, figsize=self._fig_size, dpi=200)
+            plot.plot_on(
+                ax1=axs,
+                #  style=???,  # str = "stacked",  # TODO: Include summed style
+                #  include_sys=???,  # bool = False,
+                #  markers_with_width=???,  # bool = True,
+                #  sum_color=???,  # str = plot_style.KITColors.kit_purple,
+                #  draw_legend=???,  # bool = True,
+                #  legend_inside=???,  # bool = True,
+                #  legend_cols=???,  # Optional[int] = None,
+                #  legend_loc=???,  # Optional[Union[int, str]] = None,
+                #  y_scale=???,  # float = 1.1
+            )
+
+            axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
+
+            if output_dir_path is not None:
+                assert output_name_tag is not None
+
+                add_info = ""
+                if use_initial_values:
+                    add_info = "_with_initial_values"
+                filename = f"fit_result_plot_{output_name_tag}_{mc_channel.name}_dim_{project_to}_projection_{add_info}"
+
+                export(fig=fig, filename=filename, target_dir=output_dir_path)
+                output_lists["pdf"].append(os.path.join(output_dir_path, f"{filename}.pdf"))
+                output_lists["png"].append(os.path.join(output_dir_path, f"{filename}.png"))
 
         return output_lists
 

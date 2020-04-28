@@ -198,21 +198,43 @@ class BinnedDistribution(ABC):
         raise NotImplementedError("This method is not implemented for the abstract base class BinnedDistribution, "
                                   "as it depends on the specific versions of the child classes.")
 
-    def get_projection_on(self, dimension: int) -> Tuple[np.ndarray, Binning]:
-        # TODO: Requires special treatment of the bin errors and should return these correctly reduced errors also!!!
+    def get_projection_on(self, dimension: int) -> Tuple[np.ndarray, Optional[np.ndarray], Binning]:
+        # TODO: Requires better treatment of the bin errors!
+        projected_bin_count, projected_errors_sq = self.project_onto_dimension(
+            bin_counts=self.bin_counts,
+            dimension=dimension,
+            bin_errors_squared=self.bin_errors_sq
+        )
+        reduced_binning = self.binning.get_binning_for_one_dimension(dimension=dimension)
+
+        return projected_bin_count, projected_errors_sq, reduced_binning
+
+    def project_onto_dimension(
+            self,
+            bin_counts: np.ndarray,
+            dimension: int,
+            bin_errors_squared: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        # TODO: Requires better treatment of the bin errors!
         if dimension < 0 or dimension >= self.dimensions:
             raise ValueError(f"Parameter 'dimension' must be in [0, {self.dimensions - 1}] "
                              f"as the distribution has {self.dimensions} dimensions! You provided {dimension}.")
         other_dimensions = tuple(dim for dim in range(self.dimensions) if dim != dimension)
-        projected_bin_count = self.bin_counts.sum(axis=other_dimensions)
+        projected_bin_count = bin_counts.sum(axis=other_dimensions)
+
         assert len(projected_bin_count.shape) == 1, projected_bin_count.shape
-
-        reduced_binning = Binning(bins=self.bin_edges[dimension], dimensions=1, scope=self.range[dimension])
-
         assert len(projected_bin_count) == self.num_bins[dimension], \
             (len(projected_bin_count), self.num_bins[dimension])
 
-        return projected_bin_count, reduced_binning
+        if bin_errors_squared is not None:
+            projected_errors_sq = bin_errors_squared.sum(axis=other_dimensions)
+            assert len(projected_errors_sq.shape) == 1, projected_errors_sq.shape
+            assert len(projected_errors_sq) == self.num_bins[dimension], \
+                (len(projected_errors_sq), self.num_bins[dimension])
+        else:
+            projected_errors_sq = None
+
+        return projected_bin_count, projected_errors_sq
 
     def _check_shapes(self) -> None:
         assert self.shape == self.num_bins, (self.shape, self.num_bins)
