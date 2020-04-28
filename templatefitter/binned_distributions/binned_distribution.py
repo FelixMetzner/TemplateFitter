@@ -215,7 +215,11 @@ class BinnedDistribution(ABC):
             dimension: int,
             bin_errors_squared: Optional[np.ndarray] = None,
     ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-        # TODO: Requires better treatment of the bin errors!
+        # Covering 1-dimensional case where no projection is necessary.
+        if self.dimensions == 1 and dimension == 0:
+            return bin_counts, bin_errors_squared
+
+        # TODO: The following part could requires better treatment of the bin errors!
         if dimension < 0 or dimension >= self.dimensions:
             raise ValueError(f"Parameter 'dimension' must be in [0, {self.dimensions - 1}] "
                              f"as the distribution has {self.dimensions} dimensions! You provided {dimension}.")
