@@ -509,30 +509,37 @@ class FitResultPlotter:
             return "Data"
 
     def _get_mc_color(self, key: str, original_color: Optional[str]) -> Optional[str]:
-        if "mc_color_dict" in self._optional_arguments_dict:
-            mc_color_dict = self._optional_arguments_dict["mc_color_dict"]
-            assert isinstance(mc_color_dict, dict), (mc_color_dict, type(mc_color_dict))
-            assert all(isinstance(k, str) for k in mc_color_dict.keys()), list(mc_color_dict.keys())
-            assert all(isinstance(v, str) for v in mc_color_dict.values()), list(mc_color_dict.values())
-            if key not in mc_color_dict.keys():
-                raise KeyError(f"No entry for the key {key} in the provided mc_color_dict!\n"
-                               f"mc_color_dict:\n\t" + "\n\t".join([f"{k}: {v}" for k, v in mc_color_dict.items()]))
-            return mc_color_dict[key]
-        else:
-            return original_color
+        return self._get_attribute_from_optional_arguments(
+            attribute_name="mc_color_dict",
+            key=key,
+            default_value=original_color
+        )
 
     def _get_mc_label(self, key: str, original_label: Optional[str]) -> Optional[str]:
-        if "mc_label_dict" in self._optional_arguments_dict:
-            mc_label_dict = self._optional_arguments_dict["mc_label_dict"]
-            assert isinstance(mc_label_dict, dict), (mc_label_dict, type(mc_label_dict))
-            assert all(isinstance(k, str) for k in mc_label_dict.keys()), list(mc_label_dict.keys())
-            assert all(isinstance(v, str) for v in mc_label_dict.values()), list(mc_label_dict.values())
-            if key not in mc_label_dict.keys():
-                raise KeyError(f"No entry for the key {key} in the provided mc_label_dict!\n"
-                               f"mc_label_dict:\n\t" + "\n\t".join([f"{k}: {v}" for k, v in mc_label_dict.items()]))
-            return mc_label_dict[key]
+        return self._get_attribute_from_optional_arguments(
+            attribute_name="mc_label_dict",
+            key=key,
+            default_value=original_label
+        )
+
+    def _get_attribute_from_optional_arguments(
+            self,
+            attribute_name: str,
+            key: str,
+            default_value: Optional[str]
+    ) -> Optional[str]:
+        if attribute_name in self._optional_arguments_dict:
+            attribute_dict = self._optional_arguments_dict[attribute_name]
+            assert isinstance(attribute_dict, dict), (attribute_dict, type(attribute_dict))
+            assert all(isinstance(k, str) for k in attribute_dict.keys()), list(attribute_dict.keys())
+            assert all(isinstance(v, str) for v in attribute_dict.values()), list(attribute_dict.values())
+            if key not in attribute_dict.keys():
+                raise KeyError(f"No entry for the key {key} in the provided attribute dictionary  {attribute_name}!\n"
+                               f"{attribute_name} dictionary:\n\t"
+                               + "\n\t".join([f"{k}: {v}" for k, v in attribute_dict.items()]))
+            return attribute_dict[key]
         else:
-            return original_label
+            return default_value
 
     def _compare_binning_to_channel_variable_binning(self, channel_name: str, binning: Binning) -> None:
         assert channel_name in self.channel_variables, (channel_name, list(self.channel_variables.keys()))
