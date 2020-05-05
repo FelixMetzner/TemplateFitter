@@ -7,9 +7,8 @@ import logging
 import itertools
 import numpy as np
 
-from collections import defaultdict
 from matplotlib import pyplot as plt
-from typing import Optional, Union, Tuple, List, Dict, Any
+from typing import Optional, Union, Tuple, List, Dict, NamedTuple, Generator, Any
 
 from templatefitter.fit_model.channel import Channel
 from templatefitter.binned_distributions.binning import Binning
@@ -183,31 +182,33 @@ class FitResultPlot(HistogramPlot):
                                    f"Required histogram keys: {self.required_histogram_keys}")
 
 
+class SubBinInfos(NamedTuple):
+    bin_ids: Tuple[int, ...]
+    bin_edges: Tuple[Tuple[float, float], ...]
+
+
 class FitResultPlotter:
 
     def __init__(
             self,
-            variable: HistVariable,
+            variables: Tuple[HistVariable, ...],
             fit_model: FitModel,
             reference_dimension: int = 0,
             fig_size: Tuple[float, float] = (5, 5),  # TODO: could be handled via kwargs
-            involved_hist_variables: Optional[List[HistVariable]] = None,
             **kwargs
     ) -> None:
-        self._variable = variable
+        self._variables = variables  # type: Tuple[HistVariable, ...]
+
         self._fit_model = fit_model
+
         self._reference_dimension = reference_dimension
 
         self._fig_size = fig_size
         self._optional_arguments_dict = kwargs  # type: Dict[str, Any]
 
         self._channel_name_list = []  # type: List[str]
-        self._channel_variables = {}  # type: Dict[str, HistVariable]
-        self._channel_sub_bin_mapping = defaultdict(list)  # type: Dict[str: List[Optional[Tuple[int, ...]]]]
-
-        self._involved_hist_variables = involved_hist_variables  # type: Optional[List[HistVariable]]
-
-        self._other_binnings_info = self._initialize_other_binnings_info()  # type: Dict[str, Dict[int, Dict[str, Any]]]
+        self._channel_variables_per_dim = {}  # type: Dict[str, Dict[int, HistVariable]]
+        self._number_of_bins_per_ch_per_dim = {}  # type: Dict[str, Dict[int, int]]
 
         self._get_histograms_from_model(fit_model=fit_model)
 
@@ -230,14 +231,22 @@ class FitResultPlotter:
             data_bin_count = data_channel.bin_counts
             data_bin_errors_squared = data_channel.bin_errors_sq
 
-            for counter, sub_bin_ids in enumerate(self._channel_sub_bin_mapping[mc_channel.name]):
-                if sub_bin_ids is None:
-                    sub_bin_info = None
-                else:
-                    sub_bin_info = self._get_bin_infos(channel_name=mc_channel.name, bin_ids=sub_bin_ids)
-                nd_array_slices = self._get_slices(bins_in_other_dims=sub_bin_ids)
+            for counter, sub_bin_info in enumerate(self._get_sub_bin_infos_for(
+                    channel_name=mc_channel.name,
+                    reference_dimension=self.reference_dimension  # TODO
+            )):
+                sub_bin_info_text = self._get_sub_bin_info_text(
+                    channel_name=mc_channel.name,
+                    sub_bin_infos=sub_bin_info,
+                    reference_dimension=self.reference_dimension
+                )
 
-                current_plot = FitResultPlot(variable=self.channel_variables[mc_channel.name], binning=current_binning)
+                nd_array_slices = self._get_slices(bins_in_other_dims=sub_bin_info.bin_ids)
+
+                current_plot = FitResultPlot(
+                    variable=self.channel_variables(dimension=self.reference_dimension)[mc_channel.name],
+                    binning=current_binning
+                )
 
                 for template in mc_channel.templates:
                     template_bin_count = template.expected_bin_counts(use_initial_values=use_initial_values)
@@ -282,16 +291,16 @@ class FitResultPlotter:
                 )
 
                 bin_info_pos = "right"
-                if bin_info_pos == "left" or sub_bin_info is None:
+                if bin_info_pos == "left" or sub_bin_info_text is None:
                     axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
                 else:
                     fig.suptitle(self._get_channel_label(channel=mc_channel), x=0.9, horizontalalignment="right")
 
-                if sub_bin_info is not None:
-                    info_title = sub_bin_info
+                if sub_bin_info_text is not None:
+                    info_title = sub_bin_info_text
                     if axs.get_ylim()[1] > 0.85e4 and bin_info_pos == "left":
                         padding = " " * 9
-                        info_title = "\n".join([padding + info for info in sub_bin_info.split("\n")])
+                        info_title = "\n".join([padding + info for info in sub_bin_info_text.split("\n")])
 
                     axs.set_title(info_title, loc=bin_info_pos, fontsize=6, color=plot_style.KITColors.dark_grey)
 
@@ -332,7 +341,10 @@ class FitResultPlotter:
                 bin_errors_squared=data_channel.bin_errors_sq
             )
 
-            plot = FitResultPlot(variable=self.channel_variables[mc_channel.name], binning=binning)
+            plot = FitResultPlot(
+                variable=self.channel_variables(dimension=project_to)[mc_channel.name],
+                binning=binning
+            )
 
             for template in mc_channel.templates:
                 template_bin_count, template_bin_error_sq = template.project_onto_dimension(
@@ -390,29 +402,23 @@ class FitResultPlotter:
         return output_lists
 
     def _get_histograms_from_model(self, fit_model: FitModel) -> None:
-
         for mc_channel in fit_model.mc_channels_to_plot:
+            ch_column_names = mc_channel.data_column_names
+            assert len(ch_column_names) == len(self.variables), (len(ch_column_names), len(self.variables))
+            assert all(c == v.df_label for c, v in zip(ch_column_names, self.variables)), \
+                ([(c, v.df_label) for c, v in zip(ch_column_names, self.variables)])
+
             self._channel_name_list.append(mc_channel.name)
+            self._add_channel_hist_vars(channel_name=mc_channel.name, original_binning=mc_channel.binning)
 
-            ch_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
-            self._add_channel_hist_var(channel_name=mc_channel.name, original_binning=ch_binning)
-
-            ch_data_column_names = mc_channel.data_column_names
-            data_column_name_for_plot = ch_data_column_names[self.reference_dimension]
-            assert data_column_name_for_plot == self.variable.df_label, \
-                (data_column_name_for_plot, self.variable.df_label, ch_data_column_names)
-
-            if len(self._other_binnings_info[mc_channel.name]) == 0:
-                self._channel_sub_bin_mapping[mc_channel.name].append(None)
-            else:
-                bin_ranges = [list(range(dim_info["number_of_bins"]))
-                              for dim_info in self._other_binnings_info[mc_channel.name].values()]
-                all_combinations = list(itertools.product(*bin_ranges))
-                self._channel_sub_bin_mapping[mc_channel.name].extend(all_combinations)
+            bins_per_dim = {dim: n_bins for dim, n_bins in enumerate(mc_channel.binning.num_bins)}
+            self._number_of_bins_per_ch_per_dim.update({mc_channel.name: bins_per_dim})
 
         assert len(set(self._channel_name_list)) == len(self._channel_name_list), self._channel_name_list
-
+        assert len(self._channel_variables_per_dim) == len(self._channel_name_list), \
+            (self._channel_name_list, list(self._channel_variables_per_dim.keys()))
         channel_label_check_list = copy.copy(self._channel_name_list)
+
         for data_channel in fit_model.data_channels_to_plot:
             data_channel_base_name = DataChannelContainer.get_base_channel_name(data_channel_name=data_channel.name)
             if data_channel_base_name not in channel_label_check_list:
@@ -421,28 +427,36 @@ class FitResultPlotter:
                                    f"List of known channels:\n\t-" + "\n\t-".join(self._channel_name_list))
             else:
                 channel_label_check_list.remove(data_channel_base_name)
-            assert data_channel_base_name in self._channel_sub_bin_mapping.keys(), \
-                (data_channel_base_name, self._channel_sub_bin_mapping.keys())
 
-            ch_binning = data_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
-            self._compare_binning_to_channel_variable_binning(channel_name=data_channel_base_name, binning=ch_binning)
+            self._compare_binning_to_channel_variable_binning(
+                channel_name=data_channel_base_name,
+                binning=data_channel.binning
+            )
 
-            ch_data_column_names = data_channel.data_column_names
-            data_column_name_for_plot = ch_data_column_names[self.reference_dimension]
-            assert data_column_name_for_plot == self.variable.df_label, \
-                (data_column_name_for_plot, self.variable.df_label, ch_data_column_names)
+            for dim, column_name in enumerate(data_channel.data_column_names):
+                var = self._channel_variables_per_dim[data_channel_base_name][dim]
+                assert column_name == var.df_label, (column_name, var.df_label, dim, data_channel.name)
+
+        assert all(len(self._number_of_bins_per_ch_per_dim[ch_name]) == len(vars_per_dim)
+                   for ch_name, vars_per_dim in self._channel_variables_per_dim.items())
+
+    def channel_variables(self, dimension: int) -> Dict[str, HistVariable]:
+        return {ch_name: v[dimension] for ch_name, v in self._channel_variables_per_dim.items()}
+
+    def variable(self, dimension: int) -> HistVariable:
+        return self._variables[dimension]
 
     @property
-    def variable(self) -> HistVariable:
-        return self._variable
+    def variables(self) -> Tuple[HistVariable, ...]:
+        return self._variables
 
     @property
     def channel_names(self) -> List[str]:
         return self._channel_name_list
 
     @property
-    def channel_variables(self) -> Dict[str, HistVariable]:
-        return self._channel_variables
+    def channel_variables_per_dim_dict(self) -> Dict[str, Dict[int, HistVariable]]:
+        return self.channel_variables_per_dim_dict
 
     @property
     def number_of_channels(self) -> int:
@@ -452,29 +466,30 @@ class FitResultPlotter:
     def reference_dimension(self) -> int:
         return self._reference_dimension
 
-    def _add_channel_hist_var(self, channel_name: str, original_binning: Binning) -> None:
-        assert channel_name not in self._channel_variables.keys(), (channel_name, self._channel_variables.keys())
+    def _add_channel_hist_vars(self, channel_name: str, original_binning: Binning) -> None:
+        assert channel_name not in self._channel_variables_per_dim.keys(), \
+            (channel_name, self._channel_variables_per_dim.keys())
 
-        assert original_binning.dimensions == 1, original_binning.dimensions
+        channel_dim_dict = {}  # type: Dict[int, HistVariable]
+        for dimension, hist_variable in enumerate(self.variables):
+            binning = original_binning.get_binning_for_one_dimension(dimension=dimension)
+            assert binning.dimensions == 1, binning.dimensions
+            assert len(binning.num_bins) == 1, binning.num_bins
+            assert binning.num_bins[0] == binning.num_bins_total, (binning.num_bins, binning.num_bins_total)
+            assert len(binning.range) == 1, binning.range
+            assert len(binning.log_scale_mask) == 1, binning.log_scale_mask
 
-        assert len(original_binning.num_bins) == 1, original_binning.num_bins
-        assert original_binning.num_bins[0] == original_binning.num_bins_total, \
-            (original_binning.num_bins, original_binning.num_bins_total)
+            channel_hist_var_for_dim = HistVariable(
+                df_label=hist_variable.df_label,
+                n_bins=binning.num_bins_total,
+                scope=binning.range[0],
+                var_name=hist_variable.variable_name,
+                unit=hist_variable.unit,
+                use_log_scale=binning.log_scale_mask[0]
+            )
+            channel_dim_dict.update({dimension: channel_hist_var_for_dim})
 
-        assert len(original_binning.range) == 1, original_binning.range
-
-        assert len(original_binning.log_scale_mask) == 1, original_binning.log_scale_mask
-
-        channel_hist_var = HistVariable(
-            df_label=self.variable.df_label,
-            n_bins=original_binning.num_bins_total,
-            scope=original_binning.range[0],
-            var_name=self.variable.variable_name,
-            unit=self.variable.unit,
-            use_log_scale=original_binning.log_scale_mask[0]
-        )
-
-        self._channel_variables[channel_name] = channel_hist_var
+        self._channel_variables_per_dim[channel_name] = channel_dim_dict
 
     def _get_channel_label(self, channel: Channel) -> Optional[str]:
         if "channel_label_dict" in self._optional_arguments_dict:
@@ -509,20 +524,20 @@ class FitResultPlotter:
             return "Data"
 
     def _get_mc_color(self, key: str, original_color: Optional[str]) -> Optional[str]:
-        return self._get_attribute_from_optional_arguments(
+        return self._get_attribute_from_optional_arguments_dict(
             attribute_name="mc_color_dict",
             key=key,
             default_value=original_color
         )
 
     def _get_mc_label(self, key: str, original_label: Optional[str]) -> Optional[str]:
-        return self._get_attribute_from_optional_arguments(
+        return self._get_attribute_from_optional_arguments_dict(
             attribute_name="mc_label_dict",
             key=key,
             default_value=original_label
         )
 
-    def _get_attribute_from_optional_arguments(
+    def _get_attribute_from_optional_arguments_dict(
             self,
             attribute_name: str,
             key: str,
@@ -542,55 +557,68 @@ class FitResultPlotter:
             return default_value
 
     def _compare_binning_to_channel_variable_binning(self, channel_name: str, binning: Binning) -> None:
-        assert channel_name in self.channel_variables, (channel_name, list(self.channel_variables.keys()))
-        ch_variable = self.channel_variables[channel_name]
+        assert channel_name in self.channel_variables, (channel_name, list(self.channel_variables_per_dim_dict.keys()))
 
+        for dimension, variable in self.channel_variables_per_dim_dict[channel_name].items():
+            binning_for_dim = binning.get_binning_for_one_dimension(dimension=dimension)
+            assert binning_for_dim.dimensions == 1, (binning_for_dim.dimensions, variable.df_label)
+
+            assert len(binning_for_dim.num_bins) == 1, (binning_for_dim.num_bins, variable.df_label)
+            assert binning_for_dim.num_bins[0] == binning_for_dim.num_bins_total, \
+                (binning_for_dim.num_bins, binning_for_dim.num_bins_total, variable.df_label)
+
+            assert binning_for_dim.num_bins_total == variable.n_bins, \
+                (binning.num_bins_total, variable.n_bins, variable.df_label)
+
+            assert len(binning_for_dim.range) == 1, (binning_for_dim.range, variable.df_label)
+            assert binning_for_dim.range[0] == variable.scope, (binning.range, variable.scope, variable.df_label)
+
+            assert len(binning_for_dim.log_scale_mask) == 1, (binning_for_dim.log_scale_mask, variable.df_label)
+            assert binning_for_dim.log_scale_mask[0] == variable.use_log_scale, \
+                (binning_for_dim.log_scale_mask, variable.use_log_scale, variable.df_label)
+
+    @staticmethod
+    def _get_bin_edge_pairs(binning: Binning) -> List[Tuple[float, float]]:
         assert binning.dimensions == 1, binning.dimensions
+        assert binning.num_bins[0] == binning.num_bins_total, (binning.num_bins,  binning.num_bins_total)
+        return [(binning.bin_edges[i], binning.bin_edges[i + 1]) for i in range(binning.num_bins_total)]
 
-        assert len(binning.num_bins) == 1, binning.num_bins
-        assert binning.num_bins[0] == binning.num_bins_total, (binning.num_bins, binning.num_bins_total)
-
-        assert binning.num_bins_total == ch_variable.n_bins, (binning.num_bins_total, ch_variable.n_bins)
-
-        assert len(binning.range) == 1, binning.range
-        assert binning.range[0] == ch_variable.scope, (binning.range, ch_variable.scope)
-
-        assert len(binning.log_scale_mask) == 1, binning.log_scale_mask
-        assert binning.log_scale_mask[0] == ch_variable.use_log_scale, \
-            (binning.log_scale_mask, ch_variable.use_log_scale)
-
-    def _initialize_other_binnings_info(self) -> Dict[str, Dict[int, Dict[str, Any]]]:
-        assert isinstance(self._fit_model, FitModel), type(self._fit_model)
-
-        other_binnings_info = {}
+    def _get_sub_bin_infos_for(
+            self,
+            channel_name: str,
+            reference_dimension: int
+    ) -> Generator[Optional[SubBinInfos], None, None]:
         for mc_channel in self._fit_model.mc_channels_to_plot:
-            ch_name = mc_channel.name
-            assert ch_name not in other_binnings_info, (ch_name, other_binnings_info.keys())
-            other_binnings_info[ch_name] = {}
+            if mc_channel.name != channel_name:
+                continue
 
-            ch_full_binning = mc_channel.binning
+            if mc_channel.binning.dimensions == 1:
+                yield None
+            else:
+                bin_numbers_per_other_dim = []  # type: List[List[int]]
+                bin_edges_per_other_dim = []  # type: List[List[Tuple[float, float]]]
 
-            for dim in range(ch_full_binning.dimensions):
-                if dim is self.reference_dimension:
-                    continue
+                for dim in range(mc_channel.binning.dimensions):
+                    if dim != reference_dimension:
+                        bin_numbers_per_other_dim.append(list(range(mc_channel.binning.num_bins[dim])))
+                        edges = self._get_bin_edge_pairs(binning=mc_channel.binning.get_binning_for_one_dimension(dim))
+                        bin_edges_per_other_dim.append(edges)
 
-                assert dim not in other_binnings_info[ch_name], (dim, other_binnings_info[ch_name].keys())
-                other_binnings_info[ch_name][dim] = {}
+                for bin_combination, edges in zip(
+                        itertools.product(*bin_numbers_per_other_dim),
+                        itertools.product(*bin_edges_per_other_dim)
+                ):
+                    assert isinstance(bin_combination, tuple), type(bin_combination)
+                    assert len(bin_combination) == mc_channel.binning.dimensions - 1, \
+                        (len(bin_combination), mc_channel.binning.dimensions)
+                    assert isinstance(edges, tuple), type(edges)
+                    assert len(edges) == len(bin_combination), (len(edges), len(bin_combination))
+                    assert all(isinstance(e, tuple) and len(e) == 2 for e in edges)
 
-                other_binnings_info[ch_name][dim].update({"number_of_bins": ch_full_binning.num_bins[dim]})
-                bin_edge_pairs = [
-                    (ch_full_binning.bin_edges[dim][i], ch_full_binning.bin_edges[dim][i + 1])
-                    for i in range(ch_full_binning.num_bins[dim])
-                ]
-                other_binnings_info[ch_name][dim].update({"bin_boarders": bin_edge_pairs})
-
-            dim_keys = other_binnings_info[ch_name].keys()
-            assert len(set(dim_keys)) == len(dim_keys), dim_keys
-
-        ch_keys = other_binnings_info.keys()
-        assert len(set(ch_keys)) == len(ch_keys), ch_keys
-
-        return other_binnings_info
+                    yield SubBinInfos(
+                        bin_ids=bin_combination,
+                        bin_edges=edges
+                    )
 
     @staticmethod
     def _get_histogram_name(channel_name: str, is_data: bool = False, bin_id: Union[str, int, None] = None) -> str:
@@ -619,47 +647,36 @@ class FitResultPlotter:
         assert len(slice_list) == len(bins_in_other_dims) + 1, (len(slice_list), len(bins_in_other_dims))
         return tuple(slice_list)
 
-    def _get_involved_hist_variable_latex_label(self, column_name: str) -> Optional[str]:
-        if self._involved_hist_variables is None:
-            return None
-        names = [h_var.variable_name for h_var in self._involved_hist_variables if h_var.df_label == column_name]
-        assert len(names) <= 1, (len(names), names)
-        if len(names) == 1:
-            return names[0]
-        return None
-
-    def _get_involved_hist_variable_unit(self, column_name: str) -> Optional[str]:
-        if self._involved_hist_variables is None:
-            return None
-        units = [h_var.unit for h_var in self._involved_hist_variables if h_var.df_label == column_name]
-        assert len(units) <= 1, (len(units), units)
-        if len(units) == 1:
-            return units[0]
-        return None
-
-    def _get_bin_infos(self, channel_name: str, bin_ids: Tuple[int, ...]) -> Optional[str]:
-        dimensions = [i for i in self._other_binnings_info[channel_name].keys() if i is not None]
-        assert len(bin_ids) == len(dimensions), (len(bin_ids), len(dimensions))
-        if len(dimensions) == 0:
+    def _get_sub_bin_info_text(
+            self,
+            channel_name: str,
+            sub_bin_infos: Optional[SubBinInfos],
+            reference_dimension: int
+    ) -> Optional[str]:
+        if sub_bin_infos is None:
             return None
 
-        mc_channel = self._fit_model.mc_channels_to_plot.get_channel_by_name(name=channel_name)
-        data_column_names = [mc_channel.data_column_names[dim] for dim in dimensions]
-        latex_names = [self._get_involved_hist_variable_latex_label(column_name=name) for name in data_column_names]
-        units = [self._get_involved_hist_variable_unit(column_name=name) for name in data_column_names]
+        channel_vars_per_dim = self._channel_variables_per_dim[channel_name]
+        dimensions = [i for i in range(len(channel_vars_per_dim)) if i != reference_dimension]
+
+        if len(dimensions):
+            return None
+
+        assert len(sub_bin_infos.bin_ids) == len(dimensions), (len(sub_bin_infos.bin_ids), len(dimensions))
 
         string_list = []
-        for dim, bin_n, l_name, unit in zip(dimensions, bin_ids, latex_names, units):
-            n_bins_total_in_this_dim = self._other_binnings_info[channel_name][dim]["number_of_bins"]
-            bin_range = self._other_binnings_info[channel_name][dim]["bin_boarders"][bin_n]
-            if l_name is not None:
-                info_str = rf"{l_name} (Dim. {dim + 1}): Bin {bin_n+ 1}/{n_bins_total_in_this_dim}"
-            else:
-                info_str = f"Dimension {dim + 1}: Bin {bin_n + 1}/{n_bins_total_in_this_dim}"
+        for dim, bin_id, bin_edges in zip(dimensions, sub_bin_infos.bin_ids, sub_bin_infos.bin_edges):
+            n_bins_total_in_this_dim = self._number_of_bins_per_ch_per_dim[channel_name][dim]
+            variable = channel_vars_per_dim[dim]
 
-            info_str += f": [{bin_range[0]:.2f}, {bin_range[1]:.2f}]"
-            if unit is not None:
-                info_str += rf" {unit}"
+            if variable.df_label is not None:
+                info_str = rf"{variable.variable_name} (Dim. {dim + 1}): Bin {bin_id + 1}/{n_bins_total_in_this_dim}"
+            else:
+                info_str = f"Dimension {dim + 1}: Bin {bin_id + 1}/{n_bins_total_in_this_dim}"
+
+            info_str += f": [{bin_edges[0]:.2f}, {bin_edges[1]:.2f}]"
+            if variable.unit is not None:
+                info_str += rf" {variable.unit}"
 
             string_list.append(info_str)
 
