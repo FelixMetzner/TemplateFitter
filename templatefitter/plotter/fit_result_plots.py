@@ -557,7 +557,8 @@ class FitResultPlotter:
             return default_value
 
     def _compare_binning_to_channel_variable_binning(self, channel_name: str, binning: Binning) -> None:
-        assert channel_name in self.channel_variables, (channel_name, list(self.channel_variables_per_dim_dict.keys()))
+        assert channel_name not in self._channel_variables_per_dim.keys(), \
+            (channel_name, self._channel_variables_per_dim.keys())
 
         for dimension, variable in self.channel_variables_per_dim_dict[channel_name].items():
             binning_for_dim = binning.get_binning_for_one_dimension(dimension=dimension)
