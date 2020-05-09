@@ -582,7 +582,11 @@ class FitResultPlotter:
     def _get_bin_edge_pairs(binning: Binning) -> List[Tuple[float, float]]:
         assert binning.dimensions == 1, binning.dimensions
         assert binning.num_bins[0] == binning.num_bins_total, (binning.num_bins,  binning.num_bins_total)
-        return [(binning.bin_edges[i], binning.bin_edges[i + 1]) for i in range(binning.num_bins_total)]
+        assert isinstance(binning.bin_edges, tuple), (type(binning.bin_edges), binning.bin_edges)
+        assert len(binning.bin_edges) == 1, binning.bin_edges
+        assert len(binning.bin_edges[0]) == binning.num_bins_total + 1, \
+            (len(binning.bin_edges[0]), binning.num_bins_total)
+        return [(binning.bin_edges[0][i], binning.bin_edges[0][i + 1]) for i in range(binning.num_bins_total)]
 
     def _get_sub_bin_infos_for(
             self,
