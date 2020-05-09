@@ -456,7 +456,7 @@ class FitResultPlotter:
 
     @property
     def channel_variables_per_dim_dict(self) -> Dict[str, Dict[int, HistVariable]]:
-        return self.channel_variables_per_dim_dict
+        return self._channel_variables_per_dim
 
     @property
     def number_of_channels(self) -> int:
