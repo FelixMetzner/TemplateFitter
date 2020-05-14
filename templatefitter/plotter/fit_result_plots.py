@@ -241,7 +241,7 @@ class FitResultPlotter:
                     reference_dimension=self.reference_dimension
                 )
 
-                nd_array_slices = self._get_slices(bins_in_other_dims=sub_bin_info.bin_ids)
+                nd_array_slices = self._get_slices(sub_bin_info=sub_bin_info)
 
                 current_plot = FitResultPlot(
                     variable=self.channel_variables(dimension=self.reference_dimension)[mc_channel.name],
@@ -637,10 +637,15 @@ class FitResultPlotter:
 
         return name
 
-    def _get_slices(self, bins_in_other_dims: Optional[Tuple[int, ...]]) -> Tuple[slice, ...]:
-        if bins_in_other_dims is None:
+    def _get_slices(self, sub_bin_info: Optional[SubBinInfos]) -> Tuple[slice, ...]:
+        if sub_bin_info is None:
             assert self.reference_dimension == 0
             return tuple([slice(None)])
+
+        assert isinstance(sub_bin_info, SubBinInfos), type(sub_bin_info)
+        bins_in_other_dims = sub_bin_info.bin_ids
+        assert isinstance(bins_in_other_dims, tuple), type(bins_in_other_dims)
+        assert all(isinstance(n_bins, int) for n_bins in bins_in_other_dims), bins_in_other_dims
 
         slice_list = []
         for dim in range(len(bins_in_other_dims) + 1):
