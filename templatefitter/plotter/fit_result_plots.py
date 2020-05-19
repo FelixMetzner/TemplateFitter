@@ -220,8 +220,9 @@ class FitResultPlotter:
     ) -> Dict[str, List[Union[str, os.PathLike]]]:
         output_lists = {"pdf": [], "png": []}
 
-        if (output_dir_path is not None) and (output_name_tag is not None):
-            raise ValueError(f"Parameter output_name_tag must be provided if output_dir_path is not None!")
+        if (output_dir_path is None) != (output_name_tag is None):
+            raise ValueError(f"Parameter 'output_name_tag' and 'output_dir_path' must either both be provided "
+                             f"or both set to None!")
 
         for mc_channel in self._fit_model.mc_channels_to_plot:
             current_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
@@ -326,8 +327,9 @@ class FitResultPlotter:
     ) -> Dict[str, List[Union[str, os.PathLike]]]:
         output_lists = {"pdf": [], "png": []}
 
-        if (output_dir_path is not None) and (output_name_tag is not None):
-            raise ValueError(f"Parameter output_name_tag must be provided if output_dir_path is not None!")
+        if (output_dir_path is None) != (output_name_tag is None):
+            raise ValueError(f"Parameter 'output_name_tag' and 'output_dir_path' must either both be provided "
+                             f"or both set to None!")
 
         for mc_channel in self._fit_model.mc_channels_to_plot:
             binning = mc_channel.binning.get_binning_for_one_dimension(dimension=project_to)
