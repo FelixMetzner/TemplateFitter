@@ -395,7 +395,7 @@ class FitResultPlotter:
                 add_info = ""
                 if use_initial_values:
                     add_info = "_with_initial_values"
-                filename = f"fit_result_plot_{output_name_tag}_{mc_channel.name}_dim_{project_to}_projection_{add_info}"
+                filename = f"fit_result_plot_{output_name_tag}_{mc_channel.name}_dim_{project_to}_projection{add_info}"
 
                 export(fig=fig, filename=filename, target_dir=output_dir_path)
                 output_lists["pdf"].append(os.path.join(output_dir_path, f"{filename}.pdf"))
