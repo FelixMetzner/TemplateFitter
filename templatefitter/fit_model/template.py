@@ -331,6 +331,8 @@ class Template(BinnedDistributionFromData):
                 (template_bin_count.shape, nuisance_parameters.shape)
             template_bin_count *= 1. + nuisance_parameters * relative_shape_uncertainties
 
+        if template_bin_count.sum() == 0.:
+            return template_bin_count
         template_shape = template_bin_count / template_bin_count.sum()
         return template_shape
 
