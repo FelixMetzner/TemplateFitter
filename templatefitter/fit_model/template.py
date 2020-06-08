@@ -331,10 +331,11 @@ class Template(BinnedDistributionFromData):
                 (template_bin_count.shape, nuisance_parameters.shape)
             template_bin_count *= 1. + nuisance_parameters * relative_shape_uncertainties
 
+        # If template contains no events, simply return template
         if template_bin_count.sum() == 0.:
             return template_bin_count
-        template_shape = template_bin_count / template_bin_count.sum()
-        return template_shape
+        # Else return template shape, which is the normalized template bin counts:
+        return template_bin_count / template_bin_count.sum()
 
     def _get_relative_uncertainties_for_plotting(self, use_stat_only: bool = False) -> np.ndarray:
         template_bin_count = copy.copy(self.bin_counts)

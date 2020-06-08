@@ -1457,7 +1457,15 @@ class FitModel:
             templates_with_shape_uncertainties = template_bin_counts
 
         # Normalization of template bin counts with shape uncertainties to obtain the template shapes:
-        templates_with_shape_uncertainties /= templates_with_shape_uncertainties.sum(axis=2)[:, :, np.newaxis]
+        norm_denominator = templates_with_shape_uncertainties.sum(axis=2)[:, :, np.newaxis]
+        if len(np.argwhere(norm_denominator == 0)) > 0:
+            # Handling cases where empty templates would cause division by 0, resulting in a template shape with NaNs.
+            for row, col, _ in np.argwhere(norm_denominator == 0):
+                assert all(templates_with_shape_uncertainties[row,col,:] == 0), \
+                    templates_with_shape_uncertainties[row,col,:]
+                norm_denominator[row,col, 0] = 1.
+
+        templates_with_shape_uncertainties /= norm_denominator
 
         if nuisance_parameters is None:
             self._template_shape = templates_with_shape_uncertainties
