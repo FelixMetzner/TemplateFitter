@@ -315,6 +315,7 @@ class Template(BinnedDistributionFromData):
         :return: np.ndarray containing the squared bin uncertainties for this template
         """
         relative_uncertainties = self._get_relative_uncertainties_for_plotting(use_stat_only=False)
+        # TODO:
         return self.expected_bin_counts(use_initial_values=use_initial_values) * relative_uncertainties
 
     def get_template_shape_for_expected_bin_counts(self, use_initial_values: bool = False) -> np.ndarray:
@@ -341,6 +342,7 @@ class Template(BinnedDistributionFromData):
         template_bin_count = copy.copy(self.bin_counts)
 
         stat_errors_sq = self.bin_errors_sq
+        # TODO: Consider nuisance parameters for each uncertainty covariance matrix.
         if self.use_other_systematics and not use_stat_only:
             sys_errors_sq = np.reshape(np.diag(self.bin_covariance_matrix), newshape=self.num_bins)
             assert stat_errors_sq.shape == sys_errors_sq.shape, (stat_errors_sq.shape, sys_errors_sq.shape)
