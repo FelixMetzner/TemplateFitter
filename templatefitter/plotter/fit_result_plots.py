@@ -31,6 +31,7 @@ __all__ = [
 
 plot_style.set_matplotlibrc_params()
 
+
 # TODO: Option to add Chi2 test
 # TODO: Option to add ratio plot
 
@@ -319,7 +320,8 @@ class FitResultPlotter:
 
         return output_lists
 
-    def plot_fit_result_projections(self,
+    def plot_fit_result_projections(
+            self,
             project_to: int,
             use_initial_values: bool = False,
             output_dir_path: Optional[Union[str, os.PathLike]] = None,
@@ -583,7 +585,7 @@ class FitResultPlotter:
     @staticmethod
     def _get_bin_edge_pairs(binning: Binning) -> List[Tuple[float, float]]:
         assert binning.dimensions == 1, binning.dimensions
-        assert binning.num_bins[0] == binning.num_bins_total, (binning.num_bins,  binning.num_bins_total)
+        assert binning.num_bins[0] == binning.num_bins_total, (binning.num_bins, binning.num_bins_total)
         assert isinstance(binning.bin_edges, tuple), (type(binning.bin_edges), binning.bin_edges)
         assert len(binning.bin_edges) == 1, binning.bin_edges
         assert len(binning.bin_edges[0]) == binning.num_bins_total + 1, \

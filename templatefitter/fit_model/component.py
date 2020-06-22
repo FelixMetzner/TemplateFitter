@@ -59,7 +59,7 @@ class Component:
             if not all(t.binning == templates[0].binning for t in templates):
                 raise ValueError("All templates of a component must have the same binning.")
             if not all((t.data_column_names == templates[0].data_column_names if t.data_column_names is not None
-                        else t.data_column_names is templates[0].data_column_names) for t in templates):
+            else t.data_column_names is templates[0].data_column_names) for t in templates):
                 raise RuntimeError("The data_column_names of the templates you are trying to combine in this component"
                                    " are not consistent:\n\t"
                                    + "\n\t".join([f"{t.name}: {t.data_column_names}" for t in templates]))

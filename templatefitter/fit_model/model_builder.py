@@ -25,7 +25,6 @@ from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
 
-
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
@@ -559,7 +558,6 @@ class FitModel:
                 channel_weights=None if channel_weights is None else channel_weights[channel_name]
             )
         self._has_data = True
-
 
     def add_asimov_data_from_templates(self, round_bin_counts: bool = True) -> None:
         self._check_is_not_finalized()
@@ -1218,7 +1216,7 @@ class FitModel:
 
         if complex_reshaping_required:
             num_bins_times_templates = np.array(self.number_of_bins_flattened_per_channel) \
-                                             * np.array(self.number_of_templates)
+                                       * np.array(self.number_of_templates)
 
             cum_sum_of_bins = np.cumsum(num_bins_times_templates)
             split_indices, check_sum = np.split(cum_sum_of_bins, [len(cum_sum_of_bins) - 1])
@@ -1461,9 +1459,9 @@ class FitModel:
         if len(np.argwhere(norm_denominator == 0)) > 0:
             # Handling cases where empty templates would cause division by 0, resulting in a template shape with NaNs.
             for row, col, _ in np.argwhere(norm_denominator == 0):
-                assert all(templates_with_shape_uncertainties[row,col,:] == 0), \
-                    templates_with_shape_uncertainties[row,col,:]
-                norm_denominator[row,col, 0] = 1.
+                assert all(templates_with_shape_uncertainties[row, col, :] == 0), \
+                    templates_with_shape_uncertainties[row, col, :]
+                norm_denominator[row, col, 0] = 1.
 
         templates_with_shape_uncertainties /= norm_denominator
 

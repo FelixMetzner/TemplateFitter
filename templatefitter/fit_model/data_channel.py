@@ -32,7 +32,7 @@ class DataChannel(ABC):
     ) -> None:
         self._from_data = from_data
         self._rounded = rounded
-        self._data_column_names=data_column_names
+        self._data_column_names = data_column_names
 
     @property
     def is_from_data(self) -> bool:
@@ -124,7 +124,6 @@ class DataChannelFromHistogram(BinnedDistributionFromHistogram, DataChannel):
             data_column_names: DataColumnNamesInput = None,
             round_bin_count: bool = True
     ) -> None:
-
         super().__init__(
             bins=bins,
             dimensions=dimensions,
