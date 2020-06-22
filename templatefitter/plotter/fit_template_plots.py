@@ -33,11 +33,8 @@ plot_style.set_matplotlibrc_params()
 
 
 class FitTemplatePlot(HistogramPlot):
-    valid_ratio_types = ["normal", "vs_uncert"]
-    valid_gof_methods = ["pearson", "cowan", "toys"]
-
-    data_key = "data_histogram"
-    mc_key = "mc_histogram"
+    required_hist_key = "template"
+    hist_key = required_hist_key
 
     def __init__(self, variable: HistVariable, binning: Binning) -> None:
         super().__init__(variable=variable)
@@ -59,9 +56,10 @@ class FitTemplatePlot(HistogramPlot):
     ) -> None:
         if self._has_component:
             raise RuntimeError("A component was already added, and a FitTemplatePlot only has one component...")
+
         self._add_prebinned_component(
             label=label,
-            histogram_key="template",
+            histogram_key=self.required_hist_key,
             bin_counts=bin_counts,
             original_binning=self._binning,
             bin_errors_squared=bin_errors_squared,
@@ -88,29 +86,25 @@ class FitTemplatePlot(HistogramPlot):
 
         bin_scaling = 1. / np.around(self.bin_widths / self.minimal_bin_width, decimals=0)
 
-        data_bin_count = self._histograms[self.data_key].get_bin_count_of_component(index=0)
-        data_bin_errors_sq = self._histograms[self.data_key].get_histogram_squared_bin_errors_of_component(index=0)
+        template_bin_counts = self._histograms[self.hist_key].get_bin_counts(factor=bin_scaling)
+        assert isinstance(template_bin_counts, list) and len(template_bin_counts) == 1, template_bin_counts
 
-        mc_bin_counts = self._histograms[self.mc_key].get_bin_counts(factor=bin_scaling)
-        # clean_mc_bin_counts = [np.where(bc < 0., 0., bc) for bc in mc_bin_counts]
+        mc_sum_bin_error_sq = self._histograms[self.hist_key].get_statistical_uncertainty_per_bin()
 
-        mc_sum_bin_count = np.sum(np.array(mc_bin_counts), axis=0)
-        mc_sum_bin_error_sq = self._histograms[self.mc_key].get_statistical_uncertainty_per_bin()
-
-        bar_bottom = mc_sum_bin_count - np.sqrt(mc_sum_bin_error_sq)
+        bar_bottom = template_bin_counts[0] - np.sqrt(mc_sum_bin_error_sq)
         height_corr = np.where(bar_bottom < 0., bar_bottom, 0.)
         bar_bottom[bar_bottom < 0.] = 0.
         bar_height = 2 * np.sqrt(mc_sum_bin_error_sq) - height_corr
 
         ax1.hist(
-            x=[self.bin_mids for _ in range(self._histograms[self.mc_key].number_of_components)],
+            x=[self.bin_mids for _ in range(self._histograms[self.hist_key].number_of_components)],
             bins=self.bin_edges,
-            weights=mc_bin_counts,
+            weights=template_bin_counts,
             stacked=True,
             edgecolor="black",
             lw=0.3,
-            color=self._histograms[self.mc_key].colors,
-            label=self._histograms[self.mc_key].labels,
+            color=self._histograms[self.hist_key].colors,
+            label=self._histograms[self.hist_key].labels,
             histtype='stepfilled'
         )
 
@@ -126,17 +120,6 @@ class FitTemplatePlot(HistogramPlot):
             label="MC stat. unc." if not include_sys else "MC stat. + sys. unc."
         )
 
-        ax1.errorbar(
-            x=self.bin_mids,
-            y=data_bin_count * bin_scaling,
-            yerr=np.sqrt(data_bin_errors_sq),
-            xerr=self.bin_widths / 2 if markers_with_width else None,
-            ls="",
-            marker=".",
-            color="black",
-            label=self._histograms[self.data_key].labels[0]
-        )
-
         if draw_legend:
             self.draw_legend(axis=ax1, inside=legend_inside, loc=legend_loc, ncols=legend_cols,
                              font_size="smaller", y_axis_scale=y_scale)
@@ -144,18 +127,11 @@ class FitTemplatePlot(HistogramPlot):
         ax1.set_ylabel(self._get_y_label(normed=False), plot_style.ylabel_pos)
         ax1.set_xlabel(self._variable.x_label, plot_style.xlabel_pos)
 
-    def _check_histogram_key(self, histogram_key: str) -> None:
-        assert isinstance(histogram_key, str), type(histogram_key)
-        if histogram_key not in self.valid_histogram_keys:
-            raise RuntimeError(f"Invalid histogram_key provided!\n"
-                               f"The histogram key must be one of {self.valid_histogram_keys}!\n"
-                               f"However, you provided the histogram_key {histogram_key}!")
-
     def _check_required_histograms(self) -> None:
-        if required_hist_key not in self._histograms.histogram_keys:
-            raise RuntimeError(f"The required histogram key '{required_hist_key}' is not available!\n"
+        if self.required_hist_key not in self._histograms.histogram_keys:
+            raise RuntimeError(f"The required histogram key '{self.required_hist_key}' is not available!\n"
                                f"Available histogram keys: {list(self._histograms.keys())}\n"
-                               f"Required histogram keys: {self.required_histogram_keys}")
+                               f"Required histogram keys: {self.required_hist_key}")
 
 class FitTemplates2DHeatMapPlot:
     pass
@@ -196,7 +172,7 @@ class FitTemplatesPlotter:
 
                 for template in mc_channel.templates:
                     current_plot = FitTemplatePlot(  # TODO
-                        variable=self.channel_variables(dimension=dimension)[mc_channel.name],
+                        variable=self.channel_variables(dimension=dimension)[mc_channel.name],  # TODO: channel_variables not available here... maybe implement a base function? Maybe use subsets_plotter for this?
                         binning=current_binning
                     )
 
