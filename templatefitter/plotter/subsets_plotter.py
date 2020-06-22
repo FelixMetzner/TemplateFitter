@@ -1,4 +1,5 @@
 """
+# TODO: This is not yet completed and unused!
 Provides a container class SubsetsPlotter which holds plots of the same variable
 for different subsets of a dataset, e.g. different bins, channels or similar.
 """
@@ -18,6 +19,7 @@ __all__ = [
 ]
 
 
+# TODO: This is not yet completed and unused!
 class PlotInfoContainer(NamedTuple):
     key: str
     hist_var: HistVariable
@@ -31,6 +33,7 @@ class PlotInfoContainer(NamedTuple):
     y_scale: Optional[float] = None
 
 
+# TODO: This is not yet completed and unused!
 class SubsetsPlotter:
     def __init__(
             self,

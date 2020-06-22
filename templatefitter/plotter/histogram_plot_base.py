@@ -49,11 +49,11 @@ class HistogramPlot(ABC):
         self._last_figure = None  # type: Optional[FigureType]
 
     @abstractmethod
-    def plot_on(self) -> Union[AxesType, Tuple[FigureType, Tuple[AxesType, AxesType]], Any]:
+    def plot_on(self, *args, **kwargs) -> Union[AxesType, Tuple[FigureType, Tuple[AxesType, AxesType]], Any]:
         raise NotImplementedError(f"The 'plot_on' method is not implemented for the class {self.__class__.__name__}!")
 
     @abstractmethod
-    def add_component(self, label: str, data: DataInputType) -> None:
+    def add_component(self, *args, **kwargs) -> None:
         raise NotImplementedError(
             f"The 'add_component' method is not implemented for the class {self.__class__.__name__}!"
         )
