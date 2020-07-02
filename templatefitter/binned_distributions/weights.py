@@ -70,5 +70,5 @@ class Weights:
 
     @staticmethod
     def check_input_type(weight_input: Any) -> None:
-        acceptable_types = tuple([type(None), float, str, type(pd.Series), type(np.ndarray)])
+        acceptable_types = tuple([type(None), float, str, pd.Series, np.ndarray])
         assert isinstance(weight_input, acceptable_types), (type(weight_input), acceptable_types)
