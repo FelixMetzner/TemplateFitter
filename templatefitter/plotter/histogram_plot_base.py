@@ -3,11 +3,9 @@ Contains abstract base class for histogram plots --- HistogramPlot.
 """
 import logging
 import numpy as np
-import matplotlib as mpl
-import matplotlib.axes._axes as axes
 
 from abc import ABC, abstractmethod
-from matplotlib import figure, pyplot as plt
+from matplotlib import pyplot as plt
 from typing import Optional, Union, Any, Tuple
 
 from templatefitter.binned_distributions.binning import Binning
@@ -17,20 +15,16 @@ from templatefitter.binned_distributions.binned_distribution import DataInputTyp
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram_variable import HistVariable
+from templatefitter.plotter.plot_utilities import AxesType, FigureType
 from templatefitter.plotter.histogram import Histogram, HistogramContainer
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
-    "HistogramPlot",
-    "AxesType",
-    "FigureType"
+    "HistogramPlot"
 ]
 
 plot_style.set_matplotlibrc_params()
-
-AxesType = axes.Axes
-FigureType = figure.Figure
 
 
 class HistogramPlot(ABC):

@@ -10,8 +10,9 @@ from matplotlib import pyplot as plt, figure
 from uncertainties import unumpy as unp, ufloat
 
 from templatefitter.plotter import plot_style
+from templatefitter.plotter.plot_utilities import AxesType
 from templatefitter.plotter.histogram_variable import HistVariable
-from templatefitter.plotter.histogram_plot_base import HistogramPlot, AxesType
+from templatefitter.plotter.histogram_plot_base import HistogramPlot
 
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.systematics import SystematicsInputType

@@ -16,9 +16,9 @@ from templatefitter.fit_model.data_channel import DataChannelContainer
 from templatefitter.binned_distributions.binned_distribution import DataColumnNamesInput
 
 from templatefitter.plotter import plot_style
-from templatefitter.plotter.plot_utilities import export
+from templatefitter.plotter.plot_utilities import export, AxesType
 from templatefitter.plotter.histogram_variable import HistVariable
-from templatefitter.plotter.histogram_plot_base import HistogramPlot, AxesType
+from templatefitter.plotter.histogram_plot_base import HistogramPlot
 
 from templatefitter.fit_model.model_builder import FitModel
 

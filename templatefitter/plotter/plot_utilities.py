@@ -5,16 +5,23 @@ import os
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.axes._axes as axes
 import matplotlib.colors as mpl_colors
 
+from matplotlib import figure
 from typing import Union, Tuple
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
+    "AxesType",
+    "FigureType",
     "export",
     "color_fader"
 ]
+
+AxesType = axes.Axes
+FigureType = figure.Figure
 
 
 def export(
