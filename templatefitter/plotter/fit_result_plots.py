@@ -673,7 +673,7 @@ class FitResultPlotter:
         channel_vars_per_dim = self._channel_variables_per_dim[channel_name]
         dimensions = [i for i in range(len(channel_vars_per_dim)) if i != reference_dimension]
 
-        if len(dimensions):
+        if len(dimensions) == 0:
             return None
 
         assert len(sub_bin_infos.bin_ids) == len(dimensions), (len(sub_bin_infos.bin_ids), len(dimensions))
