@@ -173,10 +173,12 @@ class HistogramPlot(ABC):
         elif self._variable.use_log_scale:
             return f"{evts_or_cands} / Bin"
         else:
-            return "{e} / ({b:.2g}{v})".format(
+            return "{e} / {bo}{b:.2g}{v}{bc})".format(
                 e=evts_or_cands,
                 b=self.minimal_bin_width,
-                v=" " + self._variable.unit if self._variable.unit else ""
+                v=" " + self._variable.unit if self._variable.unit else "",
+                bo="(" if self._variable.unit else "",
+                bc=")" if self._variable.unit else ""
             )
 
     def draw_legend(
