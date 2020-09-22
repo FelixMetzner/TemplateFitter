@@ -74,6 +74,10 @@ class SimpleHistogramPlot(HistogramPlot):
 
         for histogram in self._histograms.histograms:
             assert histogram.number_of_components == 1, histogram.number_of_components
+            if histogram.hist_type == "stepfilled":
+                kwargs = {"lw": 0.3, "edgecolor": "black"}
+            else:
+                kwargs = {"lw": 1.5}
             ax.hist(
                 x=histogram.binning.bin_mids[0],
                 bins=self.bin_edges,
@@ -82,9 +86,8 @@ class SimpleHistogramPlot(HistogramPlot):
                 histtype=histogram.hist_type,
                 label=histogram.get_component(index=0).label,
                 alpha=histogram.get_component(index=0).alpha,
-                lw=1.5 if histogram.hist_type is not "stepfilled" else 0.3,
-                edgecolor=None if histogram.hist_type is not "stepfilled" else "black",
-                color=histogram.get_component(index=0).color
+                color=histogram.get_component(index=0).color,
+                **kwargs
             )
 
         ax.set_xlabel(self.variable.x_label, plot_style.xlabel_pos)
