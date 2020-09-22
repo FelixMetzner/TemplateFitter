@@ -82,7 +82,8 @@ class SimpleHistogramPlot(HistogramPlot):
                 histtype=histogram.hist_type,
                 label=histogram.get_component(index=0).label,
                 alpha=histogram.get_component(index=0).alpha,
-                lw=1.5,
+                lw=1.5 if histogram.hist_type is not "stepfilled" else 0.3,
+                edgecolor=None if histogram.hist_type is not "stepfilled" else "black",
                 color=histogram.get_component(index=0).color
             )
 
