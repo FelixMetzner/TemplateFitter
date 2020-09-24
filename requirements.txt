@@ -8,5 +8,6 @@ numpy>=1.15.4
 pandas>=0.23.4
 scipy>=1.2.0
 tabulate>=0.8.2
+tikzplotlib>=0.9.4
 tqdm>=4.32.1
 uncertainties>=3.0.1
