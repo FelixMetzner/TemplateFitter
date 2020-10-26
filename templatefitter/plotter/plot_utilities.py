@@ -59,6 +59,7 @@ def export(
 
     if close_figure:
         plt.close(fig)
+        fig.clf()
 
 
 def save_figure_as_tikz_tex_file(fig: plt.Figure, target_path: Union[str, os.fspath]):
