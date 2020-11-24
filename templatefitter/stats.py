@@ -204,38 +204,13 @@ def mc_chi_squared_from_toys(
     return obs_chi_squared, toy_chi_squared
 
 
-def toy_chi2_test(
+def _toy_chi2_test(
         data: np.ndarray,
         expectation: np.ndarray,
         error: np.ndarray,
         mc_cov: Optional[np.ndarray] = None,
         toys_size: int = 1000000
 ) -> Tuple[float, float, ToyInfoOutputType]:
-    """
-    Performs a GoF-test using a test statistic based on toy MC sampled
-    from the expected distribution.
-
-    Parameters
-    ----------
-    data : np.ndarray
-        Data bin counts. Shape is (`num_bins`,)
-    expectation : np.ndarray
-        Expected bin counts. Shape is (`num_bins`,)
-    error : np.ndarray
-        Uncertainty on the expected distribution. Shape is (`num_bins`,)
-    toys_size : int
-        Number of toy samples to be drawn from expectation to model the chi2
-        of the expectation. Default is 1000000.
-
-    Returns
-    -------
-    float
-        :math:`\chi^2`
-    float
-        p-value.
-    tuple(bin_counts, bin_edges, chi2_toys)
-        Information needed to plot the chi2 distribution obtained from the toys.
-    """
     obs_chi2, toys = mc_chi_squared_from_toys(
         obs=data,
         exp=expectation,
@@ -252,3 +227,55 @@ def toy_chi2_test(
     assert isinstance(p_val, float)
 
     return obs_chi2, p_val, (bc, be, toys)
+
+
+def toy_chi2_test(
+        data: np.ndarray,
+        expectation: np.ndarray,
+        error: np.ndarray,
+        mc_cov: Optional[np.ndarray] = None,
+        toys_size: int = 1000000,
+        max_attempts: int = 3
+) -> Tuple[float, float, ToyInfoOutputType]:
+    """
+    Performs a GoF-test using a test statistic based on toy MC sampled
+    from the expected distribution.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Data bin counts. Shape is (`num_bins`,)
+    expectation : np.ndarray
+        Expected bin counts. Shape is (`num_bins`,)
+    error : np.ndarray
+        Uncertainty on the expected distribution. Shape is (`num_bins`,)
+    mc_cov: 2D np.ndarray
+    toys_size : int
+        Number of toy samples to be drawn from expectation to model the chi2
+        of the expectation. Default is 1000000.
+    max_attempts: Maximal number of tries, each decreasing the toy-size by a factor of 10.
+
+    Returns
+    -------
+    float
+        :math:`\chi^2`
+    float
+        p-value.
+    tuple(bin_counts, bin_edges, chi2_toys)
+        Information needed to plot the chi2 distribution obtained from the toys.
+    """
+
+    try_count = 0
+    while try_count < max_attempts:
+        try:
+            return _toy_chi2_test(
+                    data=data,
+                    expectation=expectation,
+                    error=error,
+                    mc_cov=mc_cov,
+                    toys_size=int(toys_size * 0.1 ** try_count)
+            )
+        except IndexError as ie:
+            if try_count == max_attempts - 1:
+                raise ie
+        try_count += 1
