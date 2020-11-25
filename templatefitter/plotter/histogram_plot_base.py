@@ -1,12 +1,13 @@
 """
 Contains abstract base class for histogram plots --- HistogramPlot.
 """
+import os
 import logging
 import numpy as np
 
 from abc import ABC, abstractmethod
 from matplotlib import pyplot as plt
-from typing import Optional, Union, Any, Tuple
+from typing import Optional, Union, Any, Tuple, AnyStr
 
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions.weights import WeightsInputType
@@ -212,3 +213,6 @@ class HistogramPlot(ABC):
 
     def get_last_figure(self) -> Optional[FigureType]:
         return self._last_figure
+
+    def write_hist_data_to_file(self, file_path: Union[os.PathLike, AnyStr]):
+        self._histograms.write_to_file(file_path=file_path)

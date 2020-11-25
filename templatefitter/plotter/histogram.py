@@ -8,12 +8,14 @@ orchestrates the necessary calculations on all components.
 The container class HistogramContainer can hold different Histograms which are
 to be plotted in the same plot.
 """
+import os
 import logging
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from collections import OrderedDict
-from typing import Optional, Union, List, Tuple, Dict, ItemsView, KeysView, ValuesView
+from typing import Optional, Union, List, Tuple, Dict, ItemsView, KeysView, ValuesView, AnyStr
 
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions import distributions_utility
@@ -406,3 +408,23 @@ class HistogramContainer:
         bin_mids = self.common_binning.bin_mids
         assert len(bin_mids) == 1, bin_mids
         return np.array(bin_mids[0])
+
+    def write_to_file(self, file_path: Union[AnyStr, os.PathLike]) -> None:
+        with pd.HDFStore(path=file_path, mode="w") as hdf5store:
+            hdf5store.append(key="n_dimensions", value=pd.Series([self._common_binning.dimensions]))
+            hdf5store.append(key="histogram_keys", value=pd.Series(list(self.histogram_keys)))
+            for dim in range(self._common_binning.dimensions):
+                hdf5store.append(
+                    key=f"bin_edges_in_dim_{dim}",
+                    value=pd.Series(list(self._common_binning.bin_edges[dim]))
+                )
+                hdf5store.append(
+                    key=f"bin_mids_in_dim_{dim}",
+                    value=pd.Series(list(self._common_binning.bin_mids[dim]))
+                )
+            for hist_key in self.histogram_keys:
+                hist = self.get_histogram_by_key(key=hist_key)
+                hdf5store.append(
+                    key=hist_key,
+                    value=pd.Series(hist.get_bin_count_of_component(index=0))
+                )
