@@ -237,13 +237,14 @@ class ParameterHandler:
             [index for index, pi in enumerate(self._parameter_infos) if pi.floating]
         ))
 
-    def _create_floating_parameter_initial_value_info(self) -> None:
+    def _create_floating_parameter_initial_value_info(self, reset_parameter_name: str) -> None:
         self._initial_values_of_floating_parameters = np.array([
             iv for iv, floating in zip(self._initial_pars, self.floating_parameter_mask) if floating
         ])
 
         floating_pis = [pi for pi, floating in zip(self._parameter_infos, self.floating_parameter_mask) if floating]
-        assert all(iv == p.initial_value for iv, p in zip(self._initial_values_of_floating_parameters, floating_pis)), \
+        assert all(iv == p.initial_value or p.name == reset_parameter_name
+                   for iv, p in zip(self._initial_values_of_floating_parameters, floating_pis)), \
             "\n\t - ".join([f"{iv}, {pi.initial_value}, {pi.name}"
                             for iv, pi in zip(self._initial_values_of_floating_parameters, floating_pis)])
 
@@ -423,7 +424,7 @@ class ParameterHandler:
 
         if is_floating_parameter:
             self._floating_conversion_vector = self._create_conversion_vector()
-            self._create_floating_parameter_initial_value_info()
+            self._create_floating_parameter_initial_value_info(resetted_parameter_name=parameter_name)
 
     def get_constraint_information(self) -> Tuple[List[int], List[float], List[float]]:
         constraint_param_indices = []
