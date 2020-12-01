@@ -395,6 +395,9 @@ class ParameterHandler:
 
         parameter_index = self._pars_dict[parameter_name]
         old_value = self._initial_pars[parameter_index]
+        if old_value == new_initial_value:
+            return
+
         is_floating_parameter = self.floating_parameter_mask[parameter_index]
 
         self._redefined_params_dict.update({parameter_name: ParameterResetInfo(
