@@ -241,10 +241,11 @@ class ParameterHandler:
         self._initial_values_of_floating_parameters = np.array([
             iv for iv, floating in zip(self._initial_pars, self.floating_parameter_mask) if floating
         ])
-        assert all(iv == iv_from_pi for iv, iv_from_pi in zip(
-            self._initial_values_of_floating_parameters,
-            [pi.initial_value for pi, floating in zip(self._parameter_infos, self.floating_parameter_mask) if floating]
-        ))
+
+        floating_pis = [pi for pi, floating in zip(self._parameter_infos, self.floating_parameter_mask) if floating]
+        assert all(iv == p.initial_value for iv, p in zip(self._initial_values_of_floating_parameters, floating_pis)), \
+            "\n\t - ".join([f"{iv}, {pi.initial_value}, {pi.name}"
+                            for iv, pi in zip(self._initial_values_of_floating_parameters, floating_pis)])
 
     @property
     def floating_parameter_mask(self) -> Tuple[bool, ...]:
