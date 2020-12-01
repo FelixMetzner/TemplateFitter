@@ -237,13 +237,13 @@ class ParameterHandler:
             [index for index, pi in enumerate(self._parameter_infos) if pi.floating]
         ))
 
-    def _create_floating_parameter_initial_value_info(self, reset_parameter_name: str) -> None:
+    def _create_floating_parameter_initial_value_info(self, reset_parameter_name: Optional[str] = None) -> None:
         self._initial_values_of_floating_parameters = np.array([
             iv for iv, floating in zip(self._initial_pars, self.floating_parameter_mask) if floating
         ])
 
         floating_pis = [pi for pi, floating in zip(self._parameter_infos, self.floating_parameter_mask) if floating]
-        assert all(iv == p.initial_value or p.name == reset_parameter_name
+        assert all(iv == p.initial_value or (reset_parameter_name is not None and p.name == reset_parameter_name)
                    for iv, p in zip(self._initial_values_of_floating_parameters, floating_pis)), \
             "\n\t - ".join([f"{iv}, {pi.initial_value}, {pi.name}"
                             for iv, pi in zip(self._initial_values_of_floating_parameters, floating_pis)])
