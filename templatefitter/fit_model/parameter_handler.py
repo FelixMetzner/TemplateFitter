@@ -409,7 +409,7 @@ class ParameterHandler:
 
         if is_floating_parameter:
             self._floating_conversion_vector = self._create_conversion_vector()
-            self._create_floating_parameter_initial_value_info()
+            self._create_floating_parameter_initial_value_info(reset_parameter_name=parameter_name)
 
     def reset_parameter_initial_value(self, parameter_name: str) -> None:
         if parameter_name not in self._pars_dict:
@@ -425,7 +425,7 @@ class ParameterHandler:
 
         if is_floating_parameter:
             self._floating_conversion_vector = self._create_conversion_vector()
-            self._create_floating_parameter_initial_value_info(resetted_parameter_name=parameter_name)
+            self._create_floating_parameter_initial_value_info()
 
     def get_constraint_information(self) -> Tuple[List[int], List[float], List[float]]:
         constraint_param_indices = []
