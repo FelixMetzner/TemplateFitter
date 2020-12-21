@@ -226,6 +226,7 @@ class FitResultPlotter:
                              f"or both set to None!")
 
         for mc_channel in self._fit_model.mc_channels_to_plot:
+            # TODO: Maybe also use the inverse of the reference dimension!?
             current_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
             data_column_name_for_plot = mc_channel.data_column_names[self.reference_dimension]
 
