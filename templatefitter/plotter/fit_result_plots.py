@@ -294,6 +294,7 @@ class FitResultPlotter:
                 )
 
                 bin_info_pos = "right"
+
                 if bin_info_pos == "left" or sub_bin_info_text is None:
                     axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
                 else:
@@ -304,6 +305,9 @@ class FitResultPlotter:
                     if axs.get_ylim()[1] > 0.85e4 and bin_info_pos == "left":
                         padding = " " * 9
                         info_title = "\n".join([padding + info for info in sub_bin_info_text.split("\n")])
+
+                    if bin_info_pos == "right":
+                        info_title = r"$\;$" + "\n" + info_title
 
                     axs.set_title(info_title, loc=bin_info_pos, fontsize=6, color=plot_style.KITColors.dark_grey)
 
