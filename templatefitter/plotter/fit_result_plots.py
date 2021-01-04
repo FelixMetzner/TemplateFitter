@@ -298,7 +298,7 @@ class FitResultPlotter:
                 if bin_info_pos == "left" or sub_bin_info_text is None:
                     axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
                 else:
-                    fig.suptitle(self._get_channel_label(channel=mc_channel), x=0.9, horizontalalignment="right")  # TODO: This title overlaps with the bin info, if available... Fix this!
+                    fig.suptitle(self._get_channel_label(channel=mc_channel), x=0.97, horizontalalignment="right")
 
                 if sub_bin_info_text is not None:
                     info_title = sub_bin_info_text
@@ -307,7 +307,7 @@ class FitResultPlotter:
                         info_title = "\n".join([padding + info for info in sub_bin_info_text.split("\n")])
 
                     if bin_info_pos == "right":
-                        info_title = r"$\;$" + "\n" + info_title
+                        info_title = r"$\;$" + "\n" + r"$\;$" + "\n" + info_title
 
                     axs.set_title(info_title, loc=bin_info_pos, fontsize=6, color=plot_style.KITColors.dark_grey)
 
