@@ -293,7 +293,7 @@ class FitResultPlotter:
                     #  y_scale=???,  # float = 1.1
                 )
 
-                bin_info_pos = "right"
+                bin_info_pos = "right"  # TODO: Make this variable accessible
 
                 if bin_info_pos == "left" or sub_bin_info_text is None:
                     axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
