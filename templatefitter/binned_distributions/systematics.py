@@ -284,7 +284,7 @@ class SystematicsInfo(Sequence):
 
             if isinstance(in_systematics[1], list):
                 variations = [Weights.obtain_weights(s, data, in_data) for s in in_systematics[1]]
-                sys_uncert = np.column_stack((variation for variation in variations))
+                sys_uncert = np.column_stack([variation for variation in variations])
                 assert sys_uncert.shape[1] == len(in_systematics[1]), (sys_uncert.shape, len(in_systematics[1]))
                 assert not np.isnan(sys_uncert).any()
                 return SystematicsInfoItemFromVariation(sys_weight=sys_weight, sys_uncert=sys_uncert)
