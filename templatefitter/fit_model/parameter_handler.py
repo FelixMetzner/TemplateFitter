@@ -243,11 +243,15 @@ class ParameterHandler:
         ])
 
         floating_pis = [pi for pi, floating in zip(self._parameter_infos, self.floating_parameter_mask) if floating]
-        assert all((iv == p.initial_value) or (reset_parameter_name is not None and p.name == reset_parameter_name)
-                   for iv, p in zip(self._initial_values_of_floating_parameters, floating_pis)), \
+        assert all(((iv == p.initial_value)
+                    or (reset_parameter_name is not None and p.name == reset_parameter_name)
+                    or (p.name in self._redefined_params_dict.keys()))
+                   for iv, p in zip(self._initial_values_of_floating_parameters, floating_pis)
+                   ), \
             "\n\t - ".join([f"{iv}, {pi.initial_value}, {pi.name}"
                             for iv, pi in zip(self._initial_values_of_floating_parameters, floating_pis)
-                            if not ((iv == pi.initial_value) or (pi.name == reset_parameter_name))])
+                            if not ((iv == pi.initial_value) or (pi.name == reset_parameter_name)
+                                    or pi.name in self._redefined_params_dict.keys())])
 
     @property
     def floating_parameter_mask(self) -> Tuple[bool, ...]:
@@ -429,6 +433,12 @@ class ParameterHandler:
         if is_floating_parameter:
             self._floating_conversion_vector = self._create_conversion_vector()
             self._create_floating_parameter_initial_value_info()
+
+    def reset_all_parameter_initial_values(self) -> None:
+        names_of_changed_parameter = [pri for pri in self._redefined_params_dict.keys()]
+        for parameter_name in names_of_changed_parameter:
+            self.reset_parameter_initial_value(parameter_name=parameter_name)
+        assert len(self._redefined_params_dict) == 0, len(self._redefined_params_dict)
 
     def get_constraint_information(self) -> Tuple[List[int], List[float], List[float]]:
         constraint_param_indices = []
