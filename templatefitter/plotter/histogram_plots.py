@@ -281,6 +281,14 @@ class DataMCHistogramPlot(HistogramPlot):
         data_bin_count = self._histograms[self.data_key].get_bin_count_of_component(index=0)
 
         if style.lower() == "stacked":
+            if len(self._histograms[self.mc_key].labels) > 1:
+                stacked_component_labels = self._histograms[self.mc_key].labels
+            else:
+                stacked_component_labels = tuple([
+                    l + r" $\times$ " + f"{norm_factor:.2f}"
+                    for l in self._histograms[self.mc_key].labels
+                ])
+
             ax1.hist(
                 x=[self.bin_mids for _ in range(self._histograms[self.mc_key].number_of_components)],
                 bins=self.bin_edges,
@@ -289,7 +297,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 edgecolor="black",
                 lw=0.3,
                 color=self._histograms[self.mc_key].colors,
-                label=self._histograms[self.mc_key].labels,
+                label=stacked_component_labels,
                 histtype='stepfilled'
             )
 
