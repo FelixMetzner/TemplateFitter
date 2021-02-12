@@ -1483,6 +1483,9 @@ class FitModel:
         fraction_parameters = self.get_fractions_vector(parameter_vector=parameter_vector)
         efficiency_parameters = self.get_efficiencies_matrix(parameter_vector=parameter_vector)
         normed_efficiency_parameters = efficiency_parameters  # TODO: Implement normalization of efficiencies!
+        # TODO: Regarding normalization of efficiencies: If the efficiencies are normed,
+        #       the efficiency loss due to the scope of the templates must be considered as well!
+        #       Maybe this can be done in the templates...
 
         # TODO: add also rate uncertainties to yields!
 
