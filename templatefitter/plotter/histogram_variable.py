@@ -161,6 +161,9 @@ class HistVariable:
             return False
         return True
 
+    def __hash__(self):
+        return hash((self.df_label, self.variable_name, self.n_bins, self.scope, self.unit, self.use_log_scale))
+
     @property
     def as_string_list(self) -> List[str]:
         string_list = [
