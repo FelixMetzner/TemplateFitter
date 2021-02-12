@@ -3,8 +3,11 @@ Provides container class holding the information about variables which shall
 be
 """
 
+import pandas as pd
+
+from math import floor, log10
 from collections.abc import Sequence as ABCSequence
-from typing import Optional, Tuple, List, Sequence
+from typing import Union, Optional, Tuple, List, Sequence
 
 __all__ = [
     "HistVariable"
@@ -169,3 +172,45 @@ class HistVariable:
             f"scope = {self.scope}"
         ]
         return string_list
+
+    @staticmethod
+    def get_scoped_histogram_variable(
+            base_hist_var: "HistVariable",
+            dfs: Sequence[pd.DataFrame],
+            round_scope_precision: int = 0
+    ) -> "HistVariable":
+        assert all(base_hist_var.df_label in df.columns for df in dfs), base_hist_var.df_label
+
+        if base_hist_var.scope is not None:
+            return base_hist_var
+
+        new_scope = HistVariable.round_scope_to_significance(
+            lower=min([df[base_hist_var.df_label].min() for df in dfs]),
+            upper=max([df[base_hist_var.df_label].max() for df in dfs]),
+            improve_precision_by=round_scope_precision
+        )  # type: Tuple[Union[float, int], Union[float, int]]
+
+        return HistVariable(
+            df_label=base_hist_var.df_label,
+            n_bins=base_hist_var.n_bins,
+            scope=new_scope,
+            var_name=base_hist_var.variable_name,
+            unit=base_hist_var.unit,
+            use_log_scale=base_hist_var.use_log_scale,
+        )
+
+    @staticmethod
+    def round_scope_to_significance(
+            lower: Union[float, int],
+            upper: Union[float, int],
+            improve_precision_by: int = 0
+    ) -> Tuple[float, float]:
+        if not improve_precision_by >= 0:
+            raise ValueError(f"Values for parameter improve_precision_by must be >= 0, "
+                             f"but {improve_precision_by} was provided!")
+        if improve_precision_by == 0:
+            return lower, upper
+
+        precision = improve_precision_by - int(floor(log10(abs(upper - lower))))
+        correction = 0.5 * round(abs(upper - lower), precision)
+        return round(lower - correction, precision), round(upper + correction, precision)
