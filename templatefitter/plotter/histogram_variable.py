@@ -3,6 +3,7 @@ Provides container class holding the information about variables which shall
 be
 """
 
+import numpy as np
 import pandas as pd
 
 from math import floor, log10
@@ -183,6 +184,8 @@ class HistVariable:
             round_scope_precision: int = 0
     ) -> "HistVariable":
         assert all(base_hist_var.df_label in df.columns for df in dfs), base_hist_var.df_label
+        assert all(not df[base_hist_var.df_label].isnull().values.any() for df in dfs), \
+            (base_hist_var.df_label, [df[base_hist_var.df_label].isnull().values.any() for df in dfs])
 
         if base_hist_var.scope is not None:
             return base_hist_var
@@ -192,6 +195,7 @@ class HistVariable:
             upper=max([df[base_hist_var.df_label].max() for df in dfs]),
             improve_precision_by=round_scope_precision
         )  # type: Tuple[Union[float, int], Union[float, int]]
+        assert all(not np.isnan(x) for x in new_scope), (new_scope, base_hist_var.df_label)
 
         return HistVariable(
             df_label=base_hist_var.df_label,
