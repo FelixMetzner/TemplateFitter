@@ -181,14 +181,20 @@ class HistVariable:
     def get_scoped_histogram_variable(
             base_hist_var: "HistVariable",
             dfs: Sequence[pd.DataFrame],
-            round_scope_precision: int = 0
+            round_scope_precision: int = 0,
+            check_for_nans: bool = True
     ) -> "HistVariable":
         assert all(base_hist_var.df_label in df.columns for df in dfs), base_hist_var.df_label
-        assert all(not df[base_hist_var.df_label].isnull().values.any() for df in dfs), \
-            (base_hist_var.df_label, [df[base_hist_var.df_label].isnull().values.any() for df in dfs])
 
         if base_hist_var.scope is not None:
             return base_hist_var
+
+        if any(len(df.index) == 0 for df in dfs):
+            raise RuntimeError(f"Encountered empty data frames in get_scoped_histogram_variable:{[len(df.index) for df in dfs]}")
+
+        if check_for_nans:
+            assert all(not df[base_hist_var.df_label].isnull().values.any() for df in dfs), \
+                (base_hist_var.df_label, [df[base_hist_var.df_label].isnull().values.any() for df in dfs])
 
         new_scope = HistVariable.round_scope_to_significance(
             lower=min([df[base_hist_var.df_label].min() for df in dfs]),
