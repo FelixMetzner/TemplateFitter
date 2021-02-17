@@ -212,6 +212,8 @@ class HistVariable:
             upper: Union[float, int],
             improve_precision_by: int = 0
     ) -> Tuple[float, float]:
+        assert not np.isnan(lower), lower
+        assert not np.isnan(upper), upper
         if not improve_precision_by >= 0:
             raise ValueError(f"Values for parameter improve_precision_by must be >= 0, "
                              f"but {improve_precision_by} was provided!")
@@ -219,5 +221,7 @@ class HistVariable:
             return lower, upper
 
         precision = improve_precision_by - int(floor(log10(abs(upper - lower))))
+        assert not np.isnan(precision), precision
         correction = 0.5 * round(abs(upper - lower), precision)
+        assert not np.isnan(correction), correction
         return round(lower - correction, precision), round(upper + correction, precision)
