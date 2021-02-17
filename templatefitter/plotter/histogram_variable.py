@@ -182,7 +182,7 @@ class HistVariable:
             base_hist_var: "HistVariable",
             dfs: Sequence[pd.DataFrame],
             round_scope_precision: int = 0,
-            check_for_nans: bool = True
+            check_for_nans: bool = False
     ) -> "HistVariable":
         assert all(base_hist_var.df_label in df.columns for df in dfs), base_hist_var.df_label
 
