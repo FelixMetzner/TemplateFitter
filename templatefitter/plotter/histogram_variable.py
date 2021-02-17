@@ -190,7 +190,8 @@ class HistVariable:
             return base_hist_var
 
         if any(len(df.index) == 0 for df in dfs):
-            raise RuntimeError(f"Encountered empty data frames in get_scoped_histogram_variable:{[len(df.index) for df in dfs]}")
+            raise RuntimeError(f"Encountered empty data frames in get_scoped_histogram_variable: "
+                               f"{[len(df.index) for df in dfs]}")
 
         if check_for_nans:
             assert all(not df[base_hist_var.df_label].isnull().values.any() for df in dfs), \
