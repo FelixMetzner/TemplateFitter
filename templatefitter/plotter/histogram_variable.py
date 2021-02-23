@@ -198,8 +198,8 @@ class HistVariable:
                 (base_hist_var.df_label, [df[base_hist_var.df_label].isnull().values.any() for df in dfs])
 
         new_scope = HistVariable.round_scope_to_significance(
-            lower=min([df[base_hist_var.df_label].min() for df in dfs]),
-            upper=max([df[base_hist_var.df_label].max() for df in dfs]),
+            lower=float(np.nanmin(np.concatenate([df[base_hist_var.df_label].values for df in dfs]))),
+            upper=float(np.nanmax(np.concatenate([df[base_hist_var.df_label].values for df in dfs]))),
             improve_precision_by=round_scope_precision
         )  # type: Tuple[Union[float, int], Union[float, int]]
         assert all(not np.isnan(x) for x in new_scope), (new_scope, base_hist_var.df_label)
