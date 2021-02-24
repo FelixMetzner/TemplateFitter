@@ -3,6 +3,7 @@ Provides several specialized histogram plot classes.
 """
 import copy
 import logging
+import warnings
 import numpy as np
 
 from typing import Optional, Union, Tuple
@@ -489,12 +490,20 @@ class DataMCHistogramPlot(HistogramPlot):
                 axis.set_ylim(bottom=-1. * max_val, top=1. * max_val)
             elif ratio_type.lower() == "vs_uncert":
                 max_val_mask = (uh_data != 0.) & (uh_mc != 0.) & ((uh_data - uh_mc) != 0)
-                max_val = np.around(max(
-                    abs(np.min(unp.nominal_values(ratio[max_val_mask]) - unp.std_devs(ratio[max_val_mask]))),
-                    abs(np.max(unp.nominal_values(ratio[max_val_mask]) + unp.std_devs(ratio[max_val_mask])))
-                ), decimals=1)
-                assert isinstance(max_val, float), (type(max_val), max_val)
-                axis.set_ylim(bottom=-1. * max_val, top=max_val)
+                if np.sum(max_val_mask) == 0:
+                    max_val = None
+                    warning_str = "Max value for ratio plot cannot be determined, as no valid values are available!"
+                    if include_outlier_info:
+                        include_outlier_info = False
+                        warning_str += " The option 'include_outlier_info' was set to False due to this!"
+                    warnings.warn(warning_str)
+                else:
+                    max_val = np.around(max(
+                        abs(float(np.amin(unp.nominal_values(ratio[max_val_mask]) - unp.std_devs(ratio[max_val_mask])))),
+                        abs(float(np.amax(unp.nominal_values(ratio[max_val_mask]) + unp.std_devs(ratio[max_val_mask]))))
+                    ), decimals=1)
+                    assert isinstance(max_val, float), (type(max_val), max_val)
+                    axis.set_ylim(bottom=-1. * max_val, top=max_val)
             else:
                 max_val = None
 
