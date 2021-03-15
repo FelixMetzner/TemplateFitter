@@ -40,9 +40,9 @@ class Channel(Sequence):
         self._channel_index = None
 
         if latex_label is None:
-            self._latex_label = latex_label
-        else:
             self._latex_label = name
+        else:
+            self._latex_label = latex_label
 
         self._efficiency_parameters = None
 
