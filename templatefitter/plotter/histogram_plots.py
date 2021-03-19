@@ -1,6 +1,7 @@
 """
 Provides several specialized histogram plot classes.
 """
+
 import copy
 import logging
 import warnings
@@ -27,7 +28,7 @@ __all__ = [
     "SimpleHistogramPlot",
     "StackedHistogramPlot",
     "DataMCHistogramPlot",
-    "DataMCComparisonOutputType"
+    "DataMCComparisonOutputType",
 ]
 
 plot_style.set_matplotlibrc_params()
@@ -67,7 +68,7 @@ class SimpleHistogramPlot(HistogramPlot):
             legend_inside: bool = True,
             y_axis_scale: float = 1.3,
             normed: bool = False,
-            y_label: str = "Events"
+            y_label: str = "Events",
     ) -> AxesType:
         if ax is None:
             _, ax = plt.subplots()
@@ -88,7 +89,7 @@ class SimpleHistogramPlot(HistogramPlot):
                 label=histogram.get_component(index=0).label,
                 alpha=histogram.get_component(index=0).alpha,
                 color=histogram.get_component(index=0).color,
-                **kwargs
+                **kwargs,
             )
 
         ax.set_xlabel(self.variable.x_label, plot_style.xlabel_pos)
@@ -120,7 +121,7 @@ class StackedHistogramPlot(HistogramPlot):
             systematics=None,
             hist_type="stepfilled",
             color=color,
-            alpha=alpha
+            alpha=alpha,
         )
 
     def plot_on(
@@ -147,7 +148,7 @@ class StackedHistogramPlot(HistogramPlot):
             lw=0.3,
             color=histogram.colors,
             label=histogram.labels,
-            histtype=histogram.hist_type
+            histtype=histogram.hist_type,
         )
 
         # TODO: Include uncertainties if available and wanted!
@@ -191,7 +192,7 @@ class DataMCHistogramPlot(HistogramPlot):
             systematics=None,
             hist_type="stepfilled",  # TODO: Define new own hist_type for data plots!
             color=color,
-            alpha=1.0
+            alpha=1.0,
         )
 
     def add_mc_component(
@@ -210,7 +211,7 @@ class DataMCHistogramPlot(HistogramPlot):
             systematics=systematics,
             hist_type="stepfilled",
             color=color,
-            alpha=1.0
+            alpha=1.0,
         )
 
     # Same as add_mc_component method; just added to satisfy requirements from base class.
@@ -230,7 +231,7 @@ class DataMCHistogramPlot(HistogramPlot):
             systematics=systematics,
             hist_type="stepfilled",
             color=color,
-            alpha=1.0
+            alpha=1.0,
         )
 
     def plot_on(
@@ -251,7 +252,7 @@ class DataMCHistogramPlot(HistogramPlot):
             markers_with_width: bool = True,
             plot_outlier_indicators: bool = True,
             adaptive_binning: bool = False,
-            y_scale: float = 1.1
+            y_scale: float = 1.1,
     ) -> DataMCComparisonOutputType:
         ax1, ax2 = self._check_axes_input(ax1=ax1, ax2=ax2)
         self._last_figure = ax1.get_figure()
@@ -267,7 +268,7 @@ class DataMCHistogramPlot(HistogramPlot):
             self._histograms.apply_adaptive_binning_based_on_key(
                 key=self.mc_key,
                 minimal_bin_count=5,
-                minimal_number_of_bins=7
+                minimal_number_of_bins=7,
             )
 
         bin_scaling = 1. / np.around(self.bin_widths / self.minimal_bin_width, decimals=0)
@@ -276,7 +277,7 @@ class DataMCHistogramPlot(HistogramPlot):
             component_key=self.mc_key,
             data_key=self.data_key,
             normalize_to_data=normalize_to_data,
-            include_sys=include_sys
+            include_sys=include_sys,
         )
 
         data_bin_count = self._histograms[self.data_key].get_bin_count_of_component(index=0)
@@ -299,7 +300,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 lw=0.3,
                 color=self._histograms[self.mc_key].colors,
                 label=stacked_component_labels,
-                histtype='stepfilled'
+                histtype='stepfilled',
             )
 
             ax1.bar(
@@ -311,7 +312,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 hatch="///////",
                 fill=False,
                 lw=0,
-                label="MC stat. unc." if not include_sys else "MC stat. + sys. unc."
+                label="MC stat. unc." if not include_sys else "MC stat. + sys. unc.",
             )
         elif style.lower() == "summed":
             ax1.bar(
@@ -321,7 +322,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 bottom=mc_bin_count * bin_scaling - np.sqrt(mc_uncert),
                 color=sum_color,
                 lw=0,
-                label="MC" if not normalize_to_data else r"MC $\times$ " + f"{norm_factor:.2f}"
+                label="MC" if not normalize_to_data else r"MC $\times$ " + f"{norm_factor:.2f}",
             )
         else:
             raise RuntimeError(f"Invalid style '{style.lower()}!'\n style must be one of {self.valid_styles}!")
@@ -334,14 +335,14 @@ class DataMCHistogramPlot(HistogramPlot):
             ls="",
             marker=".",
             color="black",
-            label=self._histograms[self.data_key].labels[0]
+            label=self._histograms[self.data_key].labels[0],
         )
 
         chi2, ndf, p_val, toy_output = self.do_goodness_of_fit_test(
             method=gof_check_method,
             mc_bin_count=mc_bin_count,
             data_bin_count=data_bin_count,
-            mc_is_normalized_to_data=normalize_to_data
+            mc_is_normalized_to_data=normalize_to_data,
         )
 
         if draw_legend:
@@ -365,7 +366,7 @@ class DataMCHistogramPlot(HistogramPlot):
             systematics_are_included=include_sys,
             marker_color=plot_style.KITColors.kit_black,
             include_outlier_info=True,
-            plot_outlier_indicators=plot_outlier_indicators
+            plot_outlier_indicators=plot_outlier_indicators,
         )
 
         plt.subplots_adjust(hspace=0.08)
