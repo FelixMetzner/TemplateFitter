@@ -126,10 +126,10 @@ class BinCompositionPlot:
 
     def _calculate_bin_weights(self, df: pd.DataFrame) -> List[np.ndarray]:
         binned_weights, _, _ = np.histogram2d(
-            x=df[self.primary_hist_var.df_label],
-            y=df[self.secondary_hist_var.df_label],
+            x=df[self.primary_hist_var.df_label].values,
+            y=df[self.secondary_hist_var.df_label].values,
             bins=(self.primary_binning.bin_edges, self.secondary_binning.bin_edges),
-            weights=df[self.weight_column] if self.weight_column is None else None,
+            weights=df[self.weight_column].values if self.weight_column is not None else None,
         )
 
         assert binned_weights.shape == (self.primary_binning.num_bins_total, self.secondary_binning.num_bins_total), (
