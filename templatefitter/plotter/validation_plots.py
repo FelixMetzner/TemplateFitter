@@ -161,7 +161,7 @@ class BinCompositionPlot:
                 scope=self.primary_hist_var.scope,
                 log_scale=self.primary_hist_var.use_log_scale
             )
-        return self.primary_binning
+        return self._primary_binning
 
     @property
     def primary_bin_edges(self) -> Tuple[float, ...]:
