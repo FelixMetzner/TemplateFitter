@@ -8,7 +8,9 @@ import numpy as np
 import pandas as pd
 
 from matplotlib import pyplot as plt
+from matplotlib import colors as mpl_colors
 from matplotlib import font_manager as mpl_font_mgr
+
 from typing import Optional, Union, Tuple, List, Dict
 
 from templatefitter.plotter import plot_style
@@ -32,22 +34,150 @@ class BinMigrationPlot:
             self,
             from_variable: HistVariable,
             to_variable: HistVariable,
+            weight_column: Optional[str] = None,
+            color_map: Optional[Union[str, mpl_colors.Colormap]] = None,
+            from_to_label_appendix: Optional[Tuple[Optional[str], Optional[str]]] = None,
     ) -> None:
 
         self.from_hist_var = from_variable  # type: HistVariable
         self.to_hist_var = to_variable  # type: HistVariable
 
+        self.weight_column = weight_column  # type: Optional[str]
+        self._binning = None  # type: Optional[Binning]
+
+        self.label_appendix_tuple = from_to_label_appendix  # type: Optional[Tuple[Optional[str], Optional[str]]]
+        self._color_map = color_map  # type: Optional[Union[str, mpl_colors.Colormap]]
+
     def plot_on(
             self,
             df: pd.DataFrame,
             ax: Optional[AxesType] = None,
-            draw_legend: bool = True,
+            normalize_to_origin: bool = True,
+            show_color_bar: bool = False
     ) -> AxesType:
         if ax is None:
             _, ax = plt.subplots()
 
-        # TODO
-        pass
+        assert self.from_hist_var.df_label in df.columns, self.from_hist_var.df_label
+        assert self.to_hist_var.df_label in df.columns, self.to_hist_var.df_label
+        assert self.weight_column in df.columns or self.weight_column is None, self.weight_column
+
+        plot_style.set_matplotlibrc_params()
+
+        migration_matrix = self._calculate_bin_migration(
+            df=df,
+            normalize_to_origin=normalize_to_origin,
+        )  # type: np.ndarray
+
+        heatmap = ax.imshow(X=migration_matrix, cmap=self._color_map, aspect="auto")
+        if show_color_bar:
+            plt.colorbar(heatmap)
+
+        for i in range(self.from_hist_var.n_bins):
+            for j in range(self.from_hist_var.n_bins):
+                ax.text(j, i, round(migration_matrix[i, j], 2), ha="center", va="center", color="w")
+
+        ax.set_xlabel(xlabel=self.get_axis_label(hist_var=self.to_hist_var), **plot_style.xlabel_pos)
+        ax.set_ylabel(xlabel=self.get_axis_label(hist_var=self.from_hist_var), **plot_style.ylabel_pos)
+
+        self._set_axis_tick_labels(ax=ax)
+
+        return ax
+
+    def _calculate_bin_migration(
+            self,
+            df: pd.DataFrame,
+            normalize_to_origin: bool = True,
+    ) -> np.ndarray:
+
+        from_bins = np.digitize(x=df[self.from_hist_var.df_label].values, bins=self.bin_edges)  # type: np.array
+        to_bins = np.digitize(x=df[self.to_hist_var.df_label].values, bins=self.bin_edges)  # type: np.array
+
+        if self.weight_column is None:
+            migration_matrix = pd.crosstab(
+                index=from_bins,
+                columns=to_bins,
+                normalize="index" if normalize_to_origin else "columns",
+                dropna=False,
+            ).values  # type: np.ndarray
+        else:
+            info_df = pd.DataFrame(data={
+                "bin_a": from_bins,
+                "bin_b": to_bins,
+                "weight": df[self.weight_column].values,
+            })  # type: pd.DataFrame
+            weight_sum = info_df.groupby(["bin_a", "bin_b"])["weight"].sum().unstack().values  # type: np.ndarray
+            np.nan_to_num(x=weight_sum, copy=False)
+
+            norm_denominator = np.sum(a=weight_sum, axis=1 if normalize_to_origin else 0)  # type: np.ndarray
+            if normalize_to_origin:
+                migration_matrix = weight_sum / norm_denominator[:, np.newaxis]
+            else:
+                migration_matrix = weight_sum / norm_denominator[np.newaxis, :]
+
+        assert migration_matrix.shape == (self.binning.num_bins_total, self.binning.num_bins_total), (
+            migration_matrix.shape,
+            self.binning.num_bins_total,
+        )
+        assert np.isfinite(x=migration_matrix).all(), np.sum(~np.isfinite(x=migration_matrix))
+        assert np.all(migration_matrix <= 1.0), np.max(migration_matrix)
+        assert np.all(migration_matrix >= 1.0), np.min(migration_matrix)
+
+        return migration_matrix
+
+    @property
+    def binning(self) -> Binning:
+        if self._binning is None:
+            assert self.from_hist_var.n_bins == self.to_hist_var.n_bins, (
+                self.from_hist_var.n_bins,
+                self.to_hist_var.n_bins
+            )
+            assert self.from_hist_var.scope == self.to_hist_var.scope, (self.from_hist_var.scope, self.to_hist_var.scope)
+            assert self.from_hist_var.use_log_scale == self.to_hist_var.use_log_scale, (
+                self.from_hist_var.use_log_scale,
+                self.to_hist_var.use_log_scale
+            )
+
+            self._binning = Binning(
+                bins=self.from_hist_var.n_bins,
+                dimensions=1,
+                scope=self.from_hist_var.scope,
+                log_scale=self.from_hist_var.use_log_scale
+            )
+        return self._binning
+
+    @property
+    def bin_edges(self) -> Tuple[float, ...]:
+        assert len(self.binning.bin_edges) == 1, self.binning.bin_edges
+        return self.binning.bin_edges[0]
+
+    def _set_axis_tick_labels(self, ax: AxesType) -> None:
+        tick_positions = np.arange(0, len(self.bin_edges) + 1, 1) - 0.5  # type: np.array
+        ax.set_xticks(ticks=tick_positions)
+        ax.set_yticks(ticks=tick_positions)
+        ax.set_xticklabels([f"{self.bin_edges[int(x + 0.5)]}" for x in ax.get_xticks()], rotation=45)
+        ax.set_yticklabels([f"{self.bin_edges[int(y + 0.5)]}" for y in ax.get_yticks()])
+
+    def get_axis_label(self, hist_var: HistVariable) -> str:
+        if self.label_appendix_tuple is None:
+            appendix = ""  # type: str
+        else:
+            assert isinstance(self.label_appendix_tuple, tuple), self.label_appendix_tuple
+            assert len(self.label_appendix_tuple) == 2, self.label_appendix_tuple
+            assert all(isinstance(a, str) or a is None for a in self.label_appendix_tuple), self.label_appendix_tuple
+            if hist_var is self.from_hist_var:
+                appendix = f" {self.label_appendix_tuple[0]}" if self.label_appendix_tuple[0] is not None else ""
+            elif hist_var is self.to_hist_var:
+                appendix = f" {self.label_appendix_tuple[1]}" if self.label_appendix_tuple[1] is not None else ""
+            else:
+                raise RuntimeError(
+                    f"Expected to receive either the from_hist_var\n\t{self.from_hist_var.df_label}\n, "
+                    f"or the to_hist_var\n\t{self.to_hist_var.df_label}, "
+                    f"but received a hist variable based on\n\t{hist_var.df_label}"
+                )
+
+        unit = f" in {hist_var.unit}" if hist_var.unit else ""  # type: str
+        return f"{hist_var.variable_name}{appendix}{unit}"
 
 
 class BinCompositionPlot:
@@ -181,8 +311,8 @@ class BinCompositionPlot:
     @property
     def secondary_labels(self) -> Union[List[str], Optional[str]]:  # Optional[str] only added for ax.hist requirement.
         if self._secondary_tick_label_mapping is not None:
-            sorted_map = sorted(self._secondary_tick_label_mapping.items())  # type: Union[Dict[int, str], List[int]]
-            assert isinstance(sorted_map, dict), sorted_map
+            sorted_keys = sorted(self._secondary_tick_label_mapping.keys())  # type: List[int]
+            sorted_map = [(k, self._secondary_tick_label_mapping[k]) for k in sorted_keys]  # type: List[Tuple[int, str]]
             return list(collections.OrderedDict(sorted_map).values())
         else:
             return [
