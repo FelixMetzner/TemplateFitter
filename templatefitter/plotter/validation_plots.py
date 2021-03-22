@@ -204,7 +204,7 @@ class BinCompositionPlot:
                 log_scale=False,
             )  # type: Binning
         else:
-            assert isinstance(secondary_hist_variable, Binning), type(secondary_hist_variable).__name__
+            assert isinstance(secondary_hist_variable, HistVariable), type(secondary_hist_variable).__name__
             binning = secondary_variable_binning
 
         assert isinstance(binning, Binning), type(binning).__name__
