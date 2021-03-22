@@ -119,7 +119,7 @@ class BinMigrationPlot:
             migration_matrix.shape,
             self.binning.num_bins_total,
         )
-        assert np.isfinite(x=migration_matrix).all(), np.sum(~np.isfinite(x=migration_matrix))
+        assert np.isfinite(migration_matrix).all(), np.sum(~np.isfinite(migration_matrix))
         assert np.all(migration_matrix <= 1.0), np.max(migration_matrix)
         assert np.all(migration_matrix >= 1.0), np.min(migration_matrix)
 
