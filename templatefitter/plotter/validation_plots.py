@@ -128,7 +128,7 @@ class BinCompositionPlot:
         binned_weights, _, _ = np.histogram2d(
             x=df[self.primary_hist_var.df_label].values,
             y=df[self.secondary_hist_var.df_label].values,
-            bins=(self.primary_binning.bin_edges, self.secondary_binning.bin_edges),
+            bins=(self.primary_bin_edges, self.secondary_bin_edges),
             weights=df[self.weight_column].values if self.weight_column is not None else None,
         )
 
@@ -172,6 +172,11 @@ class BinCompositionPlot:
     def secondary_bin_edge_pairs(self) -> List[Tuple[float, float]]:
         bin_edges = self.secondary_binning.bin_edges[0]
         return [(left, right) for left, right in zip(bin_edges[:-1], bin_edges[1:])]
+
+    @property
+    def secondary_bin_edges(self) -> Tuple[float, ...]:
+        assert len(self.secondary_binning.bin_edges) == 1, self.secondary_binning.bin_edges
+        return self.secondary_binning.bin_edges[0]
 
     @property
     def secondary_labels(self) -> Union[List[str], Optional[str]]:  # Optional[str] only added for ax.hist requirement.
