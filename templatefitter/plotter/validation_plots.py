@@ -78,7 +78,7 @@ class BinMigrationPlot:
                 ax.text(j, i, round(migration_matrix[i, j], 2), ha="center", va="center", color="w")
 
         ax.set_xlabel(xlabel=self.get_axis_label(hist_var=self.to_hist_var), **plot_style.xlabel_pos)
-        ax.set_ylabel(xlabel=self.get_axis_label(hist_var=self.from_hist_var), **plot_style.ylabel_pos)
+        ax.set_ylabel(ylabel=self.get_axis_label(hist_var=self.from_hist_var), **plot_style.ylabel_pos)
 
         self._set_axis_tick_labels(ax=ax, migration_matrix_shape=migration_matrix.shape)
 
