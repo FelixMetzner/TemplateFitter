@@ -80,7 +80,7 @@ class BinMigrationPlot:
         ax.set_xlabel(xlabel=self.get_axis_label(hist_var=self.to_hist_var), **plot_style.xlabel_pos)
         ax.set_ylabel(xlabel=self.get_axis_label(hist_var=self.from_hist_var), **plot_style.ylabel_pos)
 
-        self._set_axis_tick_labels(ax=ax)
+        self._set_axis_tick_labels(ax=ax, migration_matrix_shape=migration_matrix.shape)
 
         return ax
 
@@ -115,7 +115,7 @@ class BinMigrationPlot:
             else:
                 migration_matrix = weight_sum / norm_denominator[np.newaxis, :]
 
-        assert migration_matrix.shape == (self.binning.num_bins_total, self.binning.num_bins_total), (
+        assert migration_matrix.shape == (self.binning.num_bins_total + 2, self.binning.num_bins_total + 2), (
             migration_matrix.shape,
             self.binning.num_bins_total,
         )
@@ -151,12 +151,18 @@ class BinMigrationPlot:
         assert len(self.binning.bin_edges) == 1, self.binning.bin_edges
         return self.binning.bin_edges[0]
 
-    def _set_axis_tick_labels(self, ax: AxesType) -> None:
-        tick_positions = np.arange(0, len(self.bin_edges) + 1, 1) - 0.5  # type: np.array
+    def _set_axis_tick_labels(self, ax: AxesType, migration_matrix_shape: Tuple[int, ...]) -> None:
+        tick_positions = np.arange(0, len(self.bin_edges) + 2, 1) - 1.5  # type: np.array
+        assert len(tick_positions) == migration_matrix_shape[0] == migration_matrix_shape[1], (
+            len(tick_positions),
+            (tick_positions[0], tick_positions[-1]),
+            (self.bin_edges[0], self.bin_edges[-1]),
+            migration_matrix_shape,
+        )
         ax.set_xticks(ticks=tick_positions)
         ax.set_yticks(ticks=tick_positions)
-        ax.set_xticklabels([f"{self.bin_edges[int(x + 0.5)]}" for x in ax.get_xticks()], rotation=45)
-        ax.set_yticklabels([f"{self.bin_edges[int(y + 0.5)]}" for y in ax.get_yticks()])
+        ax.set_xticklabels([f"{self.bin_edges[int(x + 0.5)]}" for x in ax.get_xticks()[1:-1]], rotation=45)
+        ax.set_yticklabels([f"{self.bin_edges[int(y + 0.5)]}" for y in ax.get_yticks()[1:-1]])
 
     def get_axis_label(self, hist_var: HistVariable) -> str:
         if self.label_appendix_tuple is None:
