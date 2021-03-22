@@ -121,7 +121,7 @@ class BinMigrationPlot:
         )
         assert np.isfinite(migration_matrix).all(), np.sum(~np.isfinite(migration_matrix))
         assert np.all(migration_matrix <= 1.0), np.max(migration_matrix)
-        assert np.all(migration_matrix >= 1.0), np.min(migration_matrix)
+        assert np.all(migration_matrix >= 0.0), np.min(migration_matrix)
 
         return migration_matrix
 
