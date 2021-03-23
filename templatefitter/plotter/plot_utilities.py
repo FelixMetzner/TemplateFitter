@@ -83,10 +83,9 @@ def get_white_or_black_from_background(bkg_color: str) -> str:
     luminance = 0.0  # type: float
     color_factors = (0.2126, 0.7152, 0.0722)  # type: Tuple[float, float, float]
     for color_value, color_factor in zip(mpl_colors.to_rgb(bkg_color), color_factors):
-        sc_value = color_value / 255.0  # type: float
-        c_value = sc_value / 12.92 if sc_value <= 0.03928 else ((sc_value + 0.055) / 1.055)**2.4  # type: float
+        c_value = color_value / 12.92 if color_value <= 0.03928 else ((color_value + 0.055) / 1.055)**2.4  # type: float
 
-        luminance += color_factor + c_value
+        luminance += color_factor * c_value
 
     return KITColors.kit_black if luminance > 0.179 else KITColors.white
 

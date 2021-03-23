@@ -14,7 +14,7 @@ from matplotlib import font_manager as mpl_font_mgr
 
 from typing import Optional, Union, Tuple, List, Dict, Callable, Any
 
-from templatefitter.plotter import plot_style, KITColors
+from templatefitter.plotter import plot_style
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.plotter.histogram_variable import HistVariable
 from templatefitter.plotter.plot_utilities import AxesType, get_white_or_black_from_background
