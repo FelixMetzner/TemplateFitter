@@ -36,6 +36,7 @@ class KITColors(object):
     kit_purple = "#a3107c"
     kit_cyan = "#23a1e0"
     kit_black = "#000000"
+    white = "#ffffff"
     light_grey = "#bdbdbd"
     grey = "#797979"
     dark_grey = "#4e4e4e"

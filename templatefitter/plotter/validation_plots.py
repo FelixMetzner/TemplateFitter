@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 from matplotlib import colors as mpl_colors
 from matplotlib import font_manager as mpl_font_mgr
 
-from typing import Optional, Union, Tuple, List, Dict
+from typing import Optional, Union, Tuple, List, Dict, Callable, Any
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.plot_utilities import AxesType
@@ -37,6 +37,7 @@ class BinMigrationPlot:
             weight_column: Optional[str] = None,
             color_map: Optional[Union[str, mpl_colors.Colormap]] = None,
             from_to_label_appendix: Optional[Tuple[Optional[str], Optional[str]]] = None,
+            tick_label_format_fnc: Optional[Callable] = None,
     ) -> None:
 
         self.from_hist_var = from_variable  # type: HistVariable
@@ -48,12 +49,17 @@ class BinMigrationPlot:
         self.label_appendix_tuple = from_to_label_appendix  # type: Optional[Tuple[Optional[str], Optional[str]]]
         self._color_map = color_map  # type: Optional[Union[str, mpl_colors.Colormap]]
 
+        _tick_label_formatter = lambda x: f"{x:.2f}"  # type: Callable
+        if tick_label_format_fnc is not None:
+            _tick_label_formatter = tick_label_format_fnc
+        self.tick_label_formatter = _tick_label_formatter  # type: Callable
+
     def plot_on(
             self,
             df: pd.DataFrame,
             ax: Optional[AxesType] = None,
             normalize_to_origin: bool = True,
-            show_color_bar: bool = False
+            show_color_bar: bool = False,
     ) -> AxesType:
         if ax is None:
             _, ax = plt.subplots()
@@ -75,7 +81,7 @@ class BinMigrationPlot:
 
         for i in range(self.from_hist_var.n_bins):
             for j in range(self.from_hist_var.n_bins):
-                ax.text(j, i, round(migration_matrix[i, j], 2), ha="center", va="center", color="w")
+                ax.text(j, i, round(migration_matrix[i, j], 2), ha="center", va="center", color="w", fontsize="small")
 
         ax.set_xlabel(xlabel=self.get_axis_label(hist_var=self.to_hist_var), **plot_style.xlabel_pos)
         ax.set_ylabel(ylabel=self.get_axis_label(hist_var=self.from_hist_var), **plot_style.ylabel_pos)
@@ -151,6 +157,11 @@ class BinMigrationPlot:
         assert len(self.binning.bin_edges) == 1, self.binning.bin_edges
         return self.binning.bin_edges[0]
 
+    def get_tick_str(self, t: Any) -> str:
+        tick_str = self.tick_label_formatter(t)  # type: str
+        assert isinstance(tick_str, str), (tick_str, type(tick_str).__name__, t, type(t).__name__)
+        return tick_str
+
     def _set_axis_tick_labels(self, ax: AxesType, migration_matrix_shape: Tuple[int, ...]) -> None:
         tick_positions = np.arange(0, len(self.bin_edges) + 2, 1) - 0.5  # type: np.array
         assert len(tick_positions) - 1 == migration_matrix_shape[0] == migration_matrix_shape[1], (
@@ -161,8 +172,8 @@ class BinMigrationPlot:
         )
         ax.set_xticks(ticks=tick_positions)
         ax.set_yticks(ticks=tick_positions)
-        x_labels = [f"{self.bin_edges[int(x - 0.5)]}" for x in ax.get_xticks()[1:-1]]  # type: List[str]
-        y_labels = [f"{self.bin_edges[int(x - 0.5)]}" for x in ax.get_xticks()[1:-1]]  # type: List[str]
+        x_labels = [self.get_tick_str(t=self.bin_edges[int(x - 0.5)]) for x in ax.get_xticks()[1:-1]]  # type: List[str]
+        y_labels = [self.get_tick_str(t=self.bin_edges[int(x - 0.5)]) for x in ax.get_xticks()[1:-1]]  # type: List[str]
 
         ax.set_xticklabels(labels=[""] + x_labels + [""], rotation=-45)
         ax.set_yticklabels(labels=[""] + y_labels + [""])
