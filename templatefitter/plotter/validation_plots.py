@@ -161,8 +161,11 @@ class BinMigrationPlot:
         )
         ax.set_xticks(ticks=tick_positions)
         ax.set_yticks(ticks=tick_positions)
-        ax.set_xticklabels([f"{self.bin_edges[int(x + 0.5)]}" for x in ax.get_xticks()[1:-1]], rotation=45)
-        ax.set_yticklabels([f"{self.bin_edges[int(y + 0.5)]}" for y in ax.get_yticks()[1:-1]])
+        x_labels = [f"{self.bin_edges[int(x - 0.5)]}" for x in ax.get_xticks()[1:-1]]  # type: List[str]
+        y_labels = [f"{self.bin_edges[int(x - 0.5)]}" for x in ax.get_xticks()[1:-1]]  # type: List[str]
+
+        ax.set_xticklabels(labels=[""] + x_labels + [""], rotation=-45)
+        ax.set_yticklabels(labels=[""] + y_labels + [""])
 
     def get_axis_label(self, hist_var: HistVariable) -> str:
         if self.label_appendix_tuple is None:
