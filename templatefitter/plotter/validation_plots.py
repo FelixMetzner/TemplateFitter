@@ -8,15 +8,16 @@ import numpy as np
 import pandas as pd
 
 from matplotlib import pyplot as plt
+from matplotlib import cm as mpl_colormap
 from matplotlib import colors as mpl_colors
 from matplotlib import font_manager as mpl_font_mgr
 
 from typing import Optional, Union, Tuple, List, Dict, Callable, Any
 
-from templatefitter.plotter import plot_style
-from templatefitter.plotter.plot_utilities import AxesType
+from templatefitter.plotter import plot_style, KITColors
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.plotter.histogram_variable import HistVariable
+from templatefitter.plotter.plot_utilities import AxesType, get_white_or_black_from_background
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -79,9 +80,17 @@ class BinMigrationPlot:
         if show_color_bar:
             plt.colorbar(heatmap)
 
-        for i in range(self.from_hist_var.n_bins):
-            for j in range(self.from_hist_var.n_bins):
-                ax.text(j, i, round(migration_matrix[i, j], 2), ha="center", va="center", color="w", fontsize="small")
+        for i in range(self.from_hist_var.n_bins + 2):
+            for j in range(self.from_hist_var.n_bins + 2):
+                ax.text(
+                    x=j,
+                    y=i,
+                    s=round(migration_matrix[i, j], 2),
+                    ha="center",
+                    va="center",
+                    color=self._get_text_color(value=migration_matrix[i, j]),
+                    fontsize="small",
+                )
 
         ax.set_xlabel(xlabel=self.get_axis_label(hist_var=self.to_hist_var), **plot_style.xlabel_pos)
         ax.set_ylabel(ylabel=self.get_axis_label(hist_var=self.from_hist_var), **plot_style.ylabel_pos)
@@ -130,6 +139,16 @@ class BinMigrationPlot:
         assert np.all(migration_matrix >= 0.0), np.min(migration_matrix)
 
         return migration_matrix
+
+    def _evaluate_color_map(self, value: float) -> str:
+        if isinstance(self._color_map, mpl_colors.Colormap):
+            c_map = self._color_map  # type: mpl_colors.Colormap
+        else:
+            c_map = mpl_colormap.get_cmap(name=self._color_map)
+        return mpl_colors.to_hex(c=c_map(value), keep_alpha=False)
+
+    def _get_text_color(self, value: float) -> str:
+        return get_white_or_black_from_background(bkg_color=self._evaluate_color_map(value=value))
 
     @property
     def binning(self) -> Binning:
