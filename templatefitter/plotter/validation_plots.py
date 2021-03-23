@@ -152,8 +152,8 @@ class BinMigrationPlot:
         return self.binning.bin_edges[0]
 
     def _set_axis_tick_labels(self, ax: AxesType, migration_matrix_shape: Tuple[int, ...]) -> None:
-        tick_positions = np.arange(0, len(self.bin_edges) + 2, 1) - 1.5  # type: np.array
-        assert len(tick_positions) == migration_matrix_shape[0] == migration_matrix_shape[1], (
+        tick_positions = np.arange(0, len(self.bin_edges) + 2, 1) - 0.5  # type: np.array
+        assert len(tick_positions) - 1 == migration_matrix_shape[0] == migration_matrix_shape[1], (
             len(tick_positions),
             (tick_positions[0], tick_positions[-1]),
             (self.bin_edges[0], self.bin_edges[-1]),
