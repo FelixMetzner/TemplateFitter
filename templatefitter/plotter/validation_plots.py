@@ -137,6 +137,13 @@ class BinMigrationPlot:
             else:
                 migration_matrix = weight_sum / norm_denominator[np.newaxis, :]
 
+        # Insert columns and rows for missing bins:
+        for bin_index in range(0, self.binning.num_bins_total + 2):
+            if bin_index not in np.unique(from_bins):
+                np.insert(arr=migration_matrix, obj=bin_index, values=np.zeros(migration_matrix.shape[1]), axis=0)
+            if bin_index not in np.unique(to_bins):
+                np.insert(arr=migration_matrix, obj=bin_index, values=np.zeros(migration_matrix.shape[0]), axis=1)
+
         assert migration_matrix.shape == (self.binning.num_bins_total + 2, self.binning.num_bins_total + 2), (
             migration_matrix.shape,
             self.binning.num_bins_total,
