@@ -39,6 +39,8 @@ class BinMigrationPlot:
             color_map: Optional[Union[str, mpl_colors.Colormap]] = None,
             from_to_label_appendix: Optional[Tuple[Optional[str], Optional[str]]] = None,
             tick_label_format_fnc: Optional[Callable] = None,
+            max_number_of_ticks: Optional[int] = None,
+            max_bins_for_labels: Optional[int] = None,
     ) -> None:
 
         self.from_hist_var = from_variable  # type: HistVariable
@@ -54,6 +56,9 @@ class BinMigrationPlot:
         if tick_label_format_fnc is not None:
             _tick_label_formatter = tick_label_format_fnc
         self.tick_label_formatter = _tick_label_formatter  # type: Callable
+
+        self.max_number_of_ticks = max_number_of_ticks if max_number_of_ticks is not None else 30  # type: int
+        self.max_bins_for_labels = max_bins_for_labels if max_bins_for_labels is not None else 50  # type: int
 
     def plot_on(
             self,
@@ -77,23 +82,25 @@ class BinMigrationPlot:
         )  # type: np.ndarray
 
         heatmap = ax.imshow(X=migration_matrix, cmap=self._color_map, aspect="auto")
-        if show_color_bar:
+        if show_color_bar or self.from_hist_var.n_bins >= self.max_bins_for_labels:
             plt.colorbar(heatmap)
 
-        for i in range(self.from_hist_var.n_bins + 2):
-            for j in range(self.from_hist_var.n_bins + 2):
-                ax.text(
-                    x=j,
-                    y=i,
-                    s=round(migration_matrix[i, j], 2),
-                    ha="center",
-                    va="center",
-                    color=self._get_text_color(value=migration_matrix[i, j]),
-                    fontsize="small",
-                )
+        if self.from_hist_var.n_bins < self.max_bins_for_labels:
+            for i in range(self.from_hist_var.n_bins + 2):
+                for j in range(self.from_hist_var.n_bins + 2):
+                    ax.text(
+                        x=j,
+                        y=i,
+                        s=round(migration_matrix[i, j], 2),
+                        ha="center",
+                        va="center",
+                        color=self._get_text_color(value=migration_matrix[i, j]),
+                        fontsize="small",
+                    )
 
         ax.set_xlabel(xlabel=self.get_axis_label(hist_var=self.to_hist_var), **plot_style.xlabel_pos)
         ax.set_ylabel(ylabel=self.get_axis_label(hist_var=self.from_hist_var), **plot_style.ylabel_pos)
+
 
         self._set_axis_tick_labels(ax=ax, migration_matrix_shape=migration_matrix.shape)
 
@@ -196,6 +203,16 @@ class BinMigrationPlot:
 
         ax.set_xticklabels(labels=[""] + x_labels + [""], rotation=-45)
         ax.set_yticklabels(labels=[""] + y_labels + [""])
+
+        if len(tick_positions) > self.max_number_of_ticks:
+            tick_start = 1  # type: int  # starting from second tick, because the first one is blank
+            tick_frequency = int(np.ceil(1. * len(tick_positions) / self.max_number_of_ticks))  # type: int
+            assert tick_frequency > 0, (tick_frequency, len(tick_positions), self.max_number_of_ticks)
+
+            ax.set_xticks(ticks=ax.get_xticks()[tick_start::tick_frequency])
+            ax.set_yticks(ticks=ax.get_yticks()[tick_start::tick_frequency])
+            ax.set_xticklabels(labels=ax.get_xticklabels()[tick_start::tick_frequency])
+            ax.set_yticklabels(labels=ax.get_yticklabels()[tick_start::tick_frequency])
 
     def get_axis_label(self, hist_var: HistVariable) -> str:
         if self.label_appendix_tuple is None:
