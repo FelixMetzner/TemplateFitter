@@ -10,6 +10,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib import cm as mpl_colormap
 from matplotlib import colors as mpl_colors
+from matplotlib import ticker as mpl_ticker
 from matplotlib import font_manager as mpl_font_mgr
 
 from typing import Optional, Union, Tuple, List, Dict, Callable, Any
@@ -200,7 +201,11 @@ class BinMigrationPlot:
         assert len(self.binning.bin_edges) == 1, self.binning.bin_edges
         return self.binning.bin_edges[0]
 
-    def get_tick_str(self, t: Any) -> str:
+    def get_tick_str(self, tick_pos: float) -> str:
+        if tick_pos <= 0 or tick_pos + 0.5 > len(self.bin_edges):
+            return ""
+
+        t = self.bin_edges[int(tick_pos - 0.5)]
         tick_str = self.tick_label_formatter(t)  # type: str
         assert isinstance(tick_str, str), (tick_str, type(tick_str).__name__, t, type(t).__name__)
         return tick_str
@@ -214,13 +219,6 @@ class BinMigrationPlot:
             migration_matrix_shape,
         )
 
-        x_labels = [self.get_tick_str(t=self.bin_edges[int(x - 0.5)]) for x in ax.get_xticks()[1:-1]]  # type: List[str]
-        y_labels = [self.get_tick_str(t=self.bin_edges[int(x - 0.5)]) for x in ax.get_xticks()[1:-1]]  # type: List[str]
-
-        # Adding blank tick labels for outer edges of overflow bins:
-        x_labels = [""] + x_labels + [""]
-        y_labels = [""] + y_labels + [""]
-
         tick_start = 0  # type: int
         tick_frequency = 1  # type: int
 
@@ -231,6 +229,15 @@ class BinMigrationPlot:
 
         ax.set_xticks(ticks=tick_positions[tick_start::tick_frequency])
         ax.set_yticks(ticks=tick_positions[tick_start::tick_frequency])
+
+        if tick_frequency >= 2:
+            ax.xaxis.set_minor_locator(locator=mpl_ticker.MultipleLocator(np.floor(tick_frequency / 2.0)))
+        else:
+            ax.xaxis.set_minor_locator(locator=mpl_ticker.NullLocator())
+
+        x_labels = [self.get_tick_str(tick_pos=tick_pos) for tick_pos in ax.get_xticks()]  # type: List[str]
+        y_labels = [self.get_tick_str(tick_pos=tick_pos) for tick_pos in ax.get_yticks()]  # type: List[str]
+
         ax.set_xticklabels(labels=x_labels[tick_start::tick_frequency], rotation=-45, ha="left")
         ax.set_yticklabels(labels=y_labels[tick_start::tick_frequency])
 
