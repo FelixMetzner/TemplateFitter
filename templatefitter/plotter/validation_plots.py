@@ -232,14 +232,15 @@ class BinMigrationPlot:
 
         if tick_frequency >= 2:
             ax.xaxis.set_minor_locator(locator=mpl_ticker.MultipleLocator(np.floor(tick_frequency / 2.0)))
+            ax.yaxis.set_minor_locator(locator=mpl_ticker.MultipleLocator(np.floor(tick_frequency / 2.0)))
         else:
             ax.xaxis.set_minor_locator(locator=mpl_ticker.NullLocator())
+            ax.yaxis.set_minor_locator(locator=mpl_ticker.NullLocator())
 
         x_labels = [self.get_tick_str(tick_pos=tick_pos) for tick_pos in ax.get_xticks()]  # type: List[str]
         y_labels = [self.get_tick_str(tick_pos=tick_pos) for tick_pos in ax.get_yticks()]  # type: List[str]
-
-        ax.set_xticklabels(labels=x_labels[tick_start::tick_frequency], rotation=-45, ha="left")
-        ax.set_yticklabels(labels=y_labels[tick_start::tick_frequency])
+        ax.set_xticklabels(labels=x_labels, rotation=-45, ha="left")
+        ax.set_yticklabels(labels=y_labels)
 
     def get_axis_label(self, hist_var: HistVariable) -> str:
         if self.label_appendix_tuple is None:
