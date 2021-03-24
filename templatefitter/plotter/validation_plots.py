@@ -203,22 +203,26 @@ class BinMigrationPlot:
             (self.bin_edges[0], self.bin_edges[-1]),
             migration_matrix_shape,
         )
-        ax.set_xticks(ticks=tick_positions)
-        ax.set_yticks(ticks=tick_positions)
+
         x_labels = [self.get_tick_str(t=self.bin_edges[int(x - 0.5)]) for x in ax.get_xticks()[1:-1]]  # type: List[str]
         y_labels = [self.get_tick_str(t=self.bin_edges[int(x - 0.5)]) for x in ax.get_xticks()[1:-1]]  # type: List[str]
 
         # Adding blank tick labels for outer edges of overflow bins:
-        ax.set_xticklabels(labels=[""] + x_labels + [""], rotation=-45)
-        ax.set_yticklabels(labels=[""] + y_labels + [""])
+        x_labels = [""] + x_labels + [""]
+        y_labels = [""] + y_labels + [""]
+
+        tick_start = 0  # type: int
+        tick_frequency = 1  # type: int
 
         if len(tick_positions) > self.max_number_of_ticks:
-            tick_start = 1  # type: int  # starting from second tick, because the first one is blank
-            tick_frequency = int(np.ceil(1. * len(tick_positions) / self.max_number_of_ticks))  # type: int
+            tick_start = 1  # starting from second tick, because the first one is blank
+            tick_frequency = int(np.ceil(1. * len(tick_positions) / self.max_number_of_ticks))
             assert tick_frequency > 0, (tick_frequency, len(tick_positions), self.max_number_of_ticks)
 
-            ax.set_xticks(ticks=ax.get_xticks()[tick_start::tick_frequency])
-            ax.set_yticks(ticks=ax.get_yticks()[tick_start::tick_frequency])
+        ax.set_xticks(ticks=tick_positions[tick_start::tick_frequency])
+        ax.set_yticks(ticks=tick_positions[tick_start::tick_frequency])
+        ax.set_xticklabels(labels=x_labels[tick_start::tick_frequency], rotation=-45, ha="left")
+        ax.set_yticklabels(labels=y_labels[tick_start::tick_frequency])
 
     def get_axis_label(self, hist_var: HistVariable) -> str:
         if self.label_appendix_tuple is None:
