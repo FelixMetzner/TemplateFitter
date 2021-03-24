@@ -57,8 +57,8 @@ class BinMigrationPlot:
             _tick_label_formatter = tick_label_format_fnc
         self.tick_label_formatter = _tick_label_formatter  # type: Callable
 
-        self.max_number_of_ticks = max_number_of_ticks if max_number_of_ticks is not None else 30  # type: int
-        self.max_bins_for_labels = max_bins_for_labels if max_bins_for_labels is not None else 50  # type: int
+        self.max_number_of_ticks = max_number_of_ticks if max_number_of_ticks is not None else 20  # type: int
+        self.max_bins_for_labels = max_bins_for_labels if max_bins_for_labels is not None else 30  # type: int
 
     def plot_on(
             self,
@@ -218,8 +218,6 @@ class BinMigrationPlot:
 
             ax.set_xticks(ticks=ax.get_xticks()[tick_start::tick_frequency])
             ax.set_yticks(ticks=ax.get_yticks()[tick_start::tick_frequency])
-            ax.set_xticklabels(labels=ax.get_xticklabels()[tick_start::tick_frequency])
-            ax.set_yticklabels(labels=ax.get_yticklabels()[tick_start::tick_frequency])
 
     def get_axis_label(self, hist_var: HistVariable) -> str:
         if self.label_appendix_tuple is None:
