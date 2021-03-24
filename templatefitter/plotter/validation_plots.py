@@ -208,6 +208,7 @@ class BinMigrationPlot:
         x_labels = [self.get_tick_str(t=self.bin_edges[int(x - 0.5)]) for x in ax.get_xticks()[1:-1]]  # type: List[str]
         y_labels = [self.get_tick_str(t=self.bin_edges[int(x - 0.5)]) for x in ax.get_xticks()[1:-1]]  # type: List[str]
 
+        # Adding blank tick labels for outer edges of overflow bins:
         ax.set_xticklabels(labels=[""] + x_labels + [""], rotation=-45)
         ax.set_yticklabels(labels=[""] + y_labels + [""])
 
