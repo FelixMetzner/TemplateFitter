@@ -293,6 +293,7 @@ class BinCompositionPlot:
             df: pd.DataFrame,
             ax: Optional[AxesType] = None,
             draw_legend: bool = True,
+            legend_columns: int = 1,
     ) -> AxesType:
         if ax is None:
             _, ax = plt.subplots()
@@ -331,7 +332,7 @@ class BinCompositionPlot:
             ax.legend(
                 frameon=False,
                 loc="upper left",
-                ncol=1,
+                ncol=legend_columns,
                 bbox_to_anchor=bbox_to_anchor_tuple,
                 fontsize=legend_font_size,
             )
