@@ -1,14 +1,14 @@
 """
 Contains abstract base class for histogram plots --- HistogramPlot.
 """
-import os
 import logging
 import numpy as np
 
 from abc import ABC, abstractmethod
 from matplotlib import pyplot as plt
-from typing import Optional, Union, Any, Tuple, AnyStr
+from typing import Optional, Union, Any, Tuple
 
+from templatefitter.utility import PathType
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.systematics import SystematicsInputType
@@ -22,7 +22,7 @@ from templatefitter.plotter.histogram import Histogram, HistogramContainer
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
-    "HistogramPlot"
+    "HistogramPlot",
 ]
 
 plot_style.set_matplotlibrc_params()
@@ -54,15 +54,15 @@ class HistogramPlot(ABC):
         )
 
     def _add_component(
-            self,
-            label: str,
-            histogram_key: str,
-            data: DataInputType,
-            weights: WeightsInputType = None,
-            systematics: SystematicsInputType = None,
-            hist_type: Optional[str] = None,
-            color: Optional[str] = None,
-            alpha: float = 1.0
+        self,
+        label: str,
+        histogram_key: str,
+        data: DataInputType,
+        weights: WeightsInputType = None,
+        systematics: SystematicsInputType = None,
+        hist_type: Optional[str] = None,
+        color: Optional[str] = None,
+        alpha: float = 1.0,
     ) -> None:
         if histogram_key not in self._histograms.histogram_keys:
             new_histogram = Histogram(variable=self.variable, hist_type=hist_type)
@@ -79,16 +79,16 @@ class HistogramPlot(ABC):
         )
 
     def _add_prebinned_component(
-            self,
-            label: str,
-            histogram_key: str,
-            bin_counts: np.ndarray,
-            original_binning: Binning,
-            bin_errors_squared: np.ndarray = None,
-            data_column_names: DataColumnNamesInput = None,
-            hist_type: Optional[str] = None,
-            color: Optional[str] = None,
-            alpha: float = 1.0
+        self,
+        label: str,
+        histogram_key: str,
+        bin_counts: np.ndarray,
+        original_binning: Binning,
+        bin_errors_squared: np.ndarray = None,
+        data_column_names: DataColumnNamesInput = None,
+        hist_type: Optional[str] = None,
+        color: Optional[str] = None,
+        alpha: float = 1.0,
     ) -> None:
         if histogram_key not in self._histograms.histogram_keys:
             new_histogram = Histogram(variable=self.variable, hist_type=hist_type)
@@ -111,7 +111,7 @@ class HistogramPlot(ABC):
             bin_errors_squared=bin_errors_squared,
             data_column_names=self.variable.df_label,
             color=color,
-            alpha=alpha
+            alpha=alpha,
         )
 
     @property
@@ -157,15 +157,15 @@ class HistogramPlot(ABC):
         self._histograms.reset_binning_to_use_raw_data_range_of_key(key=histogram_key)
 
     def apply_adaptive_binning_based_on_histogram(
-            self,
-            histogram_key: str,
-            minimal_bin_count: int = 5,
-            minimal_number_of_bins: int = 7
+        self,
+        histogram_key: str,
+        minimal_bin_count: int = 5,
+        minimal_number_of_bins: int = 7,
     ) -> None:
         self._histograms.apply_adaptive_binning_based_on_key(
             key=histogram_key,
             minimal_bin_count=minimal_bin_count,
-            minimal_number_of_bins=minimal_number_of_bins
+            minimal_number_of_bins=minimal_number_of_bins,
         )
 
     def _get_y_label(self, normed: bool, evts_or_cands: str = "Events") -> str:
@@ -179,18 +179,18 @@ class HistogramPlot(ABC):
                 b=self.minimal_bin_width,
                 v=" " + self._variable.unit if self._variable.unit else "",
                 bo="(" if self._variable.unit else "",
-                bc=")" if self._variable.unit else ""
+                bc=")" if self._variable.unit else "",
             )
 
     def draw_legend(
-            self,
-            axis: AxesType,
-            inside: bool,
-            loc: Optional[Union[int, str]] = None,
-            ncols: Optional[int] = None,
-            y_axis_scale: Optional[float] = None,
-            font_size: Optional[Union[int, float, str]] = None,
-            bbox_to_anchor_tuple: Tuple[float, float] = None
+        self,
+        axis: AxesType,
+        inside: bool,
+        loc: Optional[Union[int, str]] = None,
+        ncols: Optional[int] = None,
+        y_axis_scale: Optional[float] = None,
+        font_size: Optional[Union[int, float, str]] = None,
+        bbox_to_anchor_tuple: Tuple[float, float] = None,
     ) -> None:
         if loc is None:
             loc = self.legend_loc_default
@@ -214,5 +214,5 @@ class HistogramPlot(ABC):
     def get_last_figure(self) -> Optional[FigureType]:
         return self._last_figure
 
-    def write_hist_data_to_file(self, file_path: Union[os.PathLike, AnyStr]):
+    def write_hist_data_to_file(self, file_path: PathType):
         self._histograms.write_to_file(file_path=file_path)

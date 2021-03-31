@@ -8,15 +8,15 @@ orchestrates the necessary calculations on all components.
 The container class HistogramContainer can hold different Histograms which are
 to be plotted in the same plot.
 """
-import os
 import logging
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 from collections import OrderedDict
-from typing import Optional, Union, List, Tuple, Dict, ItemsView, KeysView, ValuesView, AnyStr
+from typing import Optional, Union, List, Tuple, Dict, ItemsView, KeysView, ValuesView
 
+from templatefitter.utility import PathType
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions import distributions_utility
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution
@@ -28,9 +28,10 @@ from templatefitter.plotter.histogram_component import HistComponent, create_his
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
+
 __all__ = [
     "Histogram",
-    "HistogramContainer"
+    "HistogramContainer",
 ]
 
 plot_style.set_matplotlibrc_params()
@@ -57,7 +58,7 @@ class Histogram:
             bins=variable.n_bins,
             dimensions=1,
             scope=variable.scope,
-            log_scale=variable.use_log_scale
+            log_scale=variable.use_log_scale,
         )
 
         self._components = []  # type: List[HistComponent]
@@ -335,10 +336,10 @@ class HistogramContainer:
         self._common_binning = new_binning
 
     def apply_adaptive_binning_based_on_key(
-            self,
-            key: str,
-            minimal_bin_count: int = 5,
-            minimal_number_of_bins: int = 7
+        self,
+        key: str,
+        minimal_bin_count: int = 5,
+        minimal_number_of_bins: int = 7,
     ) -> None:
         histogram_to_use = self.get_histogram_by_key(key=key)
         histogram_to_use.apply_adapted_binning(
@@ -368,7 +369,7 @@ class HistogramContainer:
             bins=self._common_binning.bin_edges,
             dimensions=self._common_binning.dimensions,
             scope=full_raw_range,
-            log_scale=self._common_variable.use_log_scale
+            log_scale=self._common_variable.use_log_scale,
         )
 
         self.update_binning(new_binning=new_binning)
@@ -409,22 +410,22 @@ class HistogramContainer:
         assert len(bin_mids) == 1, bin_mids
         return np.array(bin_mids[0])
 
-    def write_to_file(self, file_path: Union[AnyStr, os.PathLike]) -> None:
+    def write_to_file(self, file_path: PathType) -> None:
         with pd.HDFStore(path=file_path, mode="w") as hdf5store:
             hdf5store.append(key="n_dimensions", value=pd.Series([self._common_binning.dimensions]))
             hdf5store.append(key="histogram_keys", value=pd.Series(list(self.histogram_keys)))
             for dim in range(self._common_binning.dimensions):
                 hdf5store.append(
                     key=f"bin_edges_in_dim_{dim}",
-                    value=pd.Series(list(self._common_binning.bin_edges[dim]))
+                    value=pd.Series(list(self._common_binning.bin_edges[dim])),
                 )
                 hdf5store.append(
                     key=f"bin_mids_in_dim_{dim}",
-                    value=pd.Series(list(self._common_binning.bin_mids[dim]))
+                    value=pd.Series(list(self._common_binning.bin_mids[dim])),
                 )
             for hist_key in self.histogram_keys:
                 hist = self.get_histogram_by_key(key=hist_key)
                 hdf5store.append(
                     key=hist_key,
-                    value=pd.Series(hist.get_bin_count_of_component(index=0))
+                    value=pd.Series(hist.get_bin_count_of_component(index=0)),
                 )

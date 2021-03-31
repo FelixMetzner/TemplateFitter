@@ -9,9 +9,10 @@ import matplotlib.pyplot as plt
 import matplotlib.axes._axes as axes
 import matplotlib.colors as mpl_colors
 
+from typing import Tuple
 from matplotlib import figure
-from typing import Union, Tuple, AnyStr
 
+from templatefitter.utility import PathType
 from templatefitter.plotter.plot_style import KITColors
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -27,16 +28,15 @@ __all__ = [
 
 AxesType = axes.Axes
 FigureType = figure.Figure
-PathType = Union[str, AnyStr, os.PathLike]
 
 
 def export(
-        fig: plt.Figure,
-        filename: PathType,
-        target_dir: PathType = "plots/",
-        file_formats: Tuple[str, ...] = (".pdf", ".png"),
-        save_as_tikz: bool = False,
-        close_figure: bool = False,
+    fig: plt.Figure,
+    filename: PathType,
+    target_dir: PathType = "plots/",
+    file_formats: Tuple[str, ...] = (".pdf", ".png"),
+    save_as_tikz: bool = False,
+    close_figure: bool = False,
 ) -> None:
     """
     Convenience function for saving a matplotlib figure.
@@ -65,7 +65,10 @@ def export(
         fig.clf()
 
 
-def save_figure_as_tikz_tex_file(fig: plt.Figure, target_path: PathType) -> None:
+def save_figure_as_tikz_tex_file(
+    fig: plt.Figure,
+    target_path: PathType,
+) -> None:
     try:
         tikzplotlib.clean_figure(fig=fig)
         tikzplotlib.save(figure=fig, filepath=target_path, strict=True)
@@ -74,7 +77,7 @@ def save_figure_as_tikz_tex_file(fig: plt.Figure, target_path: PathType) -> None
             f"Exception ({e.__class__.__name__}) occurred in attempt to export plot in tikz raw text format!\n"
             f"The following tikz tex file was not produced.\n\t{target_path}\n"
             f"The following lines show additional information on the {e.__class__.__name__}",
-            exc_info=e
+            exc_info=e,
         )
 
 
@@ -90,7 +93,11 @@ def get_white_or_black_from_background(bkg_color: str) -> str:
     return KITColors.kit_black if luminance > 0.179 else KITColors.white
 
 
-def color_fader(color_1: str, color_2: str, mix: float = 0.) -> str:
+def color_fader(
+    color_1: str,
+    color_2: str,
+    mix: float = 0.,
+) -> str:
     c1 = np.array(mpl_colors.to_rgb(color_1))
     c2 = np.array(mpl_colors.to_rgb(color_2))
     return mpl_colors.to_hex((1 - mix) * c1 + mix * c2)

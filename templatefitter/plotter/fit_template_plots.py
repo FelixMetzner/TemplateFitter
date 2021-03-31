@@ -9,6 +9,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from typing import Union, Optional, Tuple, List, Dict, Any
 
+from templatefitter.utility import PathType
+
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions.binned_distribution import DataColumnNamesInput
 
@@ -26,7 +28,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "FitTemplatePlot",
-    "FitTemplatesPlotter"
+    "FitTemplatesPlotter",
 ]
 
 plot_style.set_matplotlibrc_params()
@@ -47,12 +49,12 @@ class FitTemplatePlot(HistogramPlot):
         return self._binning
 
     def add_component(
-            self,
-            label: str,
-            bin_counts: np.ndarray,
-            bin_errors_squared: np.ndarray,
-            data_column_names: DataColumnNamesInput,
-            color: str
+        self,
+        label: str,
+        bin_counts: np.ndarray,
+        bin_errors_squared: np.ndarray,
+        data_column_names: DataColumnNamesInput,
+        color: str,
     ) -> None:
         if self._has_component:
             raise RuntimeError("A component was already added, and a FitTemplatePlot only has one component...")
@@ -66,21 +68,21 @@ class FitTemplatePlot(HistogramPlot):
             data_column_names=data_column_names,
             hist_type="stepfilled",
             color=color,
-            alpha=1.0
+            alpha=1.0,
         )
         self._has_component = True
 
     def plot_on(
-            self,
-            ax1: Optional[AxesType] = None,
-            include_sys: bool = False,
-            markers_with_width: bool = True,
-            sum_color: str = plot_style.KITColors.kit_purple,
-            draw_legend: bool = True,
-            legend_inside: bool = True,
-            legend_cols: Optional[int] = None,
-            legend_loc: Optional[Union[int, str]] = None,
-            y_scale: float = 1.1
+        self,
+        ax1: Optional[AxesType] = None,
+        include_sys: bool = False,
+        markers_with_width: bool = True,
+        sum_color: str = plot_style.KITColors.kit_purple,
+        draw_legend: bool = True,
+        legend_inside: bool = True,
+        legend_cols: Optional[int] = None,
+        legend_loc: Optional[Union[int, str]] = None,
+        y_scale: float = 1.1,
     ) -> Any:
         self._check_required_histograms()
 
@@ -105,7 +107,7 @@ class FitTemplatePlot(HistogramPlot):
             lw=0.3,
             color=self._histograms[self.hist_key].colors,
             label=self._histograms[self.hist_key].labels,
-            histtype='stepfilled'
+            histtype='stepfilled',
         )
 
         ax1.bar(
@@ -117,7 +119,7 @@ class FitTemplatePlot(HistogramPlot):
             hatch="///////",
             fill=False,
             lw=0,
-            label="MC stat. unc." if not include_sys else "MC stat. + sys. unc."
+            label="MC stat. unc." if not include_sys else "MC stat. + sys. unc.",
         )
 
         if draw_legend:
@@ -141,11 +143,11 @@ class FitTemplatesPlotter:
     plot_name_prefix = "fit_template_plot"
 
     def __init__(
-            self,
-            variables: Tuple[HistVariable, ...],
-            fit_model: FitModel,
-            fig_size: Tuple[float, float] = (5, 5),
-            **kwargs
+        self,
+        variables: Tuple[HistVariable, ...],
+        fit_model: FitModel,
+        fig_size: Tuple[float, float] = (5, 5),
+        **kwargs,
     ) -> None:
         self._variables = variables  # type: Tuple[HistVariable, ...]
         self._fit_model = fit_model  # type: FitModel
@@ -154,11 +156,11 @@ class FitTemplatesPlotter:
         self._optional_arguments_dict = kwargs  # type: Dict[str, Any]
 
     def plot_projected_templates(
-            self,
-            use_initial_values: bool = True,
-            output_dir_path: Optional[Union[str, os.PathLike]] = None,
-            output_name_tag: Optional[str] = None
-    ) -> Dict[str, List[Union[str, os.PathLike]]]:
+        self,
+        use_initial_values: bool = True,
+        output_dir_path: Optional[PathType] = None,
+        output_name_tag: Optional[str] = None,
+    ) -> Dict[str, List[PathType]]:
         output_lists = {"pdf": [], "png": []}
 
         if (output_dir_path is None) != (output_name_tag is None):
@@ -173,13 +175,13 @@ class FitTemplatesPlotter:
                 for template in mc_channel.templates:
                     current_plot = FitTemplatePlot(  # TODO
                         variable=self.channel_variables(dimension=dimension)[mc_channel.name],  # TODO: channel_variables not available here... maybe implement a base function? Maybe use subsets_plotter for this?
-                        binning=current_binning
+                        binning=current_binning,
                     )
 
                     template_bin_count, template_bin_error_sq = template.project_onto_dimension(
                         bin_counts=template.expected_bin_counts(use_initial_values=use_initial_values),
                         dimension=dimension,
-                        bin_errors_squared=template.expected_bin_errors_squared(use_initial_values=use_initial_values)
+                        bin_errors_squared=template.expected_bin_errors_squared(use_initial_values=use_initial_values),
                     )
 
                     current_plot.add_component(
@@ -187,7 +189,7 @@ class FitTemplatesPlotter:
                         bin_counts=template_bin_count,
                         bin_errors_squared=template_bin_error_sq,
                         data_column_names=data_column_name_for_plot,
-                        color=self._get_template_color(key=template.process_name, original_color=template.color)
+                        color=self._get_template_color(key=template.process_name, original_color=template.color),
                     )
 
                     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=self._fig_size, dpi=200)
@@ -258,10 +260,10 @@ class FitTemplatesPlotter:
             return channel.name
 
     def _get_attribute_from_optional_arguments_dict(
-            self,
-            attribute_name: str,
-            key: str,
-            default_value: Optional[str]
+        self,
+        attribute_name: str,
+        key: str,
+        default_value: Optional[str],
     ) -> Optional[str]:
         if attribute_name in self._optional_arguments_dict:
             attribute_dict = self._optional_arguments_dict[attribute_name]

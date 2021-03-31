@@ -4,11 +4,11 @@ Provides a container class SubsetsPlotter which holds plots of the same variable
 for different subsets of a dataset, e.g. different bins, channels or similar.
 """
 
-import os
 import logging
 
 from typing import NamedTuple, Any, Union, Optional, List, Dict
 
+from templatefitter.utility import PathType
 from templatefitter.plotter.histogram_variable import HistVariable
 from templatefitter.plotter.histogram_plot_base import HistogramPlot
 
@@ -36,11 +36,11 @@ class PlotInfoContainer(NamedTuple):
 # TODO: This is not yet completed and unused!
 class SubsetsPlotter:
     def __init__(
-            self,
-            variable: HistVariable,
-            plot_class: HistogramPlot,
-            plot_infos: Optional[PlotInfoContainer],
-            **kwargs
+        self,
+        variable: HistVariable,
+        plot_class: HistogramPlot,
+        plot_infos: Optional[PlotInfoContainer],
+        **kwargs,
     ) -> None:
         self._variable = variable  # type: HistVariable
         self._plot_class = plot_class  # type: HistogramPlot
@@ -55,7 +55,7 @@ class SubsetsPlotter:
     def add_component(self) -> None:
         pass
 
-    def create_plots(self) -> Optional[Dict[str, Union[str, os.PathLike]]]:
+    def create_plots(self) -> Optional[Dict[str, PathType]]:
         pass
 
     @property

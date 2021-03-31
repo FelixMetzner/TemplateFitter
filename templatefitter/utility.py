@@ -1,19 +1,24 @@
+import os
 import logging
 import numpy as np
 
 from itertools import islice
-from typing import List, Iterable
 from numba import vectorize, float64, float32
+from typing import Union, List, Iterable, AnyStr
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
+    "PathType",
     "cov2corr",
     "corr2cov",
     "xlogyx",
     "get_systematic_cov_mat",
-    "array_split_into"
+    "array_split_into",
 ]
+
+
+PathType = Union[str, AnyStr, os.PathLike]
 
 
 def cov2corr(cov: np.ndarray) -> np.ndarray:
@@ -31,7 +36,7 @@ def cov2corr(cov: np.ndarray) -> np.ndarray:
     out : np.ndarray
         Correlation matrix. Shape is (n,n).
     """
-    d_inv = np.nan_to_num(np.diag(1 / np.sqrt(np.diag(cov))))
+    d_inv = np.nan_to_num(np.diag(1.0 / np.sqrt(np.diag(cov))))
     return np.matmul(d_inv, np.matmul(cov, d_inv))
 
 
@@ -56,8 +61,7 @@ def corr2cov(corr: np.ndarray, var: np.ndarray) -> np.ndarray:
     return np.matmul(d_matrix, np.matmul(corr, d_matrix))
 
 
-@vectorize([float32(float32, float32),
-            float64(float64, float64)])
+@vectorize([float32(float32, float32), float64(float64, float64)])
 def xlogyx(x, y):
     """
     Compute :math:`x*log(y/x)`to a good precision when :math:`y~x`.
@@ -67,7 +71,7 @@ def xlogyx(x, y):
     # TODO: Add a test of this xlogyx function to the unit tests!
     # Method 1
     if x < 1e-100 or y < 1e-100:
-        return 0.
+        return 0.0
     if x < y:
         res = x * np.log1p((y - x) / x)
     else:
@@ -91,7 +95,10 @@ def xlogyx(x, y):
     # return result
 
 
-def get_systematic_cov_mat(hup: np.ndarray, hdown: np.ndarray) -> np.ndarray:
+def get_systematic_cov_mat(
+        hup: np.ndarray,
+        hdown: np.ndarray,
+) -> np.ndarray:
     """
     Calculates covariance matrix from systematic variations
     for a histogram.
@@ -101,12 +108,15 @@ def get_systematic_cov_mat(hup: np.ndarray, hdown: np.ndarray) -> np.ndarray:
     Covariance Matrix : numpy.ndarray
         Shape is (`num_bins`, `num_bins`).
     """
-    diff_sym = (hup - hdown) / 2
+    diff_sym = (hup - hdown) / 2.0
 
     return np.outer(diff_sym, diff_sym)
 
 
-def array_split_into(iterable: Iterable, sizes: List[int]) -> np.ndarray:
+def array_split_into(
+        iterable: Iterable,
+        sizes: List[int],
+) -> np.ndarray:
     """
     Yields a list of arrays of size `n` from array iterable for each `n` in `sizes`.
     """

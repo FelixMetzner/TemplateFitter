@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 
 from typing import Union, Optional, Tuple, List, Dict, Any, Callable, NamedTuple
 
-from templatefitter.utility import cov2corr
+from templatefitter.utility import cov2corr, PathType
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -28,7 +28,7 @@ __all__ = [
     "minimizer_factory",
     "MinimizeResult",
     "BoundType",
-    "available_template_fitter_minimizer"
+    "available_template_fitter_minimizer",
 ]
 
 BoundType = Tuple[Optional[float], Optional[float]]
@@ -63,7 +63,7 @@ class MinimizerParameters:
             "No": list(range(self.num_params)),
             "Name": self._names,
             "Value": self._values,
-            "Sym. Err": self.errors
+            "Sym. Err": self.errors,
         }
         return tabulate.tabulate(data, headers="keys")
 
@@ -225,7 +225,7 @@ class MinimizerParameters:
             "values": "parameter_values",
             "errors": "parameter_errors",
             "covariance": "covariance_matrix",
-            "correlation": "correlation_matrix"
+            "correlation": "correlation_matrix",
         }
 
     @property
@@ -285,14 +285,14 @@ class MinimizeResult(NamedTuple):
             "success": self.success,
         }
 
-    def save_to(self, path: Union[str, os.fspath, os.PathLike], overwrite: bool = False) -> None:
+    def save_to(self, path: PathType, overwrite: bool = False) -> None:
         if not overwrite and os.path.exists(path=path):
             raise RuntimeError(f"Trying to overwrite existing file {path}, but overwrite is set to False!")
         with open(file=path, mode="w") as fp:
             json.dump(obj=self.as_dict, fp=fp, indent=2)
 
     @classmethod
-    def load_from(cls, path: Union[str, os.fspath, os.PathLike]) -> "MinimizeResult":
+    def load_from(cls, path: PathType) -> "MinimizeResult":
         assert os.path.exists(path=path), path
         with open(file=path, mode="r") as fp:
             restored_dict = json.load(fp)
@@ -304,7 +304,7 @@ class MinimizeResult(NamedTuple):
         instance = cls(
             fcn_min_val=restored_dict["fcn_min_val"],
             params=params,
-            success=restored_dict["success"]
+            success=restored_dict["success"],
         )
         return instance
 
@@ -315,9 +315,13 @@ MinimizeResult.success.__doc__ = """bool: Whether or not the optimizer exited su
 
 
 class AbstractMinimizer(ABC):
-    def __init__(self, fcn: Callable, param_names: List[str]) -> None:
+    def __init__(
+        self,
+        fcn: Callable,
+        param_names: List[str],
+    ) -> None:
         self._fcn = fcn
-        self._params = MinimizerParameters(param_names)
+        self._params = MinimizerParameters(names=param_names)
 
         # this lists can be different for different minimizer implementations
         self._param_bounds = [(None, None) for _ in self._params.names]  # type: List[BoundType]
@@ -329,7 +333,12 @@ class AbstractMinimizer(ABC):
         self._message = None
 
     @abstractmethod
-    def minimize(self, initial_param_values: np.ndarray, verbose: bool = False, **kwargs) -> MinimizeResult:
+    def minimize(
+        self,
+        initial_param_values: np.ndarray,
+        verbose: bool = False,
+        **kwargs,
+    ) -> MinimizeResult:
         pass
 
     def set_param_fixed(self, param_id: Union[int, str]) -> None:
@@ -351,7 +360,11 @@ class AbstractMinimizer(ABC):
         """
         self.params.release_params()
 
-    def set_param_bounds(self, param_id: Union[int, str], bounds: BoundType) -> None:
+    def set_param_bounds(
+        self,
+        param_id: Union[int, str],
+        bounds: BoundType,
+    ) -> None:
         """
         Sets parameter boundaries which constrain the minimization.
 
@@ -418,15 +431,19 @@ class AbstractMinimizer(ABC):
 
 
 class IMinuitMinimizer(AbstractMinimizer):
-    def __init__(self, fcn: Callable, param_names):
-        super().__init__(fcn, param_names)
+    def __init__(
+        self,
+        fcn: Callable,
+        param_names: List[str],
+    ) -> None:
+        super().__init__(fcn=fcn, param_names=param_names)
 
     def minimize(
-            self,
-            initial_param_values: np.ndarray,
-            verbose: bool = False,
-            error_def: float = 0.5,
-            **kwargs
+        self,
+        initial_param_values: np.ndarray,
+        verbose: bool = False,
+        error_def: float = 0.5,
+        **kwargs,
     ) -> MinimizeResult:
         m = Minuit.from_array_func(
             self._fcn,  # parameter 'fcn'
@@ -477,15 +494,19 @@ class ScipyMinimizer(AbstractMinimizer):
         argument of `fcn` to strings.
     """
 
-    def __init__(self, fcn: Callable, param_names: List[str]):
+    def __init__(
+        self,
+        fcn: Callable,
+        param_names: List[str],
+    ) -> None:
         super().__init__(fcn, param_names)
 
     def minimize(
-            self,
-            initial_param_values: np.ndarray,
-            verbose: bool = False,
-            additional_args: Tuple[Any] = (),
-            get_hesse: bool = True
+        self,
+        initial_param_values: np.ndarray,
+        verbose: bool = False,
+        additional_args: Tuple[Any] = (),
+        get_hesse: bool = True,
     ) -> MinimizeResult:
         """
         Performs minimization of given objective function.
@@ -579,7 +600,11 @@ class ScipyMinimizer(AbstractMinimizer):
 
     @staticmethod
     @functools.lru_cache(maxsize=128)
-    def calculate_hesse_matrix(fcn: Callable, x: np.ndarray, args: Tuple[Any]) -> np.ndarray:
+    def calculate_hesse_matrix(
+        fcn: Callable,
+        x: np.ndarray,
+        args: Tuple[Any],
+    ) -> np.ndarray:
         """
         Calculates the Hesse matrix of callable `fcn` numerically.
 
@@ -602,9 +627,13 @@ class ScipyMinimizer(AbstractMinimizer):
 
 available_template_fitter_minimizer = {
     "scipy": ScipyMinimizer,
-    "iminuit": IMinuitMinimizer
+    "iminuit": IMinuitMinimizer,
 }
 
 
-def minimizer_factory(minimizer_id: str, fcn: Callable, names: List[str]) -> AbstractMinimizer:
+def minimizer_factory(
+    minimizer_id: str,
+    fcn: Callable,
+    names: List[str],
+) -> AbstractMinimizer:
     return available_template_fitter_minimizer[minimizer_id.lower()](fcn, names)
