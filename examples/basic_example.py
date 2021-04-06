@@ -2,11 +2,10 @@ import pathlib
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib
 
 import templatefitter as tf
 
-matplotlib.use('Agg')
+plt.switch_backend(newbackend="agg")
 
 path = pathlib.Path(__file__).resolve().parent.parent / "datasets/b_to_pizlnu"
 signal = pd.read_csv(path / "signal.csv")
