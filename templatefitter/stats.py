@@ -12,55 +12,48 @@ __all__ = [
     "pearson_chi2_test",
     "cowan_binned_likelihood_gof",
     "toy_chi2_test",
-    "ToyInfoOutputType"
+    "ToyInfoOutputType",
 ]
 
 ToyInfoOutputType = Tuple[np.ndarray, np.ndarray, np.ndarray]
 
 
 def pearson_chi2_test(
-        data: np.ndarray,
-        expectation: np.ndarray,
-        dof: int,
-        error: Optional[np.ndarray] = None
+    data: np.ndarray,
+    expectation: np.ndarray,
+    dof: int,
+    error: Optional[np.ndarray] = None,
 ) -> Tuple[float, int, float]:
     """
-    Performs a Pearson :math:`\chi^2`-test.
-    This test reflects the level of agreement between observed
-    and expected histograms.
+    Performs a Pearson chi2-test.
+    This test reflects the level of agreement between observed and expected histograms.
     The test statistic is
 
-    .. math::
+        chi2 = sum limits(i=1; n_bins) (n_i - nu_i)^2 / nu_i,
 
-        \chi^2=\sum\limits_{i=1}^{n_\mathrm{bins}} \\frac{(n_i - \\nu_i)^2}{\\nu_i},
+    where n_i is the number of observations in bin i and nu_i is the expected number of events in bin i.
 
-    where :math:`n_i` is the number of observations in bin
-    :math:`i` and :math:`\\nu_i` is the expected number of
-    events in bin :math:`i`.
-
-    In the large sample limits, this test statistic follows a
-    :math:`\chi^2`-distribution with :math:`n_\mathrm{bins} - m`
-    degrees of freedom, where :math:`m` is the number of unconstrained
-    fit parameters.
+    In the large sample limits, this test statistic follows a chi2-distribution
+    with n_bins - m degrees of freedom,
+    where m is the number of unconstrained fit parameters.
 
     Parameters
     ----------
     data : np.ndarray
-        Data bin counts. Shape is (`num_bins`,)
+        Data bin counts. Shape is (num_bins,)
     expectation : np.ndarray
-        Expected bin counts. Shape is (`num_bins`,)
+        Expected bin counts. Shape is (num_bins,)
     dof : int
-        Degrees of freedom. This is the number of bins minus the
-        number of free fit parameters.
+        Degrees of freedom. This is the number of bins minus the number of free fit parameters.
 
     Returns
     -------
     float
-        :math:`\chi^2`
+        chi2
     float
-        :math:`\mathrm{dof}`
+        dof
     float
-        p-value.
+        p-value
     """
 
     if error is not None:
@@ -73,31 +66,32 @@ def pearson_chi2_test(
     return chi_sq, dof, p_val
 
 
-def cowan_binned_likelihood_gof(data: np.ndarray, expectation: np.ndarray, dof: int) -> Tuple[float, int, float]:
+def cowan_binned_likelihood_gof(
+    data: np.ndarray,
+    expectation: np.ndarray,
+    dof: int,
+) -> Tuple[float, int, float]:
     """
     Performs a GOF-test using a test statistic based on a
     binned likelihood function.
-    The test statistic is the ratio :math:`\lambda(\\nu) = L(\\nu=\hat{\\nu})/L(\\theta=n)`,
-    where :math:`\\nu` are the expected values in each bin. In the
-    numerator (denominator), the likelihood is evaluated with the estimated
-    values for :math:`\\nu` (the measured values).
+    The test statistic is the ratio lambda(nu) = L(nu=hat(nu)) / L(theta=n),
+    where nu are the expected values in each bin.
+    In the numerator (denominator), the likelihood is evaluated with the estimated values for nu (the measured values).
 
     In the large sample limit, the test statistic
 
-    .. math::
+        chi2 = -2 log lambda = 2 sum limits(i=1; n_bins) n_i log(n_i / hat(nu_i)) - hat(nu_i) - n_i,
 
-        \chi^2 = -2\log \lambda = 2\sum\limits_{i=1}^{n_\mathrm{bins}} n_i\log(\\frac{n_i}{\hat{\\nu_i}}) - \hat{\\nu_i} - n_i,
-
-    follows a :math:`\chi^2`-distribution with :math:`n_\mathrm{bins} - m`
-    degrees of freedom, where :math:`m` is the number of unconstrained
+    follows a chi2-distribution with n_bins - m
+    degrees of freedom, where m is the number of unconstrained
     fit parameters.
 
     Parameters
     ----------
     data : np.ndarray
-        Data bin counts. Shape is (`num_bins`,)
+        Data bin counts. Shape is (num_bins,)
     expectation : np.ndarray
-        Expected bin counts. Shape is (`num_bins`,)
+        Expected bin counts. Shape is (num_bins,)
     dof : int
         Degrees of freedom. This is the number of bins minus the
         number of free fit parameters.
@@ -105,11 +99,11 @@ def cowan_binned_likelihood_gof(data: np.ndarray, expectation: np.ndarray, dof: 
     Returns
     -------
     float
-        :math:`\chi^2`
+        chi2
     float
-        :math:`\mathrm{dof}`
+        dof
     float
-        p-value.
+        p-value
     """
 
     chi_sq = 2 * np.sum(data * np.log(data / expectation) + expectation - data)
@@ -119,7 +113,11 @@ def cowan_binned_likelihood_gof(data: np.ndarray, expectation: np.ndarray, dof: 
     return chi_sq, dof, p_val
 
 
-def calc_chi_squared(obs: np.ndarray, exp: np.ndarray, exp_unc: np.ndarray) -> Union[float, np.ndarray]:
+def calc_chi_squared(
+    obs: np.ndarray,
+    exp: np.ndarray,
+    exp_unc: np.ndarray,
+) -> Union[float, np.ndarray]:
     """
     Calculates the chi squared difference between an expected and an observed histogrammed distribution.
     If obs is 2-dimensional (contains multiple histograms), an array of chi squared values will be returned.
@@ -132,10 +130,10 @@ def calc_chi_squared(obs: np.ndarray, exp: np.ndarray, exp_unc: np.ndarray) -> U
         (len(exp), >=1), where len(exp) is the number of bins of the histogrammed
         expected distribution.
     exp: np.ndarray
-        Array containing the histogrammed expected distribution. Shape is (`num_bins`, ).
+        Array containing the histogrammed expected distribution. Shape is (num_bins, ).
     exp_unc: np.ndarray
         Array containing the uncertainty on the bins of the histogrammed expected
-        distribution. Shape is (`num_bins`, )
+        distribution. Shape is (num_bins, )
     Returns
     -------
     float or np.ndarray
@@ -148,18 +146,18 @@ def calc_chi_squared(obs: np.ndarray, exp: np.ndarray, exp_unc: np.ndarray) -> U
 
 
 def mc_chi_squared_from_toys(
-        obs: np.ndarray,
-        exp: np.ndarray,
-        exp_unc: np.ndarray,
-        mc_cov: Optional[np.ndarray] = None,
-        toys_size: int = 1000000,
-        seed: int = 13377331
+    obs: np.ndarray,
+    exp: np.ndarray,
+    exp_unc: np.ndarray,
+    mc_cov: Optional[np.ndarray] = None,
+    toys_size: int = 1000000,
+    seed: int = 13377331,
 ) -> Tuple[float, np.ndarray]:
     """
     Evaluates chi squared difference of expected and observed histogrammed
     distributions and obtains the chi squared distribution for exp via toy
     samples. The number of toy samples for this evaluation can be set via
-    the parameter `toys_size`.
+    the parameter toys_size.
 
     Parameters
     ----------
@@ -170,11 +168,9 @@ def mc_chi_squared_from_toys(
     exp_unc: np.ndarray
         Uncertainty on bins of histogrammed expected distribution.
     toys_size: int
-        Size of toy sample to be produced and used to obtain the
-        chi squared distribution to exp.
+        Size of toy sample to be produced and used to obtain the chi squared distribution to exp.
     seed: int
-        Seed for random generator to be used to create reproducible
-        toy samples. Default is 13377331.
+        Seed for random generator to be used to create reproducible toy samples. Default is 13377331.
 
     Returns
     -------
@@ -205,23 +201,23 @@ def mc_chi_squared_from_toys(
 
 
 def _toy_chi2_test(
-        data: np.ndarray,
-        expectation: np.ndarray,
-        error: np.ndarray,
-        mc_cov: Optional[np.ndarray] = None,
-        toys_size: int = 1000000
+    data: np.ndarray,
+    expectation: np.ndarray,
+    error: np.ndarray,
+    mc_cov: Optional[np.ndarray] = None,
+    toys_size: int = 1000000,
 ) -> Tuple[float, float, ToyInfoOutputType]:
     obs_chi2, toys = mc_chi_squared_from_toys(
         obs=data,
         exp=expectation,
         exp_unc=error,
         mc_cov=mc_cov,
-        toys_size=toys_size
+        toys_size=toys_size,
     )
 
     bc, be = np.histogram(toys, bins=100, density=True)
     bm = (be[1:] + be[:-1]) / 2
-    bw = (be[1:] - be[:-1])
+    bw = be[1:] - be[:-1]
 
     p_val = np.sum(bc[bm > obs_chi2] * bw[bm > obs_chi2])
     assert isinstance(p_val, float)
@@ -230,12 +226,12 @@ def _toy_chi2_test(
 
 
 def toy_chi2_test(
-        data: np.ndarray,
-        expectation: np.ndarray,
-        error: np.ndarray,
-        mc_cov: Optional[np.ndarray] = None,
-        toys_size: int = 1000000,
-        max_attempts: int = 3
+    data: np.ndarray,
+    expectation: np.ndarray,
+    error: np.ndarray,
+    mc_cov: Optional[np.ndarray] = None,
+    toys_size: int = 1000000,
+    max_attempts: int = 3,
 ) -> Tuple[float, float, ToyInfoOutputType]:
     """
     Performs a GoF-test using a test statistic based on toy MC sampled
@@ -244,21 +240,20 @@ def toy_chi2_test(
     Parameters
     ----------
     data : np.ndarray
-        Data bin counts. Shape is (`num_bins`,)
+        Data bin counts. Shape is (num_bins,)
     expectation : np.ndarray
-        Expected bin counts. Shape is (`num_bins`,)
+        Expected bin counts. Shape is (num_bins,)
     error : np.ndarray
-        Uncertainty on the expected distribution. Shape is (`num_bins`,)
+        Uncertainty on the expected distribution. Shape is (num_bins,)
     mc_cov: 2D np.ndarray
     toys_size : int
-        Number of toy samples to be drawn from expectation to model the chi2
-        of the expectation. Default is 1000000.
+        Number of toy samples to be drawn from expectation to model the chi2 of the expectation. Default is 1000000.
     max_attempts: Maximal number of tries, each decreasing the toy-size by a factor of 10.
 
     Returns
     -------
     float
-        :math:`\chi^2`
+        chi2
     float
         p-value.
     tuple(bin_counts, bin_edges, chi2_toys)
@@ -269,13 +264,15 @@ def toy_chi2_test(
     while try_count < max_attempts:
         try:
             return _toy_chi2_test(
-                    data=data,
-                    expectation=expectation,
-                    error=error,
-                    mc_cov=mc_cov,
-                    toys_size=int(toys_size * 0.1 ** try_count)
+                data=data,
+                expectation=expectation,
+                error=error,
+                mc_cov=mc_cov,
+                toys_size=int(toys_size * 0.1 ** try_count),
             )
         except IndexError as ie:
             if try_count == max_attempts - 1:
                 raise ie
         try_count += 1
+
+    return 0.0, 0.0, (np.array([]), np.array([]), np.array([]))
