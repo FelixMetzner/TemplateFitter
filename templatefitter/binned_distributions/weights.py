@@ -11,7 +11,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "Weights",
-    "WeightsInputType"
+    "WeightsInputType",
 ]
 
 WeightsInputType = Union[None, float, str, pd.Series, np.ndarray]
@@ -19,20 +19,20 @@ WeightsInputType = Union[None, float, str, pd.Series, np.ndarray]
 
 class Weights:
     def __init__(
-            self,
-            weight_input: WeightsInputType = None,
-            data: Union[None, pd.Series, np.ndarray] = None,
-            data_input: Optional[pd.DataFrame] = None
+        self,
+        weight_input: WeightsInputType = None,
+        data: Union[None, pd.Series, np.ndarray] = None,
+        data_input: Optional[pd.DataFrame] = None,
     ) -> None:
         self._weights = None
         self.check_input_type(weight_input=weight_input)
         self._init_weights(weight_input=weight_input, data=data, data_input=data_input)
 
     def _init_weights(
-            self,
-            weight_input: WeightsInputType,
-            data: Union[None, pd.Series, np.ndarray],
-            data_input: Optional[pd.DataFrame]
+        self,
+        weight_input: WeightsInputType,
+        data: Union[None, pd.Series, np.ndarray],
+        data_input: Optional[pd.DataFrame],
     ) -> None:
         if weight_input is None:
             assert data is not None
@@ -50,17 +50,19 @@ class Weights:
         elif isinstance(weight_input, np.ndarray):
             self._weights = weight_input
         else:
-            raise RuntimeError(f"Got unexpected type for weights: {type(weight_input)}.\n"
-                               f"Should be one of None, str, float, pd.Series, np.ndarray.")
+            raise RuntimeError(
+                f"Got unexpected type for weights: {type(weight_input)}.\n"
+                f"Should be one of None, str, float, pd.Series, np.ndarray."
+            )
 
         assert isinstance(self._weights, np.ndarray)
 
     @classmethod
     def obtain_weights(
-            cls,
-            weight_input: WeightsInputType,
-            data: Union[None, pd.Series, np.ndarray],
-            data_input: Optional[pd.DataFrame]
+        cls,
+        weight_input: WeightsInputType,
+        data: Union[None, pd.Series, np.ndarray],
+        data_input: Optional[pd.DataFrame],
     ) -> np.ndarray:
         instance = cls(weight_input=weight_input, data=data, data_input=data_input)
         return instance.get_weights()
