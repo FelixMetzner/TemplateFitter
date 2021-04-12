@@ -11,8 +11,8 @@ import numpy as np
 import numdifftools as ndt
 
 from iminuit import Minuit
-from scipy.optimize import minimize
 from abc import ABC, abstractmethod
+from scipy.optimize import minimize as scipy_minimize
 
 from typing import Union, Optional, Tuple, List, Dict, Any, Callable, NamedTuple
 
@@ -59,12 +59,12 @@ class MinimizerParameters:
         self._correlation = np.zeros((self._number_of_params, self._number_of_params))
 
     def __str__(self) -> str:
-        data = {  # type: Dict[str, Any]
+        data = {
             "No": list(range(self.num_params)),
             "Name": self._names,
             "Value": self._values,
             "Sym. Err": self.errors,
-        }
+        }  # type: Dict[str, Any]
         return tabulate.tabulate(data, headers="keys")
 
     def get_param_value(self, param_id: Union[int, str]) -> float:
@@ -171,9 +171,11 @@ class MinimizerParameters:
     @values.setter
     def values(self, new_values: np.ndarray) -> None:
         if not len(new_values) == self.num_params:
-            raise ValueError(f"Number of parameter values must be equal to number of parameters:\n"
-                             f"\toriginal number of parameters: {self.num_params}\n"
-                             f"\tnew number of parameters: {len(new_values)}")
+            raise ValueError(
+                f"Number of parameter values must be equal to number of parameters:\n"
+                f"\toriginal number of parameters: {self.num_params}\n"
+                f"\tnew number of parameters: {len(new_values)}"
+            )
         self._values = new_values
 
     @property
@@ -195,8 +197,10 @@ class MinimizerParameters:
     @covariance.setter
     def covariance(self, new_covariance: np.ndarray) -> None:
         if not new_covariance.shape == (self.num_params_not_fixed, self.num_params_not_fixed):
-            raise ValueError(f"Shape of new covariance matrix {new_covariance.shape} must match "
-                             f"the number of not fixed parameters {self.num_params_not_fixed}")
+            raise ValueError(
+                f"Shape of new covariance matrix {new_covariance.shape} must match "
+                f"the number of not fixed parameters {self.num_params_not_fixed}"
+            )
         self._covariance = new_covariance
 
     @property
@@ -207,8 +211,10 @@ class MinimizerParameters:
     @correlation.setter
     def correlation(self, new_correlation: np.ndarray) -> None:
         if not new_correlation.shape == (self.num_params_not_fixed, self.num_params_not_fixed):
-            raise ValueError(f"Shape of new correlation matrix {new_correlation.shape} must match "
-                             f"the number of not fixed parameters {self.num_params_not_fixed}")
+            raise ValueError(
+                f"Shape of new correlation matrix {new_correlation.shape} must match "
+                f"the number of not fixed parameters {self.num_params_not_fixed}"
+            )
         self._correlation = new_correlation
 
     @property
@@ -239,13 +245,13 @@ class MinimizerParameters:
             dict_key_map["values"]: self.values.tolist(),
             dict_key_map["errors"]: self.errors.tolist(),
             dict_key_map["covariance"]: self.covariance.tolist(),
-            dict_key_map["correlation"]: self.correlation.tolist()
+            dict_key_map["correlation"]: self.correlation.tolist(),
         }
         return self_as_dict
 
     @classmethod
     def initialize_from_dict(cls, dictionary: Dict[Any, Any]) -> "MinimizerParameters":
-        km =MinimizerParameters._dict_key_mapping()
+        km = MinimizerParameters._dict_key_mapping()
         assert all(key in dictionary.keys() for key in km.values())
 
         assert len(dictionary[km["names"]]) == dictionary[km["num_params"]]
@@ -271,8 +277,10 @@ class MinimizerParameters:
 
         return instance
 
+
 class MinimizeResult(NamedTuple):
     """NamedTuple storing the minimization results."""
+
     fcn_min_val: float
     params: MinimizerParameters
     success: bool
@@ -328,16 +336,18 @@ class AbstractMinimizer(ABC):
 
         self._fcn_min_val = None
 
-        self._success = None
-        self._status = None
-        self._message = None
+        self._success = None  # type: Optional[bool]
+        self._status = None  # type: Optional[str]
+        self._message = None  # type: Optional[str]
 
     @abstractmethod
     def minimize(
         self,
         initial_param_values: np.ndarray,
         verbose: bool = False,
-        **kwargs,
+        error_def: float = 0.5,
+        additional_args: Optional[Tuple[Any, ...]] = None,
+        get_hesse: bool = True,
     ) -> MinimizeResult:
         pass
 
@@ -443,7 +453,8 @@ class IMinuitMinimizer(AbstractMinimizer):
         initial_param_values: np.ndarray,
         verbose: bool = False,
         error_def: float = 0.5,
-        **kwargs,
+        additional_args: Optional[Tuple[Any, ...]] = None,
+        get_hesse: bool = True,
     ) -> MinimizeResult:
         m = Minuit.from_array_func(
             self._fcn,  # parameter 'fcn'
@@ -466,12 +477,13 @@ class IMinuitMinimizer(AbstractMinimizer):
         self._params.covariance = m.np_matrix()
         self._params.correlation = m.np_matrix(correlation=True)
 
-        self._success = (fmin["is_valid"] and fmin["has_valid_parameters"] and fmin["has_covariance"])
+        self._success = fmin["is_valid"] and fmin["has_valid_parameters"] and fmin["has_covariance"]  # type: bool
 
         # if not self._success:
         #     raise RuntimeError(f"Minimization was not successful.\n" f"{fmin}\n")
 
-        return MinimizeResult(m.fval, self._params, self._success)
+        assert self._success is not None
+        return MinimizeResult(fcn_min_val=m.fval, params=self._params, success=self._success)
 
     def _get_fixed_params(self) -> List[bool]:
         return self.params.fixed_params
@@ -505,7 +517,8 @@ class ScipyMinimizer(AbstractMinimizer):
         self,
         initial_param_values: np.ndarray,
         verbose: bool = False,
-        additional_args: Tuple[Any] = (),
+        error_def: float = 0.5,
+        additional_args: Optional[Tuple[Any, ...]] = None,
         get_hesse: bool = True,
     ) -> MinimizeResult:
         """
@@ -516,6 +529,7 @@ class ScipyMinimizer(AbstractMinimizer):
         initial_param_values : np.ndarray or list of floats
             Initial values for the parameters used as starting values.
             Shape is (`num_params`,).
+        error_def : Not used for this implementation
         additional_args : tuple
             Tuple of additional arguments for the objective function.
         get_hesse : bool
@@ -531,13 +545,17 @@ class ScipyMinimizer(AbstractMinimizer):
         """
         constraints = self._create_constraints(initial_param_values)
 
-        opt_result = minimize(
+        _additional_args = tuple([])  # type: Tuple[Any, ...]
+        if additional_args is not None:
+            _additional_args = additional_args
+
+        opt_result = scipy_minimize(
             fun=self._fcn,
             x0=initial_param_values,
             args=additional_args,
             method="SLSQP",
             bounds=self._param_bounds,
-            constraints=constraints,
+            constraints=constraints,  # type: ignore
             options={"disp": verbose},
         )
 
@@ -547,16 +565,16 @@ class ScipyMinimizer(AbstractMinimizer):
 
         if not opt_result.success:
             raise RuntimeError(
-                f"Minimization was not successful.\n"
-                f"Status: {opt_result.status}\n"
-                f"Message: {opt_result.message}"
+                "Minimization was not successful.\n",
+                f"Status: {opt_result.status}\n",
+                f"Message: {opt_result.message}",
             )
 
         self._params.values = opt_result.x
         self._fcn_min_val = opt_result.fun
 
         if get_hesse:
-            hesse = ndt.Hessian(self._fcn)(self._params.values, *additional_args)
+            hesse = ndt.Hessian(self._fcn)(self._params.values, *_additional_args)
             self._params.covariance = np.linalg.inv(hesse)
             self._params.correlation = cov2corr(self._params.covariance)
             self._params.errors = np.sqrt(np.diag(self._params.covariance))
@@ -564,7 +582,8 @@ class ScipyMinimizer(AbstractMinimizer):
         if verbose:
             print(self._params)
 
-        result = MinimizeResult(opt_result.fun, self._params, self._success)
+        assert self._success is not None
+        result = MinimizeResult(fcn_min_val=opt_result.fun, params=self._params, success=self._success)
 
         return result
 
@@ -588,13 +607,14 @@ class ScipyMinimizer(AbstractMinimizer):
             A list of dictionaries, which is passed to scipy's
             minimize function.
         """
-        constraints = list()
+        constraints = list()  # type: List[Dict[str, Union[str, Callable]]]
 
         for fixed_param in self._get_fixed_params():
-            constraints.append({
+            _constraint_info = {
                 "type": "eq",
                 "fun": lambda x: x[fixed_param] - initial_param_values[fixed_param],
-            })
+            }  # type: Dict[str, Union[str, Callable]]
+            constraints.append(_constraint_info)
 
         return constraints
 
