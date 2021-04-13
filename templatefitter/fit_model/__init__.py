@@ -1,3 +1,9 @@
+from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.model_builder import FitModel
 from templatefitter.fit_model.parameter_handler import ParameterHandler
-from templatefitter.fit_model.template import Template
+
+__all__ = [
+    Template,
+    FitModel,
+    ParameterHandler,
+]

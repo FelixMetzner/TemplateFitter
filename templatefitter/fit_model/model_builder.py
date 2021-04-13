@@ -1922,6 +1922,9 @@ class FitModel:
             (process_name, [t.yield_parameter.index for t in templates])
         return parameter_name
 
+    def get_yield_parameter_names(self) -> Tuple[str, ...]:
+        return self._params.get_yield_parameter_names()
+
     def get_yield(self, process_name: str) -> float:
         parameter_name = self.get_yield_parameter_name_from_process(process_name=process_name)
         return self._params.get_parameters_by_name(parameter_names=parameter_name)

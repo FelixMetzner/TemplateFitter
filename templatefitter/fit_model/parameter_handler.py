@@ -67,7 +67,7 @@ class ParameterHandler:
         self._initial_pars = []  # type: List[float]
         self._np_pars = np.array([])
         self._pars_dict = {}  # type: Dict[str, int]
-        self._inverted_pars_dict = None  # type: Optional[Dict[str, int]]
+        self._inverted_pars_dict = None  # type: Optional[Dict[int, str]]
         self._parameter_infos = []  # type: List[ParameterInfo]
         self._parameters_by_type = {k: [] for k in ParameterHandler.parameter_types}
         self._redefined_params_dict = {}  # type: Dict[str, ParameterResetInfo]
@@ -316,7 +316,9 @@ class ParameterHandler:
 
     def get_name(self, index: int) -> str:
         if self._inverted_pars_dict is None:
-            self._inverted_pars_dict = {v: k for k, v in self._pars_dict.items()}
+            _inverted_dict = {v: k for k, v in self._pars_dict.items()}  # type: Dict[int, str]
+            assert len(_inverted_dict.keys()) == len(self._pars_dict.keys()), (len(_inverted_dict.keys()), len(self._pars_dict.keys()))
+            self._inverted_pars_dict = _inverted_dict
         return self._inverted_pars_dict[index]
 
     def get_parameters_by_slice(self, slicing: Tuple[Optional[int], Optional[int]]) -> np.ndarray:
@@ -360,6 +362,19 @@ class ParameterHandler:
             raise ValueError(f"Trying to get indices for unknown parameter_type {parameter_type}!\n"
                              f"Parameter_type must be one of {ParameterHandler.parameter_types}!")
         return self._parameters_by_type[parameter_type]
+
+    def get_parameter_names_for_type(self, parameter_type: str) -> Tuple[str, ...]:
+        if parameter_type not in ParameterHandler.parameter_types:
+            raise ValueError(f"Trying to get indices for unknown parameter_type {parameter_type}!\n"
+                             f"Parameter_type must be one of {ParameterHandler.parameter_types}!")
+        p_names = tuple([p.name for p in self._parameters_by_type[parameter_type]])
+        p_names_2 = tuple([self._inverted_pars_dict[i] for i in self.get_parameter_indices_for_type(parameter_type=parameter_type)])
+        assert set(p_names) == set(p_names_2), (p_names, p_names_2)
+        assert len(p_names) == len(p_names_2), (p_names, p_names_2)
+        return p_names
+
+    def get_yield_parameter_names(self) -> Tuple[str, ...]:
+        return self.get_parameter_names_for_type(parameter_type=self.yield_parameter_type)
 
     def get_parameter_dictionary(self) -> Dict[str, int]:
         return self._pars_dict
