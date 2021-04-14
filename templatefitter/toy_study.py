@@ -8,7 +8,7 @@ from templatefitter.fitter import TemplateFitter
 from templatefitter.fit_model.model_builder import FitModel
 
 __all__ = [
-    "ToyStudy"
+    "ToyStudy",
 ]
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -32,13 +32,21 @@ class ToyStudy:
 
     """
 
-    def __init__(self, fit_model: FitModel, minimizer_id: str) -> None:
+    def __init__(
+        self,
+        fit_model: FitModel,
+        minimizer_id: str,
+    ) -> None:
         self._fit_model = fit_model
         self._minimizer_id = minimizer_id
         self._toy_results = {"parameters": [], "uncertainties": []}  # type: Dict[str, List[Any]]
         self._is_fitted = False  # type: bool
 
-    def do_experiments(self, n_exp: int = 1000, max_tries: int = 10) -> None:
+    def do_experiments(
+        self,
+        n_exp: int = 1000,
+        max_tries: int = 10,
+    ) -> None:
         """
         Performs fits using the given template and generated
         toy monte carlo (following a poisson distribution) as data.
@@ -60,7 +68,11 @@ class ToyStudy:
 
         self._is_fitted = True
 
-    def _experiment(self, max_tries: int = 10, get_hesse: bool = True) -> None:
+    def _experiment(
+        self,
+        max_tries: int = 10,
+        get_hesse: bool = True,
+    ) -> None:
         """
         Helper function for toy experiments.
         """
@@ -75,7 +87,7 @@ class ToyStudy:
                     update_templates=False,
                     verbose=False,
                     get_hesse=get_hesse,
-                    fix_nui_params=True
+                    fix_nui_params=True,
                 )
 
                 self._toy_results["parameters"].append(result.params.values)
@@ -90,12 +102,12 @@ class ToyStudy:
         raise RuntimeError("Experiment exceed max number of retries.")
 
     def do_background_linearity_test(
-            self,
-            signal_process_name: str,
-            background_process_name: str,
-            limits: Tuple[float, float],
-            n_points: int = 10,
-            n_exp: int = 200
+        self,
+        signal_process_name: str,
+        background_process_name: str,
+        limits: Tuple[float, float],
+        n_points: int = 10,
+        n_exp: int = 200,
     ) -> Tuple[np.ndarray, List[float], List[float]]:
         """
         Parameters
@@ -143,11 +155,11 @@ class ToyStudy:
         return param_points, param_fit_results, param_fit_errors
 
     def do_linearity_test(
-            self,
-            process_name: str,
-            limits: Tuple[float, float],
-            n_points: int = 10,
-            n_exp: int = 200
+        self,
+        process_name: str,
+        limits: Tuple[float, float],
+        n_points: int = 10,
+        n_exp: int = 200,
     ) -> Tuple[np.ndarray, List[float], List[float]]:
 
         """
@@ -174,7 +186,7 @@ class ToyStudy:
             background_process_name=process_name,
             limits=limits,
             n_points=n_points,
-            n_exp=n_exp
+            n_exp=n_exp,
         )
 
     @property
@@ -189,13 +201,17 @@ class ToyStudy:
     @property
     def result_uncertainties(self) -> np.ndarray:
         """
-        np.ndarray: A 2D array of uncertainties fo the fit
-        results for the parameters of the likelihood.
+        Returns
+        -------
+        np.ndarray: A 2D array of uncertainties of the fit results for the parameters of the likelihood.
         """
         self._check_state()
         return np.array(self._toy_results["uncertainties"])
 
-    def get_toy_results(self, process_name: str) -> Tuple[np.ndarray, np.ndarray]:
+    def get_toy_results(
+        self,
+        process_name: str,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Returns results from the toy Monte Carlo study.
 
@@ -224,11 +240,14 @@ class ToyStudy:
 
         return parameters, uncertainties
 
-    def get_toy_result_pulls(self, process_name: str) -> np.ndarray:
+    def get_toy_result_pulls(
+        self,
+        process_name: str,
+    ) -> np.ndarray:
         """
         Returns pulls of the results from the toy Monte Carlo study. The pull is defined as
 
-        :math:`p=\\frac{\\nu^{\mathrm{fit}} - \\nu^{\mathrm{exp}}}{\sigma_{\\nu^{\mathrm{exp}}}}`,
+        p = nu_fit - nu_exp / sigma(nu_exp),
 
         and should follow a standard normal distribution.
 
@@ -262,10 +281,7 @@ class ToyStudy:
         RuntimeError
         """
         if not self._is_fitted:
-            raise RuntimeError(
-                "Toy experiments have not yet been performed. "
-                " Execute 'do_experiments' first."
-            )
+            raise RuntimeError("Toy experiments have not yet been performed. " " Execute 'do_experiments' first.")
 
     def _reset_state(self) -> None:
         """

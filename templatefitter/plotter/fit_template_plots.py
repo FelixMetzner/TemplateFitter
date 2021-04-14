@@ -38,11 +38,15 @@ class FitTemplatePlot(HistogramPlot):
     required_hist_key = "template"
     hist_key = required_hist_key
 
-    def __init__(self, variable: HistVariable, binning: Binning) -> None:
+    def __init__(
+        self,
+        variable: HistVariable,
+        binning: Binning,
+    ) -> None:
         super().__init__(variable=variable)
 
         self._has_component = False  # type: bool
-        self._binning = binning
+        self._binning = binning  # type: Binning
 
     @property
     def binning(self) -> Optional[Binning]:
@@ -86,7 +90,7 @@ class FitTemplatePlot(HistogramPlot):
     ) -> Any:
         self._check_required_histograms()
 
-        bin_scaling = 1. / np.around(self.bin_widths / self.minimal_bin_width, decimals=0)
+        bin_scaling = 1.0 / np.around(self.bin_widths / self.minimal_bin_width, decimals=0)
 
         template_bin_counts = self._histograms[self.hist_key].get_bin_counts(factor=bin_scaling)
         assert isinstance(template_bin_counts, list) and len(template_bin_counts) == 1, template_bin_counts
@@ -94,8 +98,8 @@ class FitTemplatePlot(HistogramPlot):
         mc_sum_bin_error_sq = self._histograms[self.hist_key].get_statistical_uncertainty_per_bin()
 
         bar_bottom = template_bin_counts[0] - np.sqrt(mc_sum_bin_error_sq)
-        height_corr = np.where(bar_bottom < 0., bar_bottom, 0.)
-        bar_bottom[bar_bottom < 0.] = 0.
+        height_corr = np.where(bar_bottom < 0.0, bar_bottom, 0.0)
+        bar_bottom[bar_bottom < 0.0] = 0.0
         bar_height = 2 * np.sqrt(mc_sum_bin_error_sq) - height_corr
 
         ax1.hist(
@@ -107,7 +111,7 @@ class FitTemplatePlot(HistogramPlot):
             lw=0.3,
             color=self._histograms[self.hist_key].colors,
             label=self._histograms[self.hist_key].labels,
-            histtype='stepfilled',
+            histtype="stepfilled",
         )
 
         ax1.bar(
@@ -123,17 +127,26 @@ class FitTemplatePlot(HistogramPlot):
         )
 
         if draw_legend:
-            self.draw_legend(axis=ax1, inside=legend_inside, loc=legend_loc, ncols=legend_cols,
-                             font_size="smaller", y_axis_scale=y_scale)
+            self.draw_legend(
+                axis=ax1,
+                inside=legend_inside,
+                loc=legend_loc,
+                ncols=legend_cols,
+                font_size="smaller",
+                y_axis_scale=y_scale,
+            )
 
         ax1.set_ylabel(self._get_y_label(normed=False), plot_style.ylabel_pos)
         ax1.set_xlabel(self._variable.x_label, plot_style.xlabel_pos)
 
     def _check_required_histograms(self) -> None:
         if self.required_hist_key not in self._histograms.histogram_keys:
-            raise RuntimeError(f"The required histogram key '{self.required_hist_key}' is not available!\n"
-                               f"Available histogram keys: {list(self._histograms.keys())}\n"
-                               f"Required histogram keys: {self.required_hist_key}")
+            raise RuntimeError(
+                f"The required histogram key '{self.required_hist_key}' is not available!\n"
+                f"Available histogram keys: {list(self._histograms.keys())}\n"
+                f"Required histogram keys: {self.required_hist_key}"
+            )
+
 
 class FitTemplates2DHeatMapPlot:
     pass
@@ -161,11 +174,15 @@ class FitTemplatesPlotter:
         output_dir_path: Optional[PathType] = None,
         output_name_tag: Optional[str] = None,
     ) -> Dict[str, List[PathType]]:
-        output_lists = {"pdf": [], "png": []}
+        output_lists = {
+            "pdf": [],
+            "png": [],
+        }  # type: Dict[str, List[PathType]]
 
         if (output_dir_path is None) != (output_name_tag is None):
-            raise ValueError(f"Parameter 'output_name_tag' and 'output_dir_path' must either both be provided "
-                             f"or both set to None!")
+            raise ValueError(
+                "Parameter 'output_name_tag' and 'output_dir_path' must either both be provided or both set to None!"
+            )
 
         for mc_channel in self._fit_model.mc_channels_to_plot:
             for dimension in range(mc_channel.binning.dimensions):
@@ -174,7 +191,9 @@ class FitTemplatesPlotter:
 
                 for template in mc_channel.templates:
                     current_plot = FitTemplatePlot(  # TODO
-                        variable=self.channel_variables(dimension=dimension)[mc_channel.name],  # TODO: channel_variables not available here... maybe implement a base function? Maybe use subsets_plotter for this?
+                        variable=self.channel_variables(dimension=dimension)[
+                            mc_channel.name
+                        ],  # TODO: channel_variables not available here... maybe implement a base function? Maybe use subsets_plotter for this?
                         binning=current_binning,
                     )
 
@@ -207,20 +226,27 @@ class FitTemplatesPlotter:
                         template_info = f"{mc_channel.name}_template_{template.process_name}{add_info}"
                         filename = f"{self.plot_name_prefix}_{output_name_tag}_dim_{dimension}_{template_info}"
 
-                        export(fig=fig, filename=filename, target_dir=output_dir_path)
+                        export(fig=fig, filename=filename, target_dir=output_dir_path, close_figure=True)
                         output_lists["pdf"].append(os.path.join(output_dir_path, f"{filename}.pdf"))
                         output_lists["png"].append(os.path.join(output_dir_path, f"{filename}.png"))
 
         return output_lists
 
-    def variable(self, dimension: int) -> HistVariable:
+    def variable(
+        self,
+        dimension: int,
+    ) -> HistVariable:
         return self._variables[dimension]
 
     @property
     def variables(self) -> Tuple[HistVariable, ...]:
         return self._variables
 
-    def _get_plot_title(self, template: Template, channel: Channel) -> str:
+    def _get_plot_title(
+        self,
+        template: Template,
+        channel: Channel,
+    ) -> str:
         template_label = self._get_template_label(template=template)
 
         if self._fit_model.number_of_channels > 1:
@@ -229,30 +255,37 @@ class FitTemplatesPlotter:
         else:
             return template_label
 
-    def _get_template_color(self, key: str, original_color: Optional[str]) -> Optional[str]:
+    def _get_template_color(
+        self,
+        key: str,
+        original_color: Optional[str],
+    ) -> Optional[str]:
         return self._get_attribute_from_optional_arguments_dict(
-            attribute_name="template_color_dict",
-            key=key,
-            default_value=original_color
+            attribute_name="template_color_dict", key=key, default_value=original_color
         )
 
-    def _get_template_label(self, template: Template) -> Optional[str]:
+    def _get_template_label(
+        self,
+        template: Template,
+    ) -> Optional[str]:
         return self._get_attribute_from_optional_arguments_dict(
-            attribute_name="mc_label_dict",
-            key=template.process_name,
-            default_value=template.latex_label
+            attribute_name="mc_label_dict", key=template.process_name, default_value=template.latex_label
         )
 
-    def _get_channel_label(self, channel: Channel) -> Optional[str]:
+    def _get_channel_label(
+        self,
+        channel: Channel,
+    ) -> Optional[str]:
         if "channel_label_dict" in self._optional_arguments_dict:
             channel_label_dict = self._optional_arguments_dict["channel_label_dict"]
             assert isinstance(channel_label_dict, dict), (channel_label_dict, type(channel_label_dict))
             assert all(isinstance(k, str) for k in channel_label_dict.keys()), list(channel_label_dict.keys())
             assert all(isinstance(v, str) for v in channel_label_dict.values()), list(channel_label_dict.values())
             if channel.name not in channel_label_dict.keys():
-                raise KeyError(f"No entry for the channel {channel.name} in the provided channel_label_dict!\n"
-                               f"channel_label_dict:\n\t"
-                               + "\n\t".join([f"{k}: {v}" for k, v in channel_label_dict.items()]))
+                raise KeyError(
+                    f"No entry for the channel {channel.name} in the provided channel_label_dict!\n"
+                    f"channel_label_dict:\n\t" + "\n\t".join([f"{k}: {v}" for k, v in channel_label_dict.items()])
+                )
             return channel_label_dict[channel.name]
         elif channel.latex_label is not None:
             return channel.latex_label
@@ -271,9 +304,10 @@ class FitTemplatesPlotter:
             assert all(isinstance(k, str) for k in attribute_dict.keys()), list(attribute_dict.keys())
             assert all(isinstance(v, str) for v in attribute_dict.values()), list(attribute_dict.values())
             if key not in attribute_dict.keys():
-                raise KeyError(f"No entry for the key {key} in the provided attribute dictionary  {attribute_name}!\n"
-                               f"{attribute_name} dictionary:\n\t"
-                               + "\n\t".join([f"{k}: {v}" for k, v in attribute_dict.items()]))
+                raise KeyError(
+                    f"No entry for the key {key} in the provided attribute dictionary  {attribute_name}!\n"
+                    f"{attribute_name} dictionary:\n\t" + "\n\t".join([f"{k}: {v}" for k, v in attribute_dict.items()])
+                )
             return attribute_dict[key]
         else:
             return default_value

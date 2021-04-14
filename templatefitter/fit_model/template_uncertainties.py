@@ -6,7 +6,9 @@ import logging
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["TemplateUncertainties"]
+__all__ = [
+    "TemplateUncertainties",
+]
 
 
 # TODO: Implement

@@ -80,7 +80,7 @@ class MinimizerParameters:
         -------
         float
         """
-        param_index = self.param_id_to_index(param_id)
+        param_index = self.param_id_to_index(param_id=param_id)
         return self.values[param_index]
 
     def get_param_error(self, param_id: Union[int, str]) -> float:
@@ -96,10 +96,13 @@ class MinimizerParameters:
         -------
         float
         """
-        param_index = self.param_id_to_index(param_id)
+        param_index = self.param_id_to_index(param_id=param_id)
         return self.errors[param_index]
 
-    def __getitem__(self, param_id: Union[int, str]) -> Tuple[float, float]:
+    def __getitem__(
+        self,
+        param_id: Union[int, str],
+    ) -> Tuple[float, float]:
         """
         Gets the value and error of the specified parameter.
 
@@ -115,7 +118,7 @@ class MinimizerParameters:
         float
             Parameter error.
         """
-        param_index = self.param_id_to_index(param_id)
+        param_index = self.param_id_to_index(param_id=param_id)
         return self.values[param_index], self.errors[param_index]
 
     def param_id_to_index(self, param_id: Union[int, str]) -> int:
@@ -141,8 +144,11 @@ class MinimizerParameters:
                 f"The provided value {param_id} of type {type(param_id)} is not valid!"
             )
 
-    def set_param_fixed(self, param_id: Union[int, str]) -> None:
-        param_index = self.param_id_to_index(param_id)
+    def set_param_fixed(
+        self,
+        param_id: Union[int, str],
+    ) -> None:
+        param_index = self.param_id_to_index(param_id=param_id)
         self._fixed_params[param_index] = True
 
     def release_params(self) -> None:
@@ -169,7 +175,10 @@ class MinimizerParameters:
         return self._values
 
     @values.setter
-    def values(self, new_values: np.ndarray) -> None:
+    def values(
+        self,
+        new_values: np.ndarray,
+    ) -> None:
         if not len(new_values) == self.num_params:
             raise ValueError(
                 f"Number of parameter values must be equal to number of parameters:\n"
@@ -184,7 +193,10 @@ class MinimizerParameters:
         return self._errors
 
     @errors.setter
-    def errors(self, new_errors: np.ndarray) -> None:
+    def errors(
+        self,
+        new_errors: np.ndarray,
+    ) -> None:
         if not len(new_errors) == self.num_params:
             raise ValueError("Number of parameter errors must be equal to number of parameters")
         self._errors = new_errors
@@ -195,7 +207,10 @@ class MinimizerParameters:
         return self._covariance
 
     @covariance.setter
-    def covariance(self, new_covariance: np.ndarray) -> None:
+    def covariance(
+        self,
+        new_covariance: np.ndarray,
+    ) -> None:
         if not new_covariance.shape == (self.num_params_not_fixed, self.num_params_not_fixed):
             raise ValueError(
                 f"Shape of new covariance matrix {new_covariance.shape} must match "
@@ -209,7 +224,10 @@ class MinimizerParameters:
         return self._correlation
 
     @correlation.setter
-    def correlation(self, new_correlation: np.ndarray) -> None:
+    def correlation(
+        self,
+        new_correlation: np.ndarray,
+    ) -> None:
         if not new_correlation.shape == (self.num_params_not_fixed, self.num_params_not_fixed):
             raise ValueError(
                 f"Shape of new correlation matrix {new_correlation.shape} must match "
@@ -250,7 +268,10 @@ class MinimizerParameters:
         return self_as_dict
 
     @classmethod
-    def initialize_from_dict(cls, dictionary: Dict[Any, Any]) -> "MinimizerParameters":
+    def initialize_from_dict(
+        cls,
+        dictionary: Dict[Any, Any],
+    ) -> "MinimizerParameters":
         km = MinimizerParameters._dict_key_mapping()
         assert all(key in dictionary.keys() for key in km.values())
 
@@ -293,14 +314,21 @@ class MinimizeResult(NamedTuple):
             "success": self.success,
         }
 
-    def save_to(self, path: PathType, overwrite: bool = False) -> None:
+    def save_to(
+        self,
+        path: PathType,
+        overwrite: bool = False,
+    ) -> None:
         if not overwrite and os.path.exists(path=path):
             raise RuntimeError(f"Trying to overwrite existing file {path}, but overwrite is set to False!")
         with open(file=path, mode="w") as fp:
             json.dump(obj=self.as_dict, fp=fp, indent=2)
 
     @classmethod
-    def load_from(cls, path: PathType) -> "MinimizeResult":
+    def load_from(
+        cls,
+        path: PathType,
+    ) -> "MinimizeResult":
         assert os.path.exists(path=path), path
         with open(file=path, mode="r") as fp:
             restored_dict = json.load(fp)
@@ -388,7 +416,7 @@ class AbstractMinimizer(ABC):
             given parameter. A value of `None` corresponds to no
             boundary.
         """
-        param_index = self.params.param_id_to_index(param_id)
+        param_index = self.params.param_id_to_index(param_id=param_id)
         self._param_bounds[param_index] = bounds
 
     @property
@@ -588,9 +616,12 @@ class ScipyMinimizer(AbstractMinimizer):
         return result
 
     def _get_fixed_params(self) -> List[int]:
-        return [index for index, fixed in enumerate(self.params.fixed_params) if fixed]
+        return [p_id for p_id, fixed in enumerate(self.params.fixed_params) if fixed]
 
-    def _create_constraints(self, initial_param_values: np.ndarray) -> List[Dict[str, Union[str, Callable]]]:
+    def _create_constraints(
+        self,
+        initial_param_values: np.ndarray,
+    ) -> List[Dict[str, Union[str, Callable]]]:
         """
         Creates the dictionary used by scipy's minimize function
         to constrain parameters. The dictionary is used to fix

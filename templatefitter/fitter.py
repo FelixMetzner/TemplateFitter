@@ -175,8 +175,8 @@ class TemplateFitter:
 
         """
 
-        result = fit_result.params.get_param_value(param_id)
-        param_index = fit_result.params.param_id_to_index(param_id)
+        result = fit_result.params.get_param_value(param_id=param_id)
+        param_index = fit_result.params.param_id_to_index(param_id=param_id)
         hesse_error = fit_result.params.errors[param_index]
         hesse_approx = 0.5 * (1 / hesse_error) ** 2 * (profile_points - result) ** 2 + fit_result.fcn_min_val
 
