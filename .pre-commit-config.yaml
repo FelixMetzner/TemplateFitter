@@ -32,3 +32,4 @@ repos:
     hooks:
     -   id: codespell
         args: ["-I", "codespell.txt"]
+exclude: ^tests/
