@@ -33,13 +33,16 @@ class HistogramPlot(ABC):
     Base class for histogram plots.
     """
 
-    legend_cols_default = 1
-    legend_loc_default = plt.rcParams["legend.loc"]
-    legend_font_size_default = plt.rcParams["legend.fontsize"]
+    legend_cols_default = 1  # type: int
+    legend_loc_default = plt.rcParams["legend.loc"]  # type: Union[int, str]
+    legend_font_size_default = plt.rcParams["legend.fontsize"]  # type: Union[int, str]
 
-    def __init__(self, variable: HistVariable) -> None:
+    def __init__(
+        self,
+        variable: HistVariable,
+    ) -> None:
         self._variable = variable  # type: HistVariable
-        self._histograms = HistogramContainer()
+        self._histograms = HistogramContainer()  # type: HistogramContainer
 
         self._last_figure = None  # type: Optional[FigureType]
 
@@ -75,7 +78,7 @@ class HistogramPlot(ABC):
             systematics=systematics,
             data_column_names=self.variable.df_label,
             color=color,
-            alpha=alpha
+            alpha=alpha,
         )
 
     def _add_prebinned_component(
@@ -101,8 +104,10 @@ class HistogramPlot(ABC):
                 assert len(data_column_names) == 1, (len(data_column_names), data_column_names)
                 assert data_column_names[0] == self.variable.df_label, (data_column_names[0], self.variable.df_label)
             else:
-                raise RuntimeError(f"Unexpected type for argument 'data_column_names':\n"
-                                   f"Should be None, str or List[str], but is {type(data_column_names)}!")
+                raise RuntimeError(
+                    f"Unexpected type for argument 'data_column_names':\n"
+                    f"Should be None, str or List[str], but is {type(data_column_names)}!"
+                )
 
         self._histograms[histogram_key].add_histogram_component(
             label=label,
@@ -115,7 +120,7 @@ class HistogramPlot(ABC):
         )
 
     @property
-    def binning(self) -> Optional[Binning]:
+    def binning(self) -> Binning:
         return self._histograms.common_binning
 
     @property
@@ -153,7 +158,10 @@ class HistogramPlot(ABC):
     def reset_binning_to_use_raw_data_range(self) -> None:
         self._histograms.reset_binning_to_use_raw_data_range_of_all()
 
-    def reset_binning_to_use_raw_data_range_of_histogram(self, histogram_key: str) -> None:
+    def reset_binning_to_use_raw_data_range_of_histogram(
+        self,
+        histogram_key: str,
+    ) -> None:
         self._histograms.reset_binning_to_use_raw_data_range_of_key(key=histogram_key)
 
     def apply_adaptive_binning_based_on_histogram(
@@ -168,7 +176,11 @@ class HistogramPlot(ABC):
             minimal_number_of_bins=minimal_number_of_bins,
         )
 
-    def _get_y_label(self, normed: bool, evts_or_cands: str = "Events") -> str:
+    def _get_y_label(
+        self,
+        normed: bool,
+        evts_or_cands: str = "Events",
+    ) -> str:
         if normed:
             return "Normalized in arb. units"
         elif self._variable.use_log_scale:
@@ -207,7 +219,7 @@ class HistogramPlot(ABC):
                 axis.set_ylim(bottom=y_limits[0], top=y_axis_scale * y_limits[1])
         else:
             if bbox_to_anchor_tuple is None:
-                bbox_to_anchor_tuple = (1., 1.)
+                bbox_to_anchor_tuple = (1.0, 1.0)
 
             axis.legend(frameon=False, loc=loc, ncol=ncols, bbox_to_anchor=bbox_to_anchor_tuple)
 

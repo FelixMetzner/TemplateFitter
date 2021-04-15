@@ -7,11 +7,12 @@ import logging
 import warnings
 import numpy as np
 
-from typing import Optional, Union, Tuple
 from matplotlib import pyplot as plt, figure
 from uncertainties import unumpy as unp, ufloat
+from typing import Optional, Union, Tuple, List
 
 from templatefitter.plotter import plot_style
+from templatefitter.plotter.histogram import Histogram
 from templatefitter.plotter.plot_utilities import AxesType
 from templatefitter.plotter.histogram_variable import HistVariable
 from templatefitter.plotter.histogram_plot_base import HistogramPlot
@@ -37,17 +38,20 @@ DataMCComparisonOutputType = Tuple[Optional[float], Optional[int], Optional[floa
 
 
 class SimpleHistogramPlot(HistogramPlot):
-    def __init__(self, variable: HistVariable) -> None:
+    def __init__(
+        self,
+        variable: HistVariable,
+    ) -> None:
         super().__init__(variable=variable)
 
     def add_component(
-            self,
-            label: str,
-            data: DataInputType,
-            weights: WeightsInputType = None,
-            hist_type: Optional[str] = None,
-            color: Optional[str] = None,
-            alpha: float = 1.0
+        self,
+        label: str,
+        data: DataInputType,
+        weights: WeightsInputType = None,
+        hist_type: Optional[str] = None,
+        color: Optional[str] = None,
+        alpha: float = 1.0,
     ) -> None:
         auto_histogram_key = f"hist_{self.number_of_histograms}"
         self._add_component(
@@ -58,17 +62,17 @@ class SimpleHistogramPlot(HistogramPlot):
             systematics=None,
             hist_type=hist_type,
             color=color,
-            alpha=alpha
+            alpha=alpha,
         )
 
     def plot_on(
-            self,
-            ax: Optional[AxesType] = None,
-            draw_legend: bool = True,
-            legend_inside: bool = True,
-            y_axis_scale: float = 1.3,
-            normed: bool = False,
-            y_label: str = "Events",
+        self,
+        ax: Optional[AxesType] = None,
+        draw_legend: bool = True,
+        legend_inside: bool = True,
+        y_axis_scale: float = 1.3,
+        normed: bool = False,
+        y_label: str = "Events",
     ) -> AxesType:
         if ax is None:
             _, ax = plt.subplots()
@@ -102,16 +106,19 @@ class SimpleHistogramPlot(HistogramPlot):
 
 
 class StackedHistogramPlot(HistogramPlot):
-    def __init__(self, variable: HistVariable) -> None:
+    def __init__(
+        self,
+        variable: HistVariable,
+    ) -> None:
         super().__init__(variable=variable)
 
     def add_component(
-            self,
-            label: str,
-            data: DataInputType,
-            weights: WeightsInputType = None,
-            color: Optional[str] = None,
-            alpha: float = 1.0
+        self,
+        label: str,
+        data: DataInputType,
+        weights: WeightsInputType = None,
+        color: Optional[str] = None,
+        alpha: float = 1.0,
     ) -> None:
         self._add_component(
             label=label,
@@ -125,19 +132,19 @@ class StackedHistogramPlot(HistogramPlot):
         )
 
     def plot_on(
-            self,
-            ax: Optional[AxesType] = None,
-            draw_legend: bool = True,
-            legend_inside: bool = True,
-            y_axis_scale: float = 1.6,
-            y_label: str = "Events"
+        self,
+        ax: Optional[AxesType] = None,
+        draw_legend: bool = True,
+        legend_inside: bool = True,
+        y_axis_scale: float = 1.6,
+        y_label: str = "Events",
     ) -> AxesType:
 
         if ax is None:
             _, ax = plt.subplots()
         self._last_figure = ax.get_figure()
 
-        histogram = list(self._histograms.histograms)[0]
+        histogram = list(self._histograms.histograms)[0]  # type: Histogram
 
         ax.hist(
             x=[histogram.binning.bin_mids[0] for _ in histogram.get_bin_counts()],
@@ -147,7 +154,7 @@ class StackedHistogramPlot(HistogramPlot):
             edgecolor="black",
             lw=0.3,
             color=histogram.colors,
-            label=histogram.labels,
+            label=histogram.labels,  # type: ignore  # The type here is correct!
             histtype=histogram.hist_type,
         )
 
@@ -163,24 +170,24 @@ class StackedHistogramPlot(HistogramPlot):
 
 
 class DataMCHistogramPlot(HistogramPlot):
-    valid_styles = ["stacked", "summed"]
-    valid_ratio_types = ["normal", "vs_uncert"]
-    valid_gof_methods = ["pearson", "cowan", "toys"]
+    valid_styles = ["stacked", "summed"]  # type: List[str]
+    valid_ratio_types = ["normal", "vs_uncert"]  # type: List[str]
+    valid_gof_methods = ["pearson", "cowan", "toys"]  # type: List[str]
 
-    data_key = "data_histogram"
-    mc_key = "mc_histogram"
+    data_key = "data_histogram"  # type: str
+    mc_key = "mc_histogram"  # type: str
 
-    legend_cols_default = 2
-    legend_loc_default = 0
+    legend_cols_default = 2  # type: int
+    legend_loc_default = 0  # type: int
 
     def __init__(self, variable: HistVariable) -> None:
         super().__init__(variable=variable)
 
     def add_data_component(
-            self,
-            label: str,
-            data: DataInputType,
-            color: str = plot_style.KITColors.kit_black
+        self,
+        label: str,
+        data: DataInputType,
+        color: str = plot_style.KITColors.kit_black,
     ) -> None:
         if self.data_key in self._histograms.histogram_keys:
             raise RuntimeError(f"A data component has already been added to {self.__class__.__name__} instance!")
@@ -196,12 +203,12 @@ class DataMCHistogramPlot(HistogramPlot):
         )
 
     def add_mc_component(
-            self,
-            label: str,
-            data: DataInputType,
-            weights: WeightsInputType = None,
-            systematics: SystematicsInputType = None,
-            color: Optional[str] = None
+        self,
+        label: str,
+        data: DataInputType,
+        weights: WeightsInputType = None,
+        systematics: SystematicsInputType = None,
+        color: Optional[str] = None,
     ) -> None:
         self._add_component(
             label=label,
@@ -216,12 +223,12 @@ class DataMCHistogramPlot(HistogramPlot):
 
     # Same as add_mc_component method; just added to satisfy requirements from base class.
     def add_component(
-            self,
-            label: str,
-            data: DataInputType,
-            weights: WeightsInputType = None,
-            systematics: SystematicsInputType = None,
-            color: Optional[str] = None
+        self,
+        label: str,
+        data: DataInputType,
+        weights: WeightsInputType = None,
+        systematics: SystematicsInputType = None,
+        color: Optional[str] = None,
     ) -> None:
         self._add_component(
             label=label,
@@ -235,24 +242,24 @@ class DataMCHistogramPlot(HistogramPlot):
         )
 
     def plot_on(
-            self,
-            ax1: Optional[AxesType] = None,
-            ax2: Optional[AxesType] = None,
-            normalize_to_data: bool = True,
-            style: str = "stacked",
-            ratio_type: str = "normal",
-            gof_check_method: Optional[str] = None,
-            include_sys: bool = False,
-            y_label: str = "Events",
-            sum_color: str = plot_style.KITColors.kit_purple,
-            draw_legend: bool = True,
-            legend_inside: bool = True,
-            legend_cols: Optional[int] = None,
-            legend_loc: Optional[Union[int, str]] = None,
-            markers_with_width: bool = True,
-            plot_outlier_indicators: bool = True,
-            adaptive_binning: bool = False,
-            y_scale: float = 1.1,
+        self,
+        ax1: Optional[AxesType] = None,
+        ax2: Optional[AxesType] = None,
+        normalize_to_data: bool = True,
+        style: str = "stacked",
+        ratio_type: str = "normal",
+        gof_check_method: Optional[str] = None,
+        include_sys: bool = False,
+        y_label: str = "Events",
+        sum_color: str = plot_style.KITColors.kit_purple,
+        draw_legend: bool = True,
+        legend_inside: bool = True,
+        legend_cols: Optional[int] = None,
+        legend_loc: Optional[Union[int, str]] = None,
+        markers_with_width: bool = True,
+        plot_outlier_indicators: bool = True,
+        adaptive_binning: bool = False,
+        y_scale: float = 1.1,
     ) -> DataMCComparisonOutputType:
         ax1, ax2 = self._check_axes_input(ax1=ax1, ax2=ax2)
         self._last_figure = ax1.get_figure()
@@ -261,7 +268,7 @@ class DataMCHistogramPlot(HistogramPlot):
 
         plot_outlier_indicators = self._check_outlier_indicator_setting(
             outlier_indicator_setting=plot_outlier_indicators,
-            ratio_type=ratio_type
+            ratio_type=ratio_type,
         )
 
         if adaptive_binning:
@@ -271,25 +278,24 @@ class DataMCHistogramPlot(HistogramPlot):
                 minimal_number_of_bins=7,
             )
 
-        bin_scaling = 1. / np.around(self.bin_widths / self.minimal_bin_width, decimals=0)
+        bin_scaling = 1.0 / np.around(self.bin_widths / self.minimal_bin_width, decimals=0)  # type: np.ndarray
 
         mc_bin_count, mc_uncert, norm_factor = self.get_bin_info_for_component(
             component_key=self.mc_key,
             data_key=self.data_key,
             normalize_to_data=normalize_to_data,
             include_sys=include_sys,
-        )
+        )  # type: np.ndarray, np.ndarray, float
 
-        data_bin_count = self._histograms[self.data_key].get_bin_count_of_component(index=0)
+        data_bin_count = self._histograms[self.data_key].get_bin_count_of_component(index=0)  # type: np.ndarray
 
         if style.lower() == "stacked":
             if len(self._histograms[self.mc_key].labels) > 1:
-                stacked_component_labels = self._histograms[self.mc_key].labels
+                stacked_component_labels = self._histograms[self.mc_key].labels  # type: Tuple[str, ...]
             else:
-                stacked_component_labels = tuple([
-                    l + r" $\times$ " + f"{norm_factor:.2f}"
-                    for l in self._histograms[self.mc_key].labels
-                ])
+                stacked_component_labels = tuple(
+                    [h_label + r" $\times$ " + f"{norm_factor:.2f}" for h_label in self._histograms[self.mc_key].labels]
+                )
 
             ax1.hist(
                 x=[self.bin_mids for _ in range(self._histograms[self.mc_key].number_of_components)],
@@ -299,8 +305,8 @@ class DataMCHistogramPlot(HistogramPlot):
                 edgecolor="black",
                 lw=0.3,
                 color=self._histograms[self.mc_key].colors,
-                label=stacked_component_labels,
-                histtype='stepfilled',
+                label=stacked_component_labels,  # type: ignore  # The type here is correct!
+                histtype="stepfilled",
             )
 
             ax1.bar(
@@ -347,11 +353,22 @@ class DataMCHistogramPlot(HistogramPlot):
 
         if draw_legend:
             if style == "stacked":
-                self.draw_legend(axis=ax1, inside=legend_inside, loc=legend_loc, ncols=legend_cols,
-                                 font_size="smaller", y_axis_scale=y_scale)
+                self.draw_legend(
+                    axis=ax1,
+                    inside=legend_inside,
+                    loc=legend_loc,
+                    ncols=legend_cols,
+                    font_size="smaller",
+                    y_axis_scale=y_scale,
+                )
             else:
-                self.draw_legend(axis=ax1, inside=legend_inside, loc=legend_loc, ncols=legend_cols,
-                                 y_axis_scale=y_scale)
+                self.draw_legend(
+                    axis=ax1,
+                    inside=legend_inside,
+                    loc=legend_loc,
+                    ncols=legend_cols,
+                    y_axis_scale=y_scale,
+                )
 
         ax1.set_ylabel(self._get_y_label(normed=False, evts_or_cands=y_label), plot_style.ylabel_pos)
         ax2.set_xlabel(self._variable.x_label, plot_style.xlabel_pos)
@@ -374,31 +391,35 @@ class DataMCHistogramPlot(HistogramPlot):
         return chi2, ndf, p_val, toy_output
 
     def get_bin_info_for_component(
-            self,
-            component_key: Optional[str] = None,
-            data_key: Optional[str] = None,
-            normalize_to_data: bool = False,
-            include_sys: bool = False
+        self,
+        component_key: Optional[str] = None,
+        data_key: Optional[str] = None,
+        normalize_to_data: bool = False,
+        include_sys: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, float]:
         if component_key is None:
             component_key = self.mc_key
         if component_key not in self._histograms.histogram_keys:
-            raise KeyError(f"Histogram key '{component_key}' was not added to the {self.__class__.__name__} "
-                           f"instance!\nAvailable histogram keys are: {self._histograms.histogram_keys}")
+            raise KeyError(
+                f"Histogram key '{component_key}' was not added to the {self.__class__.__name__} "
+                f"instance!\nAvailable histogram keys are: {self._histograms.histogram_keys}"
+            )
 
         if data_key is None:
             data_key = self.data_key
         if data_key not in self._histograms.histogram_keys:
-            raise KeyError(f"Histogram key '{data_key}' was not added to the {self.__class__.__name__} "
-                           f"instance!\nAvailable histogram keys are: {self._histograms.histogram_keys}")
+            raise KeyError(
+                f"Histogram key '{data_key}' was not added to the {self.__class__.__name__} "
+                f"instance!\nAvailable histogram keys are: {self._histograms.histogram_keys}"
+            )
 
         component_bin_count = np.sum(np.array(self._histograms[component_key].get_bin_counts()), axis=0)
 
-        if normalize_to_data:
+        if not normalize_to_data:
+            norm_factor = 1.0  # type: float
+        else:
             norm_factor = self._histograms[data_key].raw_data_size / self._histograms[component_key].raw_weight_sum
             component_bin_count *= norm_factor
-        else:
-            norm_factor = 1.
 
         component_stat_uncert = self._histograms[component_key].get_statistical_uncertainty_per_bin(
             normalization_factor=norm_factor
@@ -417,11 +438,11 @@ class DataMCHistogramPlot(HistogramPlot):
         return component_bin_count, component_uncert, norm_factor
 
     def do_goodness_of_fit_test(
-            self,
-            method: Optional[str],
-            mc_bin_count: np.ndarray,
-            data_bin_count: np.ndarray,
-            mc_is_normalized_to_data: bool
+        self,
+        method: Optional[str],
+        mc_bin_count: np.ndarray,
+        data_bin_count: np.ndarray,
+        mc_is_normalized_to_data: bool,
     ) -> DataMCComparisonOutputType:
         if method is None:
             return None, None, None, None
@@ -439,25 +460,27 @@ class DataMCHistogramPlot(HistogramPlot):
                 data=data_bin_count,
                 expectation=mc_bin_count,
                 error=data_bin_count,
-                mc_cov=self._histograms[self.mc_key].get_covariance_matrix()
+                mc_cov=self._histograms[self.mc_key].get_covariance_matrix(),
             )
             return chi2, dof, p_val, toy_output
         else:
-            raise ValueError(f"The provided goodness of fit method identifier '{method}' is not valid!\n"
-                             f"It must be one of {DataMCHistogramPlot.valid_gof_methods}!")
+            raise ValueError(
+                f"The provided goodness of fit method identifier '{method}' is not valid!\n"
+                f"It must be one of {DataMCHistogramPlot.valid_gof_methods}!"
+            )
 
     def add_residual_ratio_plot(
-            self,
-            axis: AxesType,
-            ratio_type: str,
-            data_bin_count: np.ndarray,
-            mc_bin_count: np.ndarray,
-            mc_error_sq: np.ndarray,
-            markers_with_width: bool = True,
-            systematics_are_included: bool = False,
-            marker_color: str = plot_style.KITColors.kit_black,
-            include_outlier_info: bool = False,
-            plot_outlier_indicators: bool = False
+        self,
+        axis: AxesType,
+        ratio_type: str,
+        data_bin_count: np.ndarray,
+        mc_bin_count: np.ndarray,
+        mc_error_sq: np.ndarray,
+        markers_with_width: bool = True,
+        systematics_are_included: bool = False,
+        marker_color: str = plot_style.KITColors.kit_black,
+        include_outlier_info: bool = False,
+        plot_outlier_indicators: bool = False,
     ) -> None:
         if ratio_type.lower() == "normal":
             axis.set_ylabel(r"$\frac{\mathrm{Data - MC}}{\mathrm{Data}}$")
@@ -467,8 +490,10 @@ class DataMCHistogramPlot(HistogramPlot):
             else:
                 axis.set_ylabel(r"$\frac{\mathrm{Data - MC}}{\sigma_\mathrm{stat}^\mathrm{Data - MC}}$")
         else:
-            raise ValueError(f"The provided ratio_type '{ratio_type}' is not valid!\n"
-                             f"The ratio_type must be one of {DataMCHistogramPlot.valid_ratio_types}!")
+            raise ValueError(
+                f"The provided ratio_type '{ratio_type}' is not valid!\n"
+                f"The ratio_type must be one of {DataMCHistogramPlot.valid_ratio_types}!"
+            )
 
         try:
             uh_data = unp.uarray(data_bin_count, np.sqrt(data_bin_count))
@@ -477,36 +502,51 @@ class DataMCHistogramPlot(HistogramPlot):
             if ratio_type.lower() == "normal":
                 divisor = copy.deepcopy(uh_data)
             elif ratio_type.lower() == "vs_uncert":
-                divisor = unp.uarray(unp.std_devs(uh_data - uh_mc), 0.)
+                divisor = unp.uarray(unp.std_devs(uh_data - uh_mc), 0.0)
             else:
                 divisor = None
 
             divisor[divisor == 0] = ufloat(0.01, 0.1)
             ratio = (uh_data - uh_mc) / divisor
-            ratio[(uh_data == 0.) & (uh_mc == 0.)] = ufloat(0., 0.)
+            ratio[(uh_data == 0.0) & (uh_mc == 0.0)] = ufloat(0.0, 0.0)
 
             if ratio_type.lower() == "normal":
-                ratio[np.logical_xor((uh_data == 0.), (uh_mc == 0.))] = ufloat(-99, 0.)
-                max_val = 1.
-                axis.set_ylim(bottom=-1. * max_val, top=1. * max_val)
+                ratio[np.logical_xor((uh_data == 0.0), (uh_mc == 0.0))] = ufloat(-99, 0.0)
+                _max_val = 1.0  # type: Union[None, float, np.ndarray]
+                assert isinstance(_max_val, float), (type(_max_val).__name__, _max_val)
+                axis.set_ylim(bottom=-1.0 * _max_val, top=1.0 * _max_val)
             elif ratio_type.lower() == "vs_uncert":
-                max_val_mask = (uh_data != 0.) & (uh_mc != 0.) & ((uh_data - uh_mc) != 0)
+                max_val_mask = (uh_data != 0.0) & (uh_mc != 0.0) & ((uh_data - uh_mc) != 0)
                 if np.sum(max_val_mask) == 0:
-                    max_val = None
+                    _max_val = None
                     warning_str = "Max value for ratio plot cannot be determined, as no valid values are available!"
                     if include_outlier_info:
                         include_outlier_info = False
                         warning_str += " The option 'include_outlier_info' was set to False due to this!"
                     warnings.warn(warning_str)
                 else:
-                    max_val = np.around(max(
-                        abs(float(np.amin(unp.nominal_values(ratio[max_val_mask]) - unp.std_devs(ratio[max_val_mask])))),
-                        abs(float(np.amax(unp.nominal_values(ratio[max_val_mask]) + unp.std_devs(ratio[max_val_mask]))))
-                    ), decimals=1)
-                    assert isinstance(max_val, float), (type(max_val), max_val)
-                    axis.set_ylim(bottom=-1. * max_val, top=max_val)
+                    _max_val = np.around(
+                        max(
+                            abs(
+                                float(
+                                    np.amin(unp.nominal_values(ratio[max_val_mask]) - unp.std_devs(ratio[max_val_mask]))
+                                )
+                            ),
+                            abs(
+                                float(
+                                    np.amax(unp.nominal_values(ratio[max_val_mask]) + unp.std_devs(ratio[max_val_mask]))
+                                )
+                            ),
+                        ),
+                        decimals=1,
+                    )
+                    assert isinstance(_max_val, float), (type(_max_val).__name__, _max_val)
+                    axis.set_ylim(bottom=-1.0 * _max_val, top=_max_val)
             else:
-                max_val = None
+                _max_val = None
+
+            assert isinstance(_max_val, float), (type(_max_val).__name__, _max_val)
+            max_val = _max_val  # type: float
 
             axis.axhline(y=0, color=plot_style.KITColors.dark_grey, alpha=0.8)
             axis.errorbar(
@@ -516,61 +556,116 @@ class DataMCHistogramPlot(HistogramPlot):
                 xerr=self.bin_widths / 2 if markers_with_width else None,
                 ls="",
                 marker=".",
-                color=marker_color
+                color=marker_color,
             )
 
             if not include_outlier_info:
                 return
 
             for bin_mid, r_val, mc_val, data_val in zip(self.bin_mids, ratio, uh_mc, uh_data):
-                if mc_val == 0. and ((data_val != 0. and ratio_type.lower() != "vs_uncert")
-                                     or (abs(r_val) > max_val and ratio_type.lower() == "vs_uncert")):
+                if mc_val == 0.0 and (
+                    (data_val != 0.0 and ratio_type.lower() != "vs_uncert")
+                    or (abs(r_val) > max_val and ratio_type.lower() == "vs_uncert")
+                ):
                     axis.text(x=bin_mid, y=+0.1 * max_val, s="No MC", fontsize=5, rotation=90, ha="center", va="bottom")
-                    axis.text(x=bin_mid, y=+0.1 * max_val, s=f"#Data={int(unp.nominal_values(data_val))}", fontsize=5,
-                              rotation=90, ha="center", va="bottom")
-                elif data_val == 0. and ((mc_val != 0. and ratio_type.lower() != "vs_uncert")
-                                         or (abs(r_val) > max_val and ratio_type.lower() == "vs_uncert")):
-                    axis.text(x=bin_mid, y=+0.1 * max_val, s=f"#MC={unp.nominal_values(mc_val):.0f}", fontsize=5,
-                              rotation=90, ha="center", va="bottom")
+                    axis.text(
+                        x=bin_mid,
+                        y=+0.1 * max_val,
+                        s=f"#Data={int(unp.nominal_values(data_val))}",
+                        fontsize=5,
+                        rotation=90,
+                        ha="center",
+                        va="bottom",
+                    )
+                elif data_val == 0.0 and (
+                    (mc_val != 0.0 and ratio_type.lower() != "vs_uncert")
+                    or (abs(r_val) > max_val and ratio_type.lower() == "vs_uncert")
+                ):
+                    axis.text(
+                        x=bin_mid,
+                        y=+0.1 * max_val,
+                        s=f"#MC={unp.nominal_values(mc_val):.0f}",
+                        fontsize=5,
+                        rotation=90,
+                        ha="center",
+                        va="bottom",
+                    )
                     axis.text(x=bin_mid, y=-0.1 * max_val, s="No Data", fontsize=5, rotation=90, ha="center", va="top")
                 elif r_val > 1.0 and plot_outlier_indicators:
-                    axis.text(x=bin_mid, y=+0.08 * max_val, s=f"{unp.nominal_values(r_val):3.2f}" + r"$\rightarrow$",
-                              fontsize=5, rotation=90, ha="right", va="bottom")
+                    axis.text(
+                        x=bin_mid,
+                        y=+0.08 * max_val,
+                        s=f"{unp.nominal_values(r_val):3.2f}" + r"$\rightarrow$",
+                        fontsize=5,
+                        rotation=90,
+                        ha="right",
+                        va="bottom",
+                    )
                 elif r_val < -1.0 and plot_outlier_indicators:
-                    axis.text(x=bin_mid, y=-0.08 * max_val, s=r"$\leftarrow$" + f"{unp.nominal_values(r_val):3.2f}",
-                              fontsize=5, rotation=90, ha="right", va="top")
+                    axis.text(
+                        x=bin_mid,
+                        y=-0.08 * max_val,
+                        s=r"$\leftarrow$" + f"{unp.nominal_values(r_val):3.2f}",
+                        fontsize=5,
+                        rotation=90,
+                        ha="right",
+                        va="top",
+                    )
                 else:
                     pass
 
         except ZeroDivisionError:
-            axis.text(x=self.bin_mids[int(np.ceil(len(self.bin_mids) / 2.))], y=0.1,
-                      s="DataMCHistogramPlot: ZeroDivisionError occurred!", fontsize=8, ha="center", va="bottom")
+            axis.text(
+                x=self.bin_mids[int(np.ceil(len(self.bin_mids) / 2.0))],
+                y=0.1,
+                s="DataMCHistogramPlot: ZeroDivisionError occurred!",
+                fontsize=8,
+                ha="center",
+                va="bottom",
+            )
             axis.axhline(y=0, color=plot_style.KITColors.dark_grey, alpha=0.8)
 
     @staticmethod
-    def _check_style_settings_input(style: str, ratio_type: str, gof_check_method: Optional[str]) -> None:
+    def _check_style_settings_input(
+        style: str,
+        ratio_type: str,
+        gof_check_method: Optional[str],
+    ) -> None:
         if not style.lower() in DataMCHistogramPlot.valid_styles:
-            raise ValueError(f"The argument 'style' must be one of {DataMCHistogramPlot.valid_styles}!"
-                             f"Provided was '{style}'")
+            raise ValueError(
+                f"The argument 'style' must be one of {DataMCHistogramPlot.valid_styles}!" f"Provided was '{style}'"
+            )
         if not ratio_type.lower() in DataMCHistogramPlot.valid_ratio_types:
-            raise ValueError(f"The argument 'ratio_type' must be one of {DataMCHistogramPlot.valid_ratio_types}!"
-                             f"Provided was '{ratio_type}'")
+            raise ValueError(
+                f"The argument 'ratio_type' must be one of {DataMCHistogramPlot.valid_ratio_types}!"
+                f"Provided was '{ratio_type}'"
+            )
         if gof_check_method is not None and gof_check_method.lower() not in DataMCHistogramPlot.valid_gof_methods:
-            raise ValueError(f"The argument 'gof_check_method' must be one of {DataMCHistogramPlot.valid_gof_methods} "
-                             f"or None! Provided was '{gof_check_method}'")
+            raise ValueError(
+                f"The argument 'gof_check_method' must be one of {DataMCHistogramPlot.valid_gof_methods} "
+                f"or None! Provided was '{gof_check_method}'"
+            )
 
     @staticmethod
-    def _check_outlier_indicator_setting(outlier_indicator_setting: bool, ratio_type: str) -> bool:
+    def _check_outlier_indicator_setting(
+        outlier_indicator_setting: bool,
+        ratio_type: str,
+    ) -> bool:
         if ratio_type.lower() == "vs_uncert":
             former_outlier_setting = outlier_indicator_setting
             outlier_indicator_setting = False
             if former_outlier_setting != outlier_indicator_setting:
-                logging.info(f"Resetting 'plot_outlier_indicators' from True to False, "
-                             f"because of 'ratio_type' being set to '{ratio_type.lower()}'.")
+                logging.info(
+                    f"Resetting 'plot_outlier_indicators' from True to False, "
+                    f"because of 'ratio_type' being set to '{ratio_type.lower()}'."
+                )
         return outlier_indicator_setting
 
     @staticmethod
-    def _check_axes_input(ax1: AxesType, ax2: AxesType) -> Tuple[AxesType, AxesType]:
+    def _check_axes_input(
+        ax1: AxesType,
+        ax2: AxesType,
+    ) -> Tuple[AxesType, AxesType]:
         if ax1 is None and ax2 is None:
             _, (ax1, ax2) = DataMCHistogramPlot.create_hist_ratio_figure()
             return ax1, ax2
@@ -581,8 +676,8 @@ class DataMCHistogramPlot(HistogramPlot):
 
     @staticmethod
     def create_hist_ratio_figure(
-            fig_size: Tuple[float, float] = (5, 5),
-            height_ratio: Tuple[float, float] = (3.5, 1)
+        fig_size: Tuple[float, float] = (5, 5),
+        height_ratio: Tuple[float, float] = (3.5, 1),
     ) -> Tuple[figure.Figure, Tuple[AxesType, AxesType]]:
         """
         Create a matplotlib.Figure for histogram ratio plots.
@@ -597,7 +692,7 @@ class DataMCHistogramPlot(HistogramPlot):
             figsize=fig_size,
             dpi=200,
             sharex="all",
-            gridspec_kw={"height_ratios": [height_ratio[0], height_ratio[1]]}
+            gridspec_kw={"height_ratios": [height_ratio[0], height_ratio[1]]},
         )
 
         assert isinstance(fig, figure.Figure), type(fig)
