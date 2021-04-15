@@ -54,10 +54,10 @@ class FitResultPlot(HistogramPlot):
     ) -> None:
         super().__init__(variable=variable)
 
-        self._binning = binning
+        self._binning = binning  # type: Binning
 
     @property
-    def binning(self) -> Optional[Binning]:
+    def binning(self) -> Binning:
         return self._binning
 
     def add_component(
@@ -85,7 +85,7 @@ class FitResultPlot(HistogramPlot):
 
     def plot_on(
         self,
-        ax1: Optional[AxesType] = None,
+        ax1: AxesType,
         style: str = "stacked",
         include_sys: bool = False,
         markers_with_width: bool = True,
@@ -123,7 +123,7 @@ class FitResultPlot(HistogramPlot):
                 edgecolor="black",
                 lw=0.3,
                 color=self._histograms[self.mc_key].colors,
-                label=self._histograms[self.mc_key].labels,
+                label=self._histograms[self.mc_key].labels,  # type: ignore  # The type here is correct!
                 histtype="stepfilled",
             )
 
@@ -201,7 +201,7 @@ class FitResultPlot(HistogramPlot):
             if required_hist_key not in self._histograms.histogram_keys:
                 raise RuntimeError(
                     f"The required histogram key '{required_hist_key}' is not available!\n"
-                    f"Available histogram keys: {list(self._histograms.keys())}\n"
+                    f"Available histogram keys: {list(self._histograms.histogram_keys)}\n"
                     f"Required histogram keys: {self.required_histogram_keys}"
                 )
 
@@ -222,11 +222,11 @@ class FitResultPlotter:
     ) -> None:
         self._variables = variables  # type: Tuple[HistVariable, ...]
 
-        self._fit_model = fit_model
+        self._fit_model = fit_model  # type: FitModel
 
-        self._reference_dimension = reference_dimension
+        self._reference_dimension = reference_dimension  # type: int
 
-        self._fig_size = fig_size
+        self._fig_size = fig_size  # type: Tuple[float, float]
         self._optional_arguments_dict = kwargs  # type: Dict[str, Any]
 
         self._channel_name_list = []  # type: List[str]
@@ -241,7 +241,10 @@ class FitResultPlotter:
         output_dir_path: Optional[PathType] = None,
         output_name_tag: Optional[str] = None,
     ) -> Dict[str, List[PathType]]:
-        output_lists = {"pdf": [], "png": []}
+        output_lists = {
+            "pdf": [],
+            "png": [],
+        }  # type: Dict[str, List[PathType]]
 
         if (output_dir_path is None) != (output_name_tag is None):
             raise ValueError(
@@ -254,8 +257,11 @@ class FitResultPlotter:
             data_column_name_for_plot = mc_channel.data_column_names[self.reference_dimension]
 
             data_channel = self._fit_model.data_channels_to_plot.get_channel_by_name(name=mc_channel.name)
-            data_bin_count = data_channel.bin_counts
-            data_bin_errors_squared = data_channel.bin_errors_sq
+
+            assert data_channel.bin_counts is not None
+            data_bin_count = data_channel.bin_counts  # type: np.ndarray
+            assert data_channel.bin_errors_sq is not None
+            data_bin_errors_squared = data_channel.bin_errors_sq  # type: np.ndarray
 
             for counter, sub_bin_info in enumerate(
                 self._get_sub_bin_infos_for(
@@ -590,8 +596,8 @@ class FitResultPlotter:
     def _get_mc_color(
         self,
         key: str,
-        original_color: Optional[str],
-    ) -> Optional[str]:
+        original_color: str,
+    ) -> str:
         return self._get_attribute_from_optional_arguments_dict(
             attribute_name="mc_color_dict",
             key=key,
@@ -601,8 +607,8 @@ class FitResultPlotter:
     def _get_mc_label(
         self,
         key: str,
-        original_label: Optional[str],
-    ) -> Optional[str]:
+        original_label: str,
+    ) -> str:
         return self._get_attribute_from_optional_arguments_dict(
             attribute_name="mc_label_dict",
             key=key,
@@ -613,8 +619,8 @@ class FitResultPlotter:
         self,
         attribute_name: str,
         key: str,
-        default_value: Optional[str],
-    ) -> Optional[str]:
+        default_value: str,
+    ) -> str:
         if attribute_name in self._optional_arguments_dict:
             attribute_dict = self._optional_arguments_dict[attribute_name]
             assert isinstance(attribute_dict, dict), (attribute_dict, type(attribute_dict))
@@ -701,7 +707,7 @@ class FitResultPlotter:
                         edges = self._get_bin_edge_pairs(binning=mc_channel.binning.get_binning_for_one_dimension(dim))
                         bin_edges_per_other_dim.append(edges)
 
-                for bin_combination, edges in zip(
+                for bin_combination, _bin_edges in zip(
                     itertools.product(*bin_numbers_per_other_dim), itertools.product(*bin_edges_per_other_dim)
                 ):
                     assert isinstance(bin_combination, tuple), type(bin_combination)
@@ -709,11 +715,11 @@ class FitResultPlotter:
                         len(bin_combination),
                         mc_channel.binning.dimensions,
                     )
-                    assert isinstance(edges, tuple), type(edges)
-                    assert len(edges) == len(bin_combination), (len(edges), len(bin_combination))
-                    assert all(isinstance(e, tuple) and len(e) == 2 for e in edges)
+                    assert isinstance(_bin_edges, tuple), type(_bin_edges)
+                    assert len(_bin_edges) == len(bin_combination), (len(_bin_edges), len(bin_combination))
+                    assert all(isinstance(e, tuple) and len(e) == 2 for e in _bin_edges)
 
-                    yield SubBinInfos(bin_ids=bin_combination, bin_edges=edges)
+                    yield SubBinInfos(bin_ids=bin_combination, bin_edges=_bin_edges)
 
     @staticmethod
     def _get_histogram_name(
@@ -734,7 +740,7 @@ class FitResultPlotter:
     def _get_slices(
         self,
         sub_bin_info: Optional[SubBinInfos],
-    ) -> Tuple[slice, ...]:
+    ) -> Tuple[Union[slice, int], ...]:
         if sub_bin_info is None:
             assert self.reference_dimension == 0
             return tuple([slice(None)])
@@ -744,7 +750,7 @@ class FitResultPlotter:
         assert isinstance(bins_in_other_dims, tuple), type(bins_in_other_dims)
         assert all(isinstance(n_bins, int) for n_bins in bins_in_other_dims), bins_in_other_dims
 
-        slice_list = []
+        slice_list = []  # type: List[Union[slice, int]]
         for dim in range(len(bins_in_other_dims) + 1):
             if dim == self.reference_dimension:
                 slice_list.append(slice(None))

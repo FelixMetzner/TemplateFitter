@@ -49,7 +49,7 @@ class FitTemplatePlot(HistogramPlot):
         self._binning = binning  # type: Binning
 
     @property
-    def binning(self) -> Optional[Binning]:
+    def binning(self) -> Binning:
         return self._binning
 
     def add_component(
@@ -78,7 +78,7 @@ class FitTemplatePlot(HistogramPlot):
 
     def plot_on(
         self,
-        ax1: Optional[AxesType] = None,
+        ax1: AxesType,
         include_sys: bool = False,
         markers_with_width: bool = True,
         sum_color: str = plot_style.KITColors.kit_purple,
@@ -87,7 +87,7 @@ class FitTemplatePlot(HistogramPlot):
         legend_cols: Optional[int] = None,
         legend_loc: Optional[Union[int, str]] = None,
         y_scale: float = 1.1,
-    ) -> Any:
+    ) -> None:
         self._check_required_histograms()
 
         bin_scaling = 1.0 / np.around(self.bin_widths / self.minimal_bin_width, decimals=0)
@@ -110,7 +110,7 @@ class FitTemplatePlot(HistogramPlot):
             edgecolor="black",
             lw=0.3,
             color=self._histograms[self.hist_key].colors,
-            label=self._histograms[self.hist_key].labels,
+            label=self._histograms[self.hist_key].labels,  # type: ignore  # The type here is correct!
             histtype="stepfilled",
         )
 
@@ -143,7 +143,7 @@ class FitTemplatePlot(HistogramPlot):
         if self.required_hist_key not in self._histograms.histogram_keys:
             raise RuntimeError(
                 f"The required histogram key '{self.required_hist_key}' is not available!\n"
-                f"Available histogram keys: {list(self._histograms.keys())}\n"
+                f"Available histogram keys: {list(self._histograms.histogram_keys)}\n"
                 f"Required histogram keys: {self.required_hist_key}"
             )
 
@@ -153,7 +153,7 @@ class FitTemplates2DHeatMapPlot:
 
 
 class FitTemplatesPlotter:
-    plot_name_prefix = "fit_template_plot"
+    plot_name_prefix = "fit_template_plot"  # type: str
 
     def __init__(
         self,
@@ -258,8 +258,8 @@ class FitTemplatesPlotter:
     def _get_template_color(
         self,
         key: str,
-        original_color: Optional[str],
-    ) -> Optional[str]:
+        original_color: str,
+    ) -> str:
         return self._get_attribute_from_optional_arguments_dict(
             attribute_name="template_color_dict", key=key, default_value=original_color
         )
@@ -267,7 +267,7 @@ class FitTemplatesPlotter:
     def _get_template_label(
         self,
         template: Template,
-    ) -> Optional[str]:
+    ) -> str:
         return self._get_attribute_from_optional_arguments_dict(
             attribute_name="mc_label_dict", key=template.process_name, default_value=template.latex_label
         )
@@ -275,7 +275,7 @@ class FitTemplatesPlotter:
     def _get_channel_label(
         self,
         channel: Channel,
-    ) -> Optional[str]:
+    ) -> str:
         if "channel_label_dict" in self._optional_arguments_dict:
             channel_label_dict = self._optional_arguments_dict["channel_label_dict"]
             assert isinstance(channel_label_dict, dict), (channel_label_dict, type(channel_label_dict))
@@ -296,8 +296,8 @@ class FitTemplatesPlotter:
         self,
         attribute_name: str,
         key: str,
-        default_value: Optional[str],
-    ) -> Optional[str]:
+        default_value: str,
+    ) -> str:
         if attribute_name in self._optional_arguments_dict:
             attribute_dict = self._optional_arguments_dict[attribute_name]
             assert isinstance(attribute_dict, dict), (attribute_dict, type(attribute_dict))
