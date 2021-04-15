@@ -11,7 +11,7 @@ from collections.abc import Sequence as ABCSequence
 from typing import Union, Optional, Tuple, List, Sequence
 
 __all__ = [
-    "HistVariable"
+    "HistVariable",
 ]
 
 
@@ -28,7 +28,7 @@ class HistVariable:
             scope: Optional[Tuple[float, float]] = None,
             var_name: Optional[str] = None,
             unit: Optional[str] = None,
-            use_log_scale: bool = False
+            use_log_scale: bool = False,
     ):
         """
         HistVariable constructor.
@@ -44,7 +44,7 @@ class HistVariable:
         self._df_label = df_label
         self._scope = scope
         self._var_name = var_name
-        self._x_label = var_name + f' in {unit}' if unit else var_name
+        self._x_label = var_name + f' in {unit}' if unit is not None else var_name
         self._unit = unit
         self._n_bins = n_bins
         self._use_log_scale = use_log_scale
@@ -147,7 +147,9 @@ class HistVariable:
         """
         return self._use_log_scale
 
-    def __eq__(self, other: "HistVariable") -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, HistVariable):
+            raise TypeError(f"HistVariable can only be compared to another HistVariable, but an object of type {type(other).__name__} was provided.")
         if self.df_label != other.df_label:
             return False
         if self.variable_name != other.variable_name:
@@ -173,7 +175,7 @@ class HistVariable:
             f"unit = {self.unit}",
             f"use_log_scale = {self.use_log_scale}",
             f"n_bins = {self.n_bins}",
-            f"scope = {self.scope}"
+            f"scope = {self.scope}",
         ]
         return string_list
 
@@ -182,7 +184,7 @@ class HistVariable:
             base_hist_var: "HistVariable",
             dfs: Sequence[pd.DataFrame],
             round_scope_precision: int = 0,
-            check_for_nans: bool = False
+            check_for_nans: bool = False,
     ) -> "HistVariable":
         assert all(base_hist_var.df_label in df.columns for df in dfs), base_hist_var.df_label
 
@@ -217,7 +219,7 @@ class HistVariable:
     def round_scope_to_significance(
             lower: Union[float, int],
             upper: Union[float, int],
-            improve_precision_by: int = 0
+            improve_precision_by: int = 0,
     ) -> Tuple[float, float]:
         assert not np.isnan(lower), lower
         assert not np.isnan(upper), upper
