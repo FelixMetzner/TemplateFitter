@@ -21,7 +21,9 @@ __all__ = [
 PathType = Union[str, AnyStr, os.PathLike]
 
 
-def cov2corr(cov: np.ndarray) -> np.ndarray:
+def cov2corr(
+    cov: np.ndarray,
+) -> np.ndarray:
     """
     Calculates the correlation matrix from a given
     covariance matrix.
@@ -40,7 +42,10 @@ def cov2corr(cov: np.ndarray) -> np.ndarray:
     return np.matmul(d_inv, np.matmul(cov, d_inv))
 
 
-def corr2cov(corr: np.ndarray, var: np.ndarray) -> np.ndarray:
+def corr2cov(
+    corr: np.ndarray,
+    var: np.ndarray,
+) -> np.ndarray:
     """
     Calculates the covariance matrix from a given
     correlation matrix and a variance vector.
@@ -96,8 +101,8 @@ def xlogyx(x, y):
 
 
 def get_systematic_cov_mat(
-        hup: np.ndarray,
-        hdown: np.ndarray,
+    hup: np.ndarray,
+    hdown: np.ndarray,
 ) -> np.ndarray:
     """
     Calculates covariance matrix from systematic variations
@@ -114,8 +119,8 @@ def get_systematic_cov_mat(
 
 
 def array_split_into(
-        iterable: Iterable,
-        sizes: List[int],
+    iterable: Iterable,
+    sizes: List[int],
 ) -> np.ndarray:
     """
     Yields a list of arrays of size `n` from array iterable for each `n` in `sizes`.

@@ -81,12 +81,14 @@ def save_figure_as_tikz_tex_file(
         )
 
 
-def get_white_or_black_from_background(bkg_color: str) -> str:
+def get_white_or_black_from_background(
+    bkg_color: str,
+) -> str:
     # See https://stackoverflow.com/questions/3942878/how-to-decide-font-color-in-white-or-black-depending-on-background-color
     luminance = 0.0  # type: float
     color_factors = (0.2126, 0.7152, 0.0722)  # type: Tuple[float, float, float]
     for color_value, color_factor in zip(mpl_colors.to_rgb(bkg_color), color_factors):
-        c_value = color_value / 12.92 if color_value <= 0.03928 else ((color_value + 0.055) / 1.055)**2.4  # type: float
+        c_value = color_value / 12.92 if color_value <= 0.03928 else ((color_value + 0.055) / 1.055) ** 2.4  # type: float
 
         luminance += color_factor * c_value
 
@@ -96,7 +98,7 @@ def get_white_or_black_from_background(bkg_color: str) -> str:
 def color_fader(
     color_1: str,
     color_2: str,
-    mix: float = 0.,
+    mix: float = 0.0,
 ) -> str:
     c1 = np.array(mpl_colors.to_rgb(color_1))
     c2 = np.array(mpl_colors.to_rgb(color_2))

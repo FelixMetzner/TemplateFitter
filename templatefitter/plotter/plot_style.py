@@ -4,6 +4,7 @@ Provides color scheme and resets matplotlib default parameter setup
 
 import matplotlib.pyplot as plt
 
+from typing import List
 from cycler import cycler
 from collections import OrderedDict
 
@@ -12,7 +13,7 @@ __all__ = [
     "ylabel_pos",
     "KITColors",
     "kit_color_cycler",
-    "set_matplotlibrc_params"
+    "set_matplotlibrc_params",
 ]
 
 # The following dictionaries define variables which can be given
@@ -22,24 +23,25 @@ xlabel_pos = OrderedDict([("x", 1), ("ha", "right")])
 ylabel_pos = OrderedDict([("y", 1), ("ha", "right")])
 
 
-class KITColors(object):
+class KITColors:
     """
     KIT color scheme plus additional grey shades
     """
-    kit_green = "#009682"
-    kit_blue = "#4664aa"
-    kit_maygreen = "#8cb63c"
-    kit_yellow = "#fce500"
-    kit_orange = "#df9b1b"
-    kit_brown = "#a7822e"
-    kit_red = "#a22223"
-    kit_purple = "#a3107c"
-    kit_cyan = "#23a1e0"
-    kit_black = "#000000"
-    white = "#ffffff"
-    light_grey = "#bdbdbd"
-    grey = "#797979"
-    dark_grey = "#4e4e4e"
+
+    kit_green = "#009682"  # type: str
+    kit_blue = "#4664aa"  # type: str
+    kit_maygreen = "#8cb63c"  # type: str
+    kit_yellow = "#fce500"  # type: str
+    kit_orange = "#df9b1b"  # type: str
+    kit_brown = "#a7822e"  # type: str
+    kit_red = "#a22223"  # type: str
+    kit_purple = "#a3107c"  # type: str
+    kit_cyan = "#23a1e0"  # type: str
+    kit_black = "#000000"  # type: str
+    white = "#ffffff"  # type: str
+    light_grey = "#bdbdbd"  # type: str
+    grey = "#797979"  # type: str
+    dark_grey = "#4e4e4e"  # type: str
 
     default_colors = [
         kit_blue,
@@ -51,8 +53,8 @@ class KITColors(object):
         kit_yellow,
         dark_grey,
         kit_cyan,
-        kit_maygreen
-    ]
+        kit_maygreen,
+    ]  # type: List[str]
 
 
 kit_color_cycler = cycler("color", KITColors.default_colors)
@@ -67,14 +69,14 @@ def set_matplotlibrc_params() -> None:
         "top": True,
         "minor.visible": True,
         "direction": "in",
-        "labelsize": 10
+        "labelsize": 10,
     }
 
     ytick = {
         "right": True,
         "minor.visible": True,
         "direction": "in",
-        "labelsize": 10
+        "labelsize": 10,
     }
 
     axes = {
@@ -86,10 +88,10 @@ def set_matplotlibrc_params() -> None:
         "labelpad": 4.0,
     }
     lines = {
-        "lw": 1.5
+        "lw": 1.5,
     }
     legend = {
-        "frameon": False
+        "frameon": False,
     }
 
     plt.rc("lines", **lines)
@@ -98,4 +100,8 @@ def set_matplotlibrc_params() -> None:
     plt.rc("ytick", **ytick)
     plt.rc("legend", **legend)
 
-    plt.rcParams.update({"figure.autolayout": True})
+    plt.rcParams.update(
+        {
+            "figure.autolayout": True,
+        }
+    )

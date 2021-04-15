@@ -13,7 +13,7 @@ from matplotlib import colors as mpl_colors
 from matplotlib import ticker as mpl_ticker
 from matplotlib import font_manager as mpl_font_mgr
 
-from typing import Optional, Union, Tuple, List, Dict, Callable, Any
+from typing import Optional, Union, Tuple, List, Dict, Callable
 
 from templatefitter.plotter import plot_style
 from templatefitter.binned_distributions.binning import Binning
@@ -31,17 +31,16 @@ plot_style.set_matplotlibrc_params()
 
 
 class BinMigrationPlot:
-
     def __init__(
-            self,
-            from_variable: HistVariable,
-            to_variable: HistVariable,
-            weight_column: Optional[str] = None,
-            color_map: Optional[Union[str, mpl_colors.Colormap]] = None,
-            from_to_label_appendix: Optional[Tuple[Optional[str], Optional[str]]] = None,
-            tick_label_format_fnc: Optional[Callable] = None,
-            max_number_of_ticks: Optional[int] = None,
-            max_bins_for_labels: Optional[int] = None,
+        self,
+        from_variable: HistVariable,
+        to_variable: HistVariable,
+        weight_column: Optional[str] = None,
+        color_map: Optional[Union[str, mpl_colors.Colormap]] = None,
+        from_to_label_appendix: Optional[Tuple[Optional[str], Optional[str]]] = None,
+        tick_label_format_fnc: Optional[Callable] = None,
+        max_number_of_ticks: Optional[int] = None,
+        max_bins_for_labels: Optional[int] = None,
     ) -> None:
 
         self.from_hist_var = from_variable  # type: HistVariable
@@ -53,7 +52,7 @@ class BinMigrationPlot:
         self.label_appendix_tuple = from_to_label_appendix  # type: Optional[Tuple[Optional[str], Optional[str]]]
         self._color_map = color_map  # type: Optional[Union[str, mpl_colors.Colormap]]
 
-        _tick_label_formatter = lambda x: f"{x:.2f}"  # type: Callable
+        _tick_label_formatter = BinMigrationPlot._default_tick_label_formatter  # type: Callable
         if tick_label_format_fnc is not None:
             _tick_label_formatter = tick_label_format_fnc
         self.tick_label_formatter = _tick_label_formatter  # type: Callable
@@ -62,11 +61,11 @@ class BinMigrationPlot:
         self.max_bins_for_labels = max_bins_for_labels if max_bins_for_labels is not None else 30  # type: int
 
     def plot_on(
-            self,
-            df: pd.DataFrame,
-            ax: Optional[AxesType] = None,
-            normalize_to_origin: bool = True,
-            show_color_bar: bool = False,
+        self,
+        df: pd.DataFrame,
+        ax: Optional[AxesType] = None,
+        normalize_to_origin: bool = True,
+        show_color_bar: bool = False,
     ) -> AxesType:
         if ax is None:
             _, ax = plt.subplots()
@@ -102,15 +101,14 @@ class BinMigrationPlot:
         ax.set_xlabel(xlabel=self.get_axis_label(hist_var=self.to_hist_var), **plot_style.xlabel_pos)
         ax.set_ylabel(ylabel=self.get_axis_label(hist_var=self.from_hist_var), **plot_style.ylabel_pos)
 
-
         self._set_axis_tick_labels(ax=ax, migration_matrix_shape=migration_matrix.shape)
 
         return ax
 
     def _calculate_bin_migration(
-            self,
-            df: pd.DataFrame,
-            normalize_to_origin: bool = True,
+        self,
+        df: pd.DataFrame,
+        normalize_to_origin: bool = True,
     ) -> np.ndarray:
 
         from_bins = np.digitize(x=df[self.from_hist_var.df_label].values, bins=self.bin_edges)  # type: np.array
@@ -124,11 +122,13 @@ class BinMigrationPlot:
                 dropna=False,
             ).values  # type: np.ndarray
         else:
-            info_df = pd.DataFrame(data={
-                "bin_a": from_bins,
-                "bin_b": to_bins,
-                "weight": df[self.weight_column].values,
-            })  # type: pd.DataFrame
+            info_df = pd.DataFrame(
+                data={
+                    "bin_a": from_bins,
+                    "bin_b": to_bins,
+                    "weight": df[self.weight_column].values,
+                }
+            )  # type: pd.DataFrame
             weight_sum = info_df.groupby(["bin_a", "bin_b"])["weight"].sum().unstack().values  # type: np.ndarray
             np.nan_to_num(x=weight_sum, copy=False)
 
@@ -180,19 +180,19 @@ class BinMigrationPlot:
         if self._binning is None:
             assert self.from_hist_var.n_bins == self.to_hist_var.n_bins, (
                 self.from_hist_var.n_bins,
-                self.to_hist_var.n_bins
+                self.to_hist_var.n_bins,
             )
             assert self.from_hist_var.scope == self.to_hist_var.scope, (self.from_hist_var.scope, self.to_hist_var.scope)
             assert self.from_hist_var.use_log_scale == self.to_hist_var.use_log_scale, (
                 self.from_hist_var.use_log_scale,
-                self.to_hist_var.use_log_scale
+                self.to_hist_var.use_log_scale,
             )
 
             self._binning = Binning(
                 bins=self.from_hist_var.n_bins,
                 dimensions=1,
                 scope=self.from_hist_var.scope,
-                log_scale=self.from_hist_var.use_log_scale
+                log_scale=self.from_hist_var.use_log_scale,
             )
         return self._binning
 
@@ -200,6 +200,10 @@ class BinMigrationPlot:
     def bin_edges(self) -> Tuple[float, ...]:
         assert len(self.binning.bin_edges) == 1, self.binning.bin_edges
         return self.binning.bin_edges[0]
+
+    @staticmethod
+    def _default_tick_label_formatter(x: float) -> str:
+        return f"{x:.2f}"
 
     def get_tick_str(self, tick_pos: float) -> str:
         if tick_pos <= 0 or tick_pos + 0.5 > len(self.bin_edges):
@@ -224,7 +228,7 @@ class BinMigrationPlot:
 
         if len(tick_positions) > self.max_number_of_ticks:
             tick_start = 1  # starting from second tick, because the first one is blank
-            tick_frequency = int(np.ceil(1. * len(tick_positions) / self.max_number_of_ticks))
+            tick_frequency = int(np.ceil(1.0 * len(tick_positions) / self.max_number_of_ticks))
             assert tick_frequency > 0, (tick_frequency, len(tick_positions), self.max_number_of_ticks)
 
         ax.set_xticks(ticks=tick_positions[tick_start::tick_frequency])
@@ -265,14 +269,13 @@ class BinMigrationPlot:
 
 
 class BinCompositionPlot:
-
     def __init__(
-            self,
-            variable: HistVariable,
-            secondary_variable: HistVariable,
-            secondary_variable_binning: Binning,
-            weight_column: Optional[str] = None,
-            secondary_tick_label_mapping: Optional[Dict[int, str]] = None
+        self,
+        variable: HistVariable,
+        secondary_variable: HistVariable,
+        secondary_variable_binning: Binning,
+        weight_column: Optional[str] = None,
+        secondary_tick_label_mapping: Optional[Dict[int, str]] = None,
     ) -> None:
 
         self.primary_hist_var = variable  # type: HistVariable
@@ -289,11 +292,11 @@ class BinCompositionPlot:
         self._auto_color_index = 0  # type: int
 
     def plot_on(
-            self,
-            df: pd.DataFrame,
-            ax: Optional[AxesType] = None,
-            draw_legend: bool = True,
-            legend_columns: int = 1,
+        self,
+        df: pd.DataFrame,
+        ax: Optional[AxesType] = None,
+        draw_legend: bool = True,
+        legend_columns: int = 1,
     ) -> AxesType:
         if ax is None:
             _, ax = plt.subplots()
@@ -315,14 +318,14 @@ class BinCompositionPlot:
             lw=0.3,
             color=[self._get_auto_color() for _ in range(self.secondary_binning.num_bins[0])],
             label=self.secondary_labels,
-            histtype="stepfilled"
+            histtype="stepfilled",
         )
 
         ax.set_xlabel(xlabel=self.primary_hist_var.x_label, **plot_style.xlabel_pos)
         ax.set_ylabel(ylabel="Bin Composition", **plot_style.ylabel_pos)
 
         if draw_legend:
-            bbox_to_anchor_tuple = (1.02, 1.)
+            bbox_to_anchor_tuple = (1.02, 1.0)
             legend_font_size = (
                 "medium"
                 if self.secondary_binning.num_bins_total < 10
@@ -350,7 +353,7 @@ class BinCompositionPlot:
         assert binned_weights.shape == (self.primary_binning.num_bins_total, self.secondary_binning.num_bins_total), (
             binned_weights.shape,
             self.primary_binning.num_bins_total,
-            self.secondary_binning.num_bins_total
+            self.secondary_binning.num_bins_total,
         )
 
         weight_sums = np.sum(a=binned_weights, axis=1)  # type: np.ndarray
@@ -362,7 +365,7 @@ class BinCompositionPlot:
         ]
         assert len(normed_weight_list) == self.secondary_binning.num_bins[0], (
             len(normed_weight_list),
-            self.secondary_binning.num_bins
+            self.secondary_binning.num_bins,
         )
 
         return normed_weight_list
@@ -374,7 +377,7 @@ class BinCompositionPlot:
                 bins=self.primary_hist_var.n_bins,
                 dimensions=1,
                 scope=self.primary_hist_var.scope,
-                log_scale=self.primary_hist_var.use_log_scale
+                log_scale=self.primary_hist_var.use_log_scale,
             )
         return self._primary_binning
 
@@ -413,8 +416,8 @@ class BinCompositionPlot:
 
     @staticmethod
     def _init_secondary_var(
-            secondary_hist_variable: HistVariable,
-            secondary_variable_binning: Optional[Binning],
+        secondary_hist_variable: HistVariable,
+        secondary_variable_binning: Optional[Binning],
     ) -> Tuple[HistVariable, Binning]:
         if secondary_variable_binning is None:
             binning = Binning(
