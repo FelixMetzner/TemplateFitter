@@ -60,7 +60,7 @@ Basic example on how to use the TemplateFitter package
     ax.plot(points, profile, label="Profile NLL")
     ax.plot(points, hesse, label="Hesse approx.")
 
-    # create a toy study to perform linearity tests for yield paramters or for studying pull distributions
+    # create a toy study to perform linearity tests for yield parameters or for studying pull distributions
     toys = tf.ToyStudy(st, "iminuit")
     result = toys.do_linearity_test("signal", (0, 1000), n_points=3, n_exp=30)
     fig, ax = plt.subplots(1, 1, figsize=(8,8), dpi=200)
