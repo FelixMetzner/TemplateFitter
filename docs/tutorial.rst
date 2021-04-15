@@ -65,4 +65,3 @@ Basic example on how to use the TemplateFitter package
     result = toys.do_linearity_test("signal", (0, 1000), n_points=3, n_exp=30)
     fig, ax = plt.subplots(1, 1, figsize=(8,8), dpi=200)
     ax.errorbar(x=result[0], y=result[1], yerr=result[2], ls="", marker=".")
-
