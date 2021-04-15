@@ -1,9 +1,10 @@
 import pathlib
-
 import pandas as pd
 import matplotlib.pyplot as plt
 
 import templatefitter as tf
+
+# TODO: Update these examples!
 
 plt.switch_backend(newbackend="agg")
 
