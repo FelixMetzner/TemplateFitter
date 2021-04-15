@@ -11,6 +11,7 @@ from templatefitter.histograms.abstract_hist import AbstractHist
 #           - latex_tables.py
 #           - mva_plots.py
 
+
 class PlottingInfo(NamedTuple):  # TODO: This is not used atm... is it necessary? Maybe for template to hist conversion?
     templates: dict
     params: ParameterHandler
@@ -41,8 +42,7 @@ def plot_stacked_on(plot_info, ax, plot_all=False, **kwargs):
         for template in plot_info.templates.values():
             labels += template.labels()
         bin_counts = [
-            temp_yield * template.all_fractions()
-            for temp_yield, template in zip(yields, plot_info.templates.values())
+            temp_yield * template.all_fractions() for temp_yield, template in zip(yields, plot_info.templates.values())
         ]
         bin_counts = np.concatenate(bin_counts)
         N = len(bin_counts)
@@ -69,7 +69,7 @@ def plot_stacked_on(plot_info, ax, plot_all=False, **kwargs):
         lw=0.5,
         color=colors,
         label=labels,
-        stacked=True
+        stacked=True,
     )
 
     uncertainties_sq = [
@@ -91,7 +91,7 @@ def plot_stacked_on(plot_info, ax, plot_all=False, **kwargs):
         hatch="///////",
         fill=False,
         lw=0,
-        label="MC Uncertainty"
+        label="MC Uncertainty",
     )
 
     if plot_info.data is None:
@@ -104,12 +104,8 @@ def plot_stacked_on(plot_info, ax, plot_all=False, **kwargs):
     if plot_info.has_data:
 
         if plot_info.dimension > 1:
-            data_bin_counts = plot_info.projection(
-                kwargs["projection"], data_bin_counts
-            )
-            data_bin_errors_sq = plot_info.projection(
-                kwargs["projection"], data_bin_errors_sq
-            )
+            data_bin_counts = plot_info.projection(kwargs["projection"], data_bin_counts)
+            data_bin_errors_sq = plot_info.projection(kwargs["projection"], data_bin_errors_sq)
 
             axis = kwargs["projection"]
             ax_to_index = {
@@ -118,7 +114,14 @@ def plot_stacked_on(plot_info, ax, plot_all=False, **kwargs):
             }
             data_bin_mids = data_bin_mids[ax_to_index[axis]]
 
-        ax.errorbar(x=data_bin_mids, y=data_bin_counts, yerr=np.sqrt(data_bin_errors_sq),
-                    ls="", marker=".", color="black", label="Data")
+        ax.errorbar(
+            x=data_bin_mids,
+            y=data_bin_counts,
+            yerr=np.sqrt(data_bin_errors_sq),
+            ls="",
+            marker=".",
+            color="black",
+            label="Data",
+        )
 
     return ax
