@@ -94,7 +94,7 @@ class Channel(Sequence):
         # This assignment already checks the consistency of data_column_names of the new components.
         new_data_column_names_list = [c.data_column_names for c in components]  # type: List[Optional[List[str]]]
         assert all(
-            c is new_data_column_names_list[0] if new_data_column_names_list[0] is not None else c is None
+            c == new_data_column_names_list[0] if new_data_column_names_list[0] is not None else c is None
             for c in new_data_column_names_list
         ), new_data_column_names_list
 
