@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 
 from math import floor, log10
-from collections.abc import Sequence as ABCSequence
 from typing import Union, Optional, Tuple, List, Sequence
 
 __all__ = [
@@ -91,7 +90,7 @@ class HistVariable:
         error_text = (
             f"The scope must be a tuple or any other sequence of two floats." f"You provided an {type(value).__name__}"
         )
-        if not isinstance(value, ABCSequence):
+        if not isinstance(value, Sequence):
             raise ValueError(f"{error_text}.")
         if not len(value) == 2:
             raise ValueError(f"{error_text} with a length of {len(value)}.")

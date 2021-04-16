@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence as CollectionsABCSequence
 from typing import Union, Optional, Tuple, List, NamedTuple, Sequence
 
 from templatefitter.utility import cov2corr
@@ -429,7 +428,7 @@ class BinnedDistributionFromData(BinnedDistribution):
             data = in_data[data_column_names].values
         elif isinstance(in_data, np.ndarray):
             data = in_data
-        elif isinstance(in_data, CollectionsABCSequence):
+        elif isinstance(in_data, Sequence):
             first_type = type(in_data[0])
             assert all(isinstance(d_in, first_type) for d_in in in_data), [type(d) for d in in_data]
             if all(isinstance(d_in, pd.Series) for d_in in in_data):

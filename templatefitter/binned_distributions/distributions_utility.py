@@ -6,7 +6,6 @@ import logging
 import numpy as np
 import pandas as pd
 
-from collections.abc import Sequence as CollectionsABCSequence
 from typing import Union, Optional, Tuple, List, Sequence, Dict
 
 from templatefitter.binned_distributions.binning import Binning, BinEdgesType
@@ -114,7 +113,7 @@ def find_ranges_for_data(
         data_array = data
     elif isinstance(data, pd.Series):
         data_array = data.values
-    elif isinstance(data, CollectionsABCSequence):
+    elif isinstance(data, Sequence):
         first_type = type(data[0])
         assert all(isinstance(d_in, first_type) for d_in in data), [type(d) for d in data]
         if all(isinstance(d_in, pd.Series) for d_in in data):
@@ -158,7 +157,7 @@ def find_ranges_for_distributions(distributions: Sequence[BinnedDistribution]) -
 
 
 def find_common_binning_for_distributions(distributions: Sequence[BinnedDistribution]) -> Binning:
-    assert isinstance(distributions, CollectionsABCSequence), type(distributions)
+    assert isinstance(distributions, Sequence), type(distributions)
     assert all(isinstance(dist, BinnedDistribution) for dist in distributions), [type(d) for d in distributions]
 
     # If all distributions already have the same binning, return it.
@@ -205,7 +204,7 @@ def run_adaptive_binning(
         raise ValueError(f"minimal_bin_count must be greater than 0, the value provided is {minimal_bin_count}")
     min_count = minimal_bin_count
 
-    assert isinstance(distributions, CollectionsABCSequence), type(distributions)
+    assert isinstance(distributions, Sequence), type(distributions)
     assert all(isinstance(dist, BinnedDistribution) for dist in distributions), [type(d) for d in distributions]
 
     common_dims = distributions[0].dimensions
@@ -564,7 +563,7 @@ def _get_minimal_number_of_bins(minimal_number_of_bins: Union[int, Sequence[int]
         if minimal_number_of_bins <= 5:
             raise ValueError(f"minimal_number_of_bins must be > 5, but is {minimal_number_of_bins}")
         return [minimal_number_of_bins for _ in range(dimensions)]
-    elif isinstance(minimal_number_of_bins, CollectionsABCSequence):
+    elif isinstance(minimal_number_of_bins, Sequence):
         if not all(isinstance(nb, int) for nb in minimal_number_of_bins):
             raise ValueError(
                 f"Argument 'minimal_number_of_bins' must be integer or sequence of integers, but a "

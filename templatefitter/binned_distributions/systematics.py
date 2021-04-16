@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 
 from abc import ABC, abstractmethod
-from collections import abc as collections_abc
 from typing import Union, Optional, Tuple, List, Sequence, overload
 
 from templatefitter.binned_distributions.binning import Binning
@@ -277,7 +276,7 @@ class SystematicsInfoItemFromVariation(SystematicsInfoItem):
         return cov
 
 
-class SystematicsInfo(collections_abc.Sequence):
+class SystematicsInfo(Sequence):
     def __init__(
         self,
         in_sys: SystematicsInputType = None,

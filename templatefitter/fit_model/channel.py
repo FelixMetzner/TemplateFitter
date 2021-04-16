@@ -7,8 +7,7 @@ This package provides
 import logging
 
 from collections import Counter
-from collections.abc import Sequence
-from typing import Union, Optional, List, Dict, Tuple, Any, overload
+from typing import Union, Optional, List, Dict, Tuple, Sequence, Any, overload
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
