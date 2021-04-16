@@ -91,7 +91,6 @@ class Channel(Sequence):
             if not self._binning == components[0].binning:
                 raise ValueError("All components of a channel must have the same binning.")
 
-        # This assignment already checks the consistency of data_column_names of the new components.
         new_data_column_names_list = [c.data_column_names for c in components]  # type: List[Optional[List[str]]]
         assert all(
             c == new_data_column_names_list[0] if new_data_column_names_list[0] is not None else c is None
