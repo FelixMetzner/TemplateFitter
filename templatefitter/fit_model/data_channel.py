@@ -8,8 +8,7 @@ import logging
 import numpy as np
 
 from abc import ABC
-from collections.abc import Sequence
-from typing import Optional, Union, List, Dict, Tuple, overload
+from typing import Optional, Union, List, Dict, Tuple, Sequence, overload
 
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 from templatefitter.binned_distributions.binning import Binning, LogScaleInputType, BinsInputType, ScopeInputType
