@@ -394,7 +394,15 @@ class TemplateFitter:
         print("Background")
         profile_result = minimizer.minimize(initial_param_values=self._nll.x0, verbose=verbose)
 
+        assert fit_result.params[yield_parameter][0] == 0, fit_result.params[yield_parameter][0]
+
         q0 = 2 * (profile_result.fcn_min_val - fit_result.fcn_min_val)
-        logging.debug(f"q0: {q0}")
+
+        logging.debug(
+            f"For yield_parameter {yield_parameter}: q0: {q0}, {fit_result.params[yield_parameter][0]}, "
+            f"{profile_result.fcn_min_val}, {fit_result.fcn_min_val}"
+        )
+
         self._fit_model.reset_initial_parameter_value(parameter_name=yield_parameter)
+
         return np.sqrt(q0)
