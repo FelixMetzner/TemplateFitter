@@ -2422,12 +2422,12 @@ class AbstractCostFunction(ABC):
         return self._model.names_of_floating_parameters
 
     @abstractmethod
-    def __call__(self, x: np.ndarray) -> float:
+    def __call__(self, x: np.ndarray, *args) -> float:
         raise NotImplementedError(f"{self.__class__.__name__} is an abstract base class.")
 
 
 class Chi2CostFunction(AbstractCostFunction):
-    def __call__(self, x) -> float:
+    def __call__(self, x: np.ndarray, *args) -> float:
         return self._model.chi2(
             parameter_vector=x,
             fix_nuisance_parameters=self._fix_nui_params,
@@ -2435,7 +2435,7 @@ class Chi2CostFunction(AbstractCostFunction):
 
 
 class NLLCostFunction(AbstractCostFunction):
-    def __call__(self, x) -> float:
+    def __call__(self, x: np.ndarray, *args) -> float:
         return self._model.nll(
             parameter_vector=x,
             fix_nuisance_parameters=self._fix_nui_params,
