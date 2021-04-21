@@ -373,8 +373,9 @@ class TemplateFitter:
 
         # set signal of template related to the specified yield_parameter to zero and profile the likelihood
         self._fit_model.set_initial_parameter_value(parameter_name=yield_parameter, new_initial_value=0.0)
+        self._fit_model.reset_parameters_to_initial_values()
 
-        minimizer = minimizer_factory(
+        minimizer_bkg = minimizer_factory(
             minimizer_id=self._minimizer_id,
             fcn=self._nll_creator(fix_nuisance_parameters=fix_nui_params),
             names=self._nll.param_names,
@@ -382,26 +383,27 @@ class TemplateFitter:
 
         if fix_nui_params:
             for param_id in self._fit_model.floating_nuisance_parameter_indices:
-                minimizer.set_param_fixed(param_id=param_id)
+                minimizer_bkg.set_param_fixed(param_id=param_id)
 
         for param_id_or_str in self._fixed_parameters:
-            minimizer.set_param_fixed(param_id=param_id_or_str)
+            minimizer_bkg.set_param_fixed(param_id=param_id_or_str)
 
         for param_id_or_str, bounds in self._bound_parameters.items():
-            minimizer.set_param_bounds(param_id=param_id_or_str, bounds=bounds)
+            minimizer_bkg.set_param_bounds(param_id=param_id_or_str, bounds=bounds)
 
-        minimizer.set_param_fixed(param_id=yield_parameter)
+        minimizer_bkg.set_param_fixed(param_id=yield_parameter)
         print("Background")
-        profile_result = minimizer.minimize(initial_param_values=self._nll.x0, verbose=verbose)
+        profile_result = minimizer_bkg.minimize(initial_param_values=self._nll.x0, verbose=verbose)
 
-        assert fit_result.params[yield_parameter][0] == 0, fit_result.params[yield_parameter][0]
+        assert profile_result.params[yield_parameter][0] == 0.0, profile_result.params[yield_parameter][0]
 
         q0 = 2 * (profile_result.fcn_min_val - fit_result.fcn_min_val)
 
         logging.debug(
-            f"For yield_parameter {yield_parameter}: q0: {q0}, {fit_result.params[yield_parameter][0]}, "
+            f"For yield_parameter {yield_parameter}: q0: {q0}, {profile_result.params[yield_parameter][0]}, {fit_result.params[yield_parameter][0]}, "
             f"{profile_result.fcn_min_val}, {fit_result.fcn_min_val}"
         )
+        assert q0 >= 0.0, (q0, yield_parameter)
 
         self._fit_model.reset_initial_parameter_value(parameter_name=yield_parameter)
 

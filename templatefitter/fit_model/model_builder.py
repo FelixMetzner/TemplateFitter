@@ -64,7 +64,7 @@ class FitModel:
         self,
         parameter_handler: ParameterHandler,
     ):
-        self._params = parameter_handler
+        self._params = parameter_handler  # type: ParameterHandler
 
         self._model_parameters = []  # type: List[ModelParameter]
         self._model_parameters_mapping = {}  # type: Dict[str, int]
@@ -777,13 +777,13 @@ class FitModel:
     def _model_setup_as_string(self) -> str:
         output_string = ""
         for channel in self._channels:
-            output_string += f"Channel {channel.channel_index}: '{channel.name}\n"
+            output_string += f"Channel {channel.channel_index}: '{channel.name}'\n"
             for component in channel:
-                output_string += f"\tComponent {component.component_index}: '{component.name}\n"
+                output_string += f"\tComponent {component.component_index}: '{component.name}'\n"
                 for template in component.sub_templates:
                     output_string += (
-                        f"\t\tTemplate {template.template_index}: '{template.name} "
-                        f"(Process: {template.process_name})\n"
+                        f"\t\tTemplate {template.template_index}: '{template.name}' "
+                        f"(Process: '{template.process_name})'\n"
                     )
 
         return output_string

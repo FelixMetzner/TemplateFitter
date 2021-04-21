@@ -428,7 +428,7 @@ class ParameterHandler:
     def get_parameter_infos_by_name(
         self,
         parameter_names: Union[str, List[str]],
-    ) -> Union[List[ParameterInfo], ParameterInfo]:
+    ) -> List[ParameterInfo]:
         if isinstance(parameter_names, list):
             return [self._parameter_infos[self.get_index(name=name)] for name in parameter_names]
         elif isinstance(parameter_names, str):
