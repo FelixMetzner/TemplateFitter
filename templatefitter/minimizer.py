@@ -514,10 +514,10 @@ class IMinuitMinimizer(AbstractMinimizer):
         self._params.covariance = np.array(m.covariance)[fixed_params, :][:, fixed_params]
         self._params.correlation = np.array(m.covariance.correlation())[fixed_params, :][:, fixed_params]
 
-        self._success = fmin.is_valid and fmin.has_valid_parameters and fmin.has_covariance  # type: bool
+        self._success = fmin.is_valid and fmin.has_valid_parameters and fmin.has_covariance
 
-        # if not self._success:
-        #     raise RuntimeError(f"Minimization was not successful.\n" f"{fmin}\n")
+        if not self._success:
+            raise RuntimeError(f"Minimization was not successful.\n" f"{fmin}\n")
 
         assert self._success is not None
         return MinimizeResult(fcn_min_val=m.fval, params=self._params, success=self._success)
