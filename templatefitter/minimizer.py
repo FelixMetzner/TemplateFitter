@@ -484,28 +484,34 @@ class IMinuitMinimizer(AbstractMinimizer):
         additional_args: Optional[Tuple[Any, ...]] = None,
         get_hesse: bool = True,
     ) -> MinimizeResult:
-        m = Minuit.from_array_func(
-            self._fcn,  # parameter 'fcn'
-            initial_param_values,  # parameter 'start'
-            error=0.05 * initial_param_values,
-            errordef=error_def,
-            fix=self._get_fixed_params(),
+
+        m = Minuit(
+            self._fcn,
+            initial_param_values,
             name=self.params.names,
-            limit=self._param_bounds,
-            print_level=1 if verbose else 0,
         )
 
+        m.errors = 0.05 * initial_param_values
+        m.errordef = error_def
+        m.limits = self._param_bounds
+
+        for i in range(len(m.params)):
+            m.fixed[i] = self._get_fixed_params()[i]
+
+        m.print_level = 3 if verbose else 0
+
         # perform minimization twice!
-        fmin, _ = m.migrad(ncall=100000)
-        fmin, _ = m.migrad(ncall=100000)
+        fmin = m.migrad(ncall=100000, iterate=2).fmin
 
         self._fcn_min_val = m.fval
-        self._params.values = m.np_values()
-        self._params.errors = m.np_errors()
-        self._params.covariance = m.np_matrix()
-        self._params.correlation = m.np_matrix(correlation=True)
+        self._params.values = np.array(m.values)
+        self._params.errors = np.array(m.errors)
 
-        self._success = fmin["is_valid"] and fmin["has_valid_parameters"] and fmin["has_covariance"]  # type: bool
+        fixed_params = tuple(~np.array(self._get_fixed_params()))
+        self._params.covariance = np.array(m.covariance)[fixed_params, :][:, fixed_params]
+        self._params.correlation = np.array(m.covariance.correlation())[fixed_params, :][:, fixed_params]
+
+        self._success = fmin.is_valid and fmin.has_valid_parameters and fmin.has_covariance  # type: bool
 
         # if not self._success:
         #     raise RuntimeError(f"Minimization was not successful.\n" f"{fmin}\n")

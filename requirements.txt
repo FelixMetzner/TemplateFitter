@@ -1,5 +1,5 @@
 cycler>=0.10.0
-iminuit>=1.5.4
+iminuit>=2.3.0
 keras>=2.1.4
 matplotlib>=3.0.2
 numba>=0.42.1
