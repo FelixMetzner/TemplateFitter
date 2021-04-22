@@ -510,7 +510,7 @@ class IMinuitMinimizer(AbstractMinimizer):
         self._params.values = np.array(m.values)
         self._params.errors = np.array(m.errors)
 
-        fixed_params = tuple(~np.array(self._get_fixed_params()))
+        fixed_params = tuple(~np.array(self._get_fixed_params()))  # type: Tuple[bool, ...]
         self._params.covariance = np.array(m.covariance)[fixed_params, :][:, fixed_params]
         self._params.correlation = np.array(m.covariance.correlation())[fixed_params, :][:, fixed_params]
 
