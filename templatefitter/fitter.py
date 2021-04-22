@@ -219,7 +219,7 @@ class TemplateFitter:
         np.ndarray
             Hesse approximation. Shape is (num_points,).
         """
-        print(f"\nCalculating profile likelihood for parameter: '{param_id}'")
+        logging.info(f"\nCalculating profile likelihood for parameter: '{param_id}'")
 
         minimizer = minimizer_factory(
             minimizer_id=self._minimizer_id,
@@ -234,7 +234,7 @@ class TemplateFitter:
         for fix_param_id in self._fixed_parameters:
             minimizer.set_param_fixed(fix_param_id)
 
-        print("Start nominal minimization")
+        logging.info("Start nominal minimization")
         result = minimizer.minimize(initial_param_values=self._nll.x0, get_hesse=True, verbose=True)
 
         minimum = result.fcn_min_val
@@ -244,7 +244,7 @@ class TemplateFitter:
 
         hesse_approx = self._get_hesse_approx(param_id=param_id, fit_result=result, profile_points=profile_points)
 
-        print(f"Start profiling the likelihood using {num_cpu} processes...")
+        logging.info(f"Start profiling the likelihood using {num_cpu} processes...")
         args = [(minimizer, point, result.params.values, param_id, fix_nui_params) for point in profile_points]
         with Pool(num_cpu) as pool:
             profile_values = np.array(
@@ -360,7 +360,7 @@ class TemplateFitter:
             for param_id in self._fit_model.floating_nuisance_parameter_indices:
                 minimizer.set_param_fixed(param_id=param_id)
 
-        print("Perform nominal minimization:")
+        logging.info("Perform nominal minimization:")
         for param_id_or_str in self._fixed_parameters:
             minimizer.set_param_fixed(param_id=param_id_or_str)
 
@@ -392,7 +392,7 @@ class TemplateFitter:
             minimizer_bkg.set_param_bounds(param_id=param_id_or_str, bounds=bounds)
 
         minimizer_bkg.set_param_fixed(param_id=yield_parameter)
-        print("Background")
+        logging.info("Background")
         profile_result = minimizer_bkg.minimize(initial_param_values=self._nll.x0, verbose=verbose)
 
         assert profile_result.params[yield_parameter][0] == 0.0, profile_result.params[yield_parameter][0]

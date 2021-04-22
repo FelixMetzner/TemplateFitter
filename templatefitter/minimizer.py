@@ -501,7 +501,7 @@ class IMinuitMinimizer(AbstractMinimizer):
         for i in range(len(m.params)):
             m.fixed[i] = self._get_fixed_params()[i]
 
-        m.print_level = 3 if verbose else 0
+        m.print_level = 1 if verbose else 0
 
         # perform minimization twice!
         fmin = m.migrad(ncall=100000, iterate=2).fmin
@@ -589,6 +589,9 @@ class ScipyMinimizer(AbstractMinimizer):
         if additional_args is not None:
             _additional_args = additional_args
 
+        logging.info(
+            f"Starting SciPy minimization with {sum(~np.array(self.params.fixed_params))} floating and {sum(self.params.fixed_params)} fixed parameters."
+        )
         opt_result = scipy_minimize(
             fun=self._fcn,
             x0=initial_param_values,
@@ -597,6 +600,10 @@ class ScipyMinimizer(AbstractMinimizer):
             bounds=self._param_bounds,
             constraints=constraints,  # type: ignore
             options={"disp": verbose},
+        )
+
+        logging.info(
+            f"Finished SciPy minimization with success = {opt_result.success}, status {opt_result.status} and message {opt_result.message}."
         )
 
         self._success = opt_result.success
@@ -614,10 +621,12 @@ class ScipyMinimizer(AbstractMinimizer):
         self._fcn_min_val = opt_result.fun
 
         if get_hesse:
+            logging.info("Calculating Hesse Matrix for SciPy minimization.")
             hesse = ndt.Hessian(self._fcn)(self._params.values, *_additional_args)
             self._params.covariance = np.linalg.inv(hesse)
             self._params.correlation = cov2corr(self._params.covariance)
             self._params.errors = np.sqrt(np.diag(self._params.covariance))
+            logging.info("Finished calculation of Hesse Matrix for SciPy minimization.")
 
         if verbose:
             print(self._params)
