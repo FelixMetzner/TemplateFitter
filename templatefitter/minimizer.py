@@ -474,7 +474,10 @@ class IMinuitMinimizer(AbstractMinimizer):
         fcn: Callable,
         param_names: List[str],
     ) -> None:
-        super().__init__(fcn=fcn, param_names=param_names)
+        super().__init__(
+            fcn=fcn,
+            param_names=param_names,
+        )
 
     def minimize(
         self,
@@ -545,7 +548,10 @@ class ScipyMinimizer(AbstractMinimizer):
         fcn: Callable,
         param_names: List[str],
     ) -> None:
-        super().__init__(fcn, param_names)
+        super().__init__(
+            fcn=fcn,
+            param_names=param_names,
+        )
 
     def minimize(
         self,
