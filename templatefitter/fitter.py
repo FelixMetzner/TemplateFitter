@@ -393,7 +393,11 @@ class TemplateFitter:
 
         minimizer_bkg.set_param_fixed(param_id=yield_parameter)
         logging.info("Background")
-        profile_result = minimizer_bkg.minimize(initial_param_values=self._nll.x0, verbose=verbose)
+        profile_result = minimizer_bkg.minimize(
+            initial_param_values=self._nll.x0,
+            verbose=verbose,
+            check_success=False,
+        )
 
         assert profile_result.params[yield_parameter][0] == 0.0, profile_result.params[yield_parameter][0]
 
@@ -403,7 +407,7 @@ class TemplateFitter:
             f"For yield_parameter {yield_parameter}: q0: {q0}, {profile_result.params[yield_parameter][0]}, {fit_result.params[yield_parameter][0]}, "
             f"{profile_result.fcn_min_val}, {fit_result.fcn_min_val}"
         )
-        assert q0 >= 0.0, (q0, yield_parameter)
+        # assert q0 >= 0.0, (q0, yield_parameter)
 
         self._fit_model.reset_initial_parameter_value(parameter_name=yield_parameter)
 

@@ -376,6 +376,7 @@ class AbstractMinimizer(ABC):
         error_def: float = 0.5,
         additional_args: Optional[Tuple[Any, ...]] = None,
         get_hesse: bool = True,
+        check_success: bool = True,
     ) -> MinimizeResult:
         pass
 
@@ -486,6 +487,7 @@ class IMinuitMinimizer(AbstractMinimizer):
         error_def: float = 0.5,
         additional_args: Optional[Tuple[Any, ...]] = None,
         get_hesse: bool = True,
+        check_success: bool = True,
     ) -> MinimizeResult:
 
         m = Minuit(
@@ -516,7 +518,7 @@ class IMinuitMinimizer(AbstractMinimizer):
 
         self._success = fmin.is_valid and fmin.has_valid_parameters and fmin.has_covariance
 
-        if not self._success:
+        if check_success and not self._success:
             raise RuntimeError(f"Minimization was not successful.\n" f"{fmin}\n")
 
         assert self._success is not None
@@ -560,6 +562,7 @@ class ScipyMinimizer(AbstractMinimizer):
         error_def: float = 0.5,
         additional_args: Optional[Tuple[Any, ...]] = None,
         get_hesse: bool = True,
+        check_success: bool = True,
     ) -> MinimizeResult:
         """
         Performs minimization of given objective function.
@@ -578,6 +581,8 @@ class ScipyMinimizer(AbstractMinimizer):
             of parameter errors. Default is True.
         verbose: bool
             If True, a convergence message is printed. Default is False.
+        check_success: bool
+            Check if fit was successful and raise if not! Default: True
 
         Returns
         -------
@@ -630,6 +635,9 @@ class ScipyMinimizer(AbstractMinimizer):
 
         if verbose:
             print(self._params)
+
+        if check_success:
+            pass  # TODO
 
         assert self._success is not None
         result = MinimizeResult(fcn_min_val=opt_result.fun, params=self._params, success=self._success)
