@@ -325,6 +325,22 @@ class MinimizeResult(NamedTuple):
             json.dump(obj=self.as_dict, fp=fp, indent=2)
 
     @classmethod
+    def from_dict(
+        cls,
+        result_dict: Dict[Any, Any],
+    ) -> "MinimizeResult":
+        assert isinstance(result_dict, dict), type(result_dict)
+        assert all(k in result_dict.keys() for k in ["fcn_min_val", "params", "success"]), result_dict.keys()
+        params = MinimizerParameters.initialize_from_dict(dictionary=result_dict["params"])
+
+        instance = cls(
+            fcn_min_val=result_dict["fcn_min_val"],
+            params=params,
+            success=result_dict["success"],
+        )
+        return instance
+
+    @classmethod
     def load_from(
         cls,
         path: PathType,
@@ -333,16 +349,7 @@ class MinimizeResult(NamedTuple):
         with open(file=path, mode="r") as fp:
             restored_dict = json.load(fp)
 
-        assert isinstance(restored_dict, dict), type(restored_dict)
-        assert all(k in restored_dict.keys() for k in ["fcn_min_val", "params", "success"]), restored_dict.keys()
-        params = MinimizerParameters.initialize_from_dict(dictionary=restored_dict["params"])
-
-        instance = cls(
-            fcn_min_val=restored_dict["fcn_min_val"],
-            params=params,
-            success=restored_dict["success"],
-        )
-        return instance
+        return cls.from_dict(result_dict=restored_dict)
 
 
 MinimizeResult.fcn_min_val.__doc__ = """float: Estimated minimum of the objective function."""
