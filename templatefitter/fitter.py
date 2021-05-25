@@ -95,6 +95,7 @@ class TemplateFitter:
             minimizer_id=self._minimizer_id,
             fcn=self._nll_creator(fix_nuisance_parameters=fix_nui_params),
             names=self._nll.param_names,
+            param_types=self._nll.param_types,
         )
 
         if fix_nui_params:
@@ -225,6 +226,7 @@ class TemplateFitter:
             minimizer_id=self._minimizer_id,
             fcn=self._nll_creator(fix_nuisance_parameters=fix_nui_params),
             names=self._nll.param_names,
+            param_types=self._nll.param_types,
         )
 
         if fix_nui_params:
@@ -354,6 +356,7 @@ class TemplateFitter:
             minimizer_id=self._minimizer_id,
             fcn=self._nll_creator(fix_nuisance_parameters=fix_nui_params),
             names=self._nll.param_names,
+            param_types=self._nll.param_types,
         )
 
         if fix_nui_params:
@@ -379,6 +382,7 @@ class TemplateFitter:
             minimizer_id=self._minimizer_id,
             fcn=self._nll_creator(fix_nuisance_parameters=fix_nui_params),
             names=self._nll.param_names,
+            param_types=self._nll.param_types,
         )
 
         if fix_nui_params:

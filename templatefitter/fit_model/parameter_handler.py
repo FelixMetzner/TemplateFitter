@@ -472,11 +472,23 @@ class ParameterHandler:
     def get_parameter_dictionary(self) -> Dict[str, int]:
         return self._pars_dict
 
-    def get_parameter_names(self) -> List[str]:
-        return list(self._pars_dict.keys())
+    def get_parameter_names(self) -> Tuple[str, ...]:
+        return tuple(self._pars_dict.keys())
 
-    def get_floating_parameter_names(self) -> List[str]:
-        return [name for name, floating in zip(self._pars_dict.keys(), self.floating_parameter_mask) if floating]
+    def get_parameter_types(self) -> Tuple[str, ...]:
+        return tuple([self._parameter_infos[p_id].parameter_type for p_id in self._pars_dict.values()])
+
+    def get_floating_parameter_names(self) -> Tuple[str, ...]:
+        return tuple([name for name, floating in zip(self._pars_dict.keys(), self.floating_parameter_mask) if floating])
+
+    def get_floating_parameter_types(self) -> Tuple[str, ...]:
+        return tuple(
+            [
+                self._parameter_infos[p_id].parameter_type
+                for p_id, floating in zip(self._pars_dict.values(), self.floating_parameter_mask)
+                if floating
+            ]
+        )
 
     def get_parameters(self) -> np.ndarray:
         return self._np_pars

@@ -48,9 +48,17 @@ class MinimizerParameters:
         List of parameter names.
     """
 
-    def __init__(self, names: List[str]) -> None:
-        self._names = names
-        self._number_of_params = len(names)
+    def __init__(
+        self,
+        names: Tuple[str, ...],
+        param_types: Tuple[str, ...],
+    ) -> None:
+        self._names = names  # type: Tuple[str, ...]
+        self._param_types = param_types  # type: Tuple[str, ...]
+        self._number_of_params = len(names)  # type: int
+
+        assert len(self._param_types) == self._number_of_params, (len(self._param_types), self._number_of_params)
+
         self._fixed_params = [False for _ in self._names]
 
         self._values = np.zeros(self._number_of_params)
@@ -155,9 +163,12 @@ class MinimizerParameters:
         self._fixed_params = [False for _ in self.names]
 
     @property
-    def names(self) -> List[str]:
-        """list of str: List of parameter names."""
+    def names(self) -> Tuple[str, ...]:
         return self._names
+
+    @property
+    def parameter_types(self) -> Tuple[str, ...]:
+        return self._param_types
 
     @property
     def num_params(self) -> int:
@@ -243,6 +254,7 @@ class MinimizerParameters:
     def _dict_key_mapping() -> Dict[str, str]:
         return {
             "names": "names",
+            "param_types": "parameter_types",
             "num_params": "number_of_parameters",
             "num_params_not_fixed": "number_of_parameters_not_fixed",
             "fixed_params": "fixed_parameters_map",
@@ -256,7 +268,8 @@ class MinimizerParameters:
     def as_dict(self) -> Dict[Any, Any]:
         dict_key_map = self._dict_key_mapping()
         self_as_dict = {
-            dict_key_map["names"]: self.names,
+            dict_key_map["names"]: list(self.names),
+            dict_key_map["param_types"]: list(self.parameter_types),
             dict_key_map["num_params"]: self.num_params,
             dict_key_map["num_params_not_fixed"]: self.num_params_not_fixed,
             dict_key_map["fixed_params"]: self.fixed_params,
@@ -276,7 +289,10 @@ class MinimizerParameters:
         assert all(key in dictionary.keys() for key in km.values())
 
         assert len(dictionary[km["names"]]) == dictionary[km["num_params"]]
-        instance = cls(names=dictionary[km["names"]])
+        instance = cls(
+            names=tuple(dictionary[km["names"]]),
+            param_types=tuple(dictionary[km["param_types"]]),
+        )
 
         instance._fixed_params = dictionary[km["fixed_params"]]
         assert instance.num_params_not_fixed == dictionary[km["num_params_not_fixed"]]
@@ -361,10 +377,14 @@ class AbstractMinimizer(ABC):
     def __init__(
         self,
         fcn: Callable,
-        param_names: List[str],
+        param_names: Tuple[str, ...],
+        param_types: Tuple[str, ...],
     ) -> None:
         self._fcn = fcn
-        self._params = MinimizerParameters(names=param_names)
+        self._params = MinimizerParameters(
+            names=param_names,
+            param_types=param_types,
+        )
 
         # this lists can be different for different minimizer implementations
         self._param_bounds = [(None, None) for _ in self._params.names]  # type: List[BoundType]
@@ -480,11 +500,13 @@ class IMinuitMinimizer(AbstractMinimizer):
     def __init__(
         self,
         fcn: Callable,
-        param_names: List[str],
+        param_names: Tuple[str, ...],
+        param_types: Tuple[str, ...],
     ) -> None:
         super().__init__(
             fcn=fcn,
             param_names=param_names,
+            param_types=param_types,
         )
 
     def minimize(
@@ -555,11 +577,13 @@ class ScipyMinimizer(AbstractMinimizer):
     def __init__(
         self,
         fcn: Callable,
-        param_names: List[str],
+        param_names: Tuple[str, ...],
+        param_types: Tuple[str, ...],
     ) -> None:
         super().__init__(
             fcn=fcn,
             param_names=param_names,
+            param_types=param_types,
         )
 
     def minimize(
@@ -721,6 +745,11 @@ available_template_fitter_minimizer = {
 def minimizer_factory(
     minimizer_id: str,
     fcn: Callable,
-    names: List[str],
+    names: Tuple[str, ...],
+    param_types: Tuple[str, ...],
 ) -> AbstractMinimizer:
-    return available_template_fitter_minimizer[minimizer_id.lower()](fcn, names)
+    return available_template_fitter_minimizer[minimizer_id.lower()](
+        fcn=fcn,
+        param_names=names,
+        param_types=param_types,
+    )

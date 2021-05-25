@@ -2302,8 +2302,12 @@ class FitModel:
         return floating_nuisance_parameter_indices
 
     @property
-    def names_of_floating_parameters(self) -> List[str]:
+    def names_of_floating_parameters(self) -> Tuple[str, ...]:
         return self._params.get_floating_parameter_names()
+
+    @property
+    def types_of_floating_parameters(self) -> Tuple[str, ...]:
+        return self._params.get_floating_parameter_types()
 
     def get_parameter_index(
         self,
@@ -2418,8 +2422,12 @@ class AbstractCostFunction(ABC):
         return self._params.get_initial_values_of_floating_parameters()
 
     @property
-    def param_names(self) -> List[str]:
+    def param_names(self) -> Tuple[str, ...]:
         return self._model.names_of_floating_parameters
+
+    @property
+    def param_types(self) -> Tuple[str, ...]:
+        return self._model.types_of_floating_parameters
 
     @abstractmethod
     def __call__(self, x: np.ndarray, *args) -> float:
