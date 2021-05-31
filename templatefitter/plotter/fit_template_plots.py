@@ -7,7 +7,7 @@ import logging
 import numpy as np
 
 from matplotlib import pyplot as plt
-from typing import Union, Optional, Tuple, List, Dict, Any
+from typing import Union, Optional, Tuple, List, Dict, Type
 
 from templatefitter.utility import PathType
 
@@ -20,7 +20,7 @@ from templatefitter.fit_model.template import Template
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.plot_utilities import export, AxesType
 from templatefitter.plotter.histogram_variable import HistVariable
-from templatefitter.plotter.histogram_plot_base import HistogramPlot
+from templatefitter.plotter.fit_plots_base import FitPlotBase, FitPlotterBase
 
 from templatefitter.fit_model.model_builder import FitModel
 
@@ -29,12 +29,16 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     "FitTemplatePlot",
     "FitTemplatesPlotter",
+    # "FitTemplates2DHeatMapPlot",  # TODO
+    # "FitTemplates2DHeatMapPlotter",  # TODO
 ]
+
+# TODO: Allow for irregular binning! -> Fix issue with _add_prebinned_component
 
 plot_style.set_matplotlibrc_params()
 
 
-class FitTemplatePlot(HistogramPlot):
+class FitTemplatePlot(FitPlotBase):
     required_hist_key = "template"
     hist_key = required_hist_key
 
@@ -43,14 +47,12 @@ class FitTemplatePlot(HistogramPlot):
         variable: HistVariable,
         binning: Binning,
     ) -> None:
-        super().__init__(variable=variable)
+        super().__init__(
+            variable=variable,
+            binning=binning,
+        )
 
         self._has_component = False  # type: bool
-        self._binning = binning  # type: Binning
-
-    @property
-    def binning(self) -> Binning:
-        return self._binning
 
     def add_component(
         self,
@@ -148,11 +150,7 @@ class FitTemplatePlot(HistogramPlot):
             )
 
 
-class FitTemplates2DHeatMapPlot:
-    pass
-
-
-class FitTemplatesPlotter:
+class FitTemplatesPlotter(FitPlotterBase):
     plot_name_prefix = "fit_template_plot"  # type: str
 
     def __init__(
@@ -162,11 +160,15 @@ class FitTemplatesPlotter:
         fig_size: Tuple[float, float] = (5, 5),
         **kwargs,
     ) -> None:
-        self._variables = variables  # type: Tuple[HistVariable, ...]
-        self._fit_model = fit_model  # type: FitModel
-        self._fig_size = fig_size  # type: Tuple[float, float]
+        super().__init__(
+            variables=variables,
+            fit_model=fit_model,
+            reference_dimension=0,
+            fig_size=fig_size,
+            **kwargs,
+        )
 
-        self._optional_arguments_dict = kwargs  # type: Dict[str, Any]
+        self._plotter_class = FitTemplatePlot  # type: Type[FitPlotBase]
 
     def plot_projected_templates(
         self,
@@ -190,10 +192,8 @@ class FitTemplatesPlotter:
                 data_column_name_for_plot = mc_channel.data_column_names[dimension]
 
                 for template in mc_channel.templates:
-                    current_plot = FitTemplatePlot(  # TODO
-                        variable=self.channel_variables(dimension=dimension)[
-                            mc_channel.name
-                        ],  # TODO: channel_variables not available here... maybe implement a base function? Maybe use subsets_plotter for this?
+                    current_plot = self.plotter_class(
+                        variable=self.channel_variables(dimension=dimension)[mc_channel.name],
                         binning=current_binning,
                     )
 
@@ -232,16 +232,6 @@ class FitTemplatesPlotter:
 
         return output_lists
 
-    def variable(
-        self,
-        dimension: int,
-    ) -> HistVariable:
-        return self._variables[dimension]
-
-    @property
-    def variables(self) -> Tuple[HistVariable, ...]:
-        return self._variables
-
     def _get_plot_title(
         self,
         template: Template,
@@ -272,42 +262,11 @@ class FitTemplatesPlotter:
             attribute_name="mc_label_dict", key=template.process_name, default_value=template.latex_label
         )
 
-    def _get_channel_label(
-        self,
-        channel: Channel,
-    ) -> str:
-        if "channel_label_dict" in self._optional_arguments_dict:
-            channel_label_dict = self._optional_arguments_dict["channel_label_dict"]
-            assert isinstance(channel_label_dict, dict), (channel_label_dict, type(channel_label_dict))
-            assert all(isinstance(k, str) for k in channel_label_dict.keys()), list(channel_label_dict.keys())
-            assert all(isinstance(v, str) for v in channel_label_dict.values()), list(channel_label_dict.values())
-            if channel.name not in channel_label_dict.keys():
-                raise KeyError(
-                    f"No entry for the channel {channel.name} in the provided channel_label_dict!\n"
-                    f"channel_label_dict:\n\t" + "\n\t".join([f"{k}: {v}" for k, v in channel_label_dict.items()])
-                )
-            return channel_label_dict[channel.name]
-        elif channel.latex_label is not None:
-            return channel.latex_label
-        else:
-            return channel.name
 
-    def _get_attribute_from_optional_arguments_dict(
-        self,
-        attribute_name: str,
-        key: str,
-        default_value: str,
-    ) -> str:
-        if attribute_name in self._optional_arguments_dict:
-            attribute_dict = self._optional_arguments_dict[attribute_name]
-            assert isinstance(attribute_dict, dict), (attribute_dict, type(attribute_dict))
-            assert all(isinstance(k, str) for k in attribute_dict.keys()), list(attribute_dict.keys())
-            assert all(isinstance(v, str) for v in attribute_dict.values()), list(attribute_dict.values())
-            if key not in attribute_dict.keys():
-                raise KeyError(
-                    f"No entry for the key {key} in the provided attribute dictionary  {attribute_name}!\n"
-                    f"{attribute_name} dictionary:\n\t" + "\n\t".join([f"{k}: {v}" for k, v in attribute_dict.items()])
-                )
-            return attribute_dict[key]
-        else:
-            return default_value
+# class FitTemplates2DHeatMapPlot(FitPlotBase):
+#     # TODO Generalize heat map plot in validation plots!
+#     pass
+#
+#
+# class FitTemplates2DHeatMapPlotter(FitPlotterBase):
+#     pass
