@@ -217,14 +217,14 @@ class FitResultPlotter:
         variables: Tuple[HistVariable, ...],
         fit_model: FitModel,
         reference_dimension: int = 0,
-        fig_size: Tuple[float, float] = (5, 5),  # TODO: could be handled via kwargs
+        fig_size: Tuple[float, float] = (5, 5),
         **kwargs,
     ) -> None:
         self._variables = variables  # type: Tuple[HistVariable, ...]
 
         self._fit_model = fit_model  # type: FitModel
 
-        self._reference_dimension = reference_dimension  # type: int
+        self._base_reference_dimension = reference_dimension  # type: int
 
         self._fig_size = fig_size  # type: Tuple[float, float]
         self._optional_arguments_dict = kwargs  # type: Dict[str, Any]
@@ -238,8 +238,10 @@ class FitResultPlotter:
     def plot_fit_result(
         self,
         use_initial_values: bool = False,
+        reference_dimension: Optional[int] = None,
         output_dir_path: Optional[PathType] = None,
         output_name_tag: Optional[str] = None,
+        bin_info_location: Optional[str] = None,
     ) -> Dict[str, List[PathType]]:
         output_lists = {
             "pdf": [],
@@ -251,10 +253,12 @@ class FitResultPlotter:
                 "Parameter 'output_name_tag' and 'output_dir_path' must either both be provided or both set to None!"
             )
 
+        bin_info_pos = "right" if bin_info_location is None else bin_info_location  # type: str
+        ref_dim = self.base_reference_dimension if reference_dimension is None else reference_dimension  # type: int
+
         for mc_channel in self._fit_model.mc_channels_to_plot:
-            # TODO: Maybe also use the inverse of the reference dimension!?
-            current_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=self.reference_dimension)
-            data_column_name_for_plot = mc_channel.data_column_names[self.reference_dimension]
+            current_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=ref_dim)
+            data_column_name_for_plot = mc_channel.data_column_names[ref_dim]
 
             data_channel = self._fit_model.data_channels_to_plot.get_channel_by_name(name=mc_channel.name)
 
@@ -266,19 +270,19 @@ class FitResultPlotter:
             for counter, sub_bin_info in enumerate(
                 self._get_sub_bin_infos_for(
                     channel_name=mc_channel.name,
-                    reference_dimension=self.reference_dimension,  # TODO
+                    reference_dimension=ref_dim,
                 )
             ):
                 sub_bin_info_text = self._get_sub_bin_info_text(
                     channel_name=mc_channel.name,
                     sub_bin_infos=sub_bin_info,
-                    reference_dimension=self.reference_dimension,
+                    reference_dimension=ref_dim,
                 )
 
-                nd_array_slices = self._get_slices(sub_bin_info=sub_bin_info)
+                nd_array_slices = self._get_slices(reference_dimension=ref_dim, sub_bin_info=sub_bin_info)
 
                 current_plot = FitResultPlot(
-                    variable=self.channel_variables(dimension=self.reference_dimension)[mc_channel.name],
+                    variable=self.channel_variables(dimension=ref_dim)[mc_channel.name],
                     binning=current_binning,
                 )
 
@@ -323,8 +327,6 @@ class FitResultPlotter:
                     #  legend_loc=???,  # Optional[Union[int, str]] = None,
                     #  y_scale=???,  # float = 1.1
                 )
-
-                bin_info_pos = "right"  # TODO: Make this variable accessible
 
                 if bin_info_pos == "left" or sub_bin_info_text is None:
                     axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
@@ -523,8 +525,8 @@ class FitResultPlotter:
         return len(self._channel_name_list)
 
     @property
-    def reference_dimension(self) -> int:
-        return self._reference_dimension
+    def base_reference_dimension(self) -> int:
+        return self._base_reference_dimension
 
     def _add_channel_hist_vars(
         self,
@@ -737,12 +739,13 @@ class FitResultPlotter:
 
         return name
 
+    @staticmethod
     def _get_slices(
-        self,
+        reference_dimension: int,
         sub_bin_info: Optional[SubBinInfos],
     ) -> Tuple[Union[slice, int], ...]:
         if sub_bin_info is None:
-            assert self.reference_dimension == 0
+            assert reference_dimension == 0
             return tuple([slice(None)])
 
         assert isinstance(sub_bin_info, SubBinInfos), type(sub_bin_info)
@@ -752,10 +755,10 @@ class FitResultPlotter:
 
         slice_list = []  # type: List[Union[slice, int]]
         for dim in range(len(bins_in_other_dims) + 1):
-            if dim == self.reference_dimension:
+            if dim == reference_dimension:
                 slice_list.append(slice(None))
             else:
-                slice_list.append(bins_in_other_dims[dim if dim < self.reference_dimension else dim - 1])
+                slice_list.append(bins_in_other_dims[dim if dim < reference_dimension else dim - 1])
 
         assert len(slice_list) == len(bins_in_other_dims) + 1, (len(slice_list), len(bins_in_other_dims))
         return tuple(slice_list)
