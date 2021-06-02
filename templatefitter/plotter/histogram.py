@@ -17,8 +17,8 @@ from collections import OrderedDict
 from typing import Optional, Union, List, Tuple, Dict, ItemsView, KeysView, ValuesView
 
 from templatefitter.utility import PathType
-from templatefitter.binned_distributions.binning import Binning
 from templatefitter.binned_distributions import distributions_utility
+from templatefitter.binned_distributions.binning import Binning, BinsInputType
 from templatefitter.binned_distributions.binned_distribution import BinnedDistribution
 from templatefitter.binned_distributions.distributions_utility import get_combined_covariance
 
@@ -57,6 +57,7 @@ class Histogram:
         self,
         variable: HistVariable,
         hist_type: Optional[str] = None,
+        special_binning: Union[None, BinsInputType, Binning] = None,
     ) -> None:
         if not isinstance(variable, HistVariable):
             raise ValueError(
@@ -66,12 +67,7 @@ class Histogram:
         self._variable = variable  # type: HistVariable
         self._hist_type = self._check_and_return_hist_type(hist_type=hist_type)  # type: str
 
-        self._binning = Binning(
-            bins=variable.n_bins,
-            dimensions=1,
-            scope=variable.scope,
-            log_scale=variable.use_log_scale,
-        )  # type: Binning
+        self._binning = self._init_hist_binning(special_binning=special_binning)  # type: Binning
 
         self._components = []  # type: List[HistComponent]
         self._auto_color_index = 0  # type: int
@@ -328,6 +324,34 @@ class Histogram:
             raise ValueError(f"{base_error_text}You provided the string {hist_type}!")
 
         return hist_type
+
+    def _init_hist_binning(self, special_binning: Union[None, BinsInputType, Binning]) -> Binning:
+        if special_binning is None:
+            _binning = Binning(
+                bins=self.variable.n_bins,
+                dimensions=1,
+                scope=self.variable.scope,
+                log_scale=self.variable.use_log_scale,
+            )  # type: Binning
+        else:
+            if isinstance(special_binning, Binning):
+                assert special_binning.dimensions == 1, special_binning.dimensions
+                assert special_binning.log_scale_mask[0] == self.variable.use_log_scale, (
+                    special_binning.log_scale_mask,
+                    self.variable.use_log_scale,
+                )
+                if self.variable.has_scope():
+                    assert special_binning.range[0] == self.variable.scope, (special_binning.range, self.variable.scope)
+                _binning = special_binning
+            else:
+                _binning = Binning(
+                    bins=special_binning,
+                    dimensions=1,
+                    scope=self.variable.scope,
+                    log_scale=self.variable.use_log_scale,
+                )
+
+        return _binning
 
     def _get_auto_color(self):
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]

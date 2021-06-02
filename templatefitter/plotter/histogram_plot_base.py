@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from typing import Optional, Union, Any, Tuple
 
 from templatefitter.utility import PathType
-from templatefitter.binned_distributions.binning import Binning
+from templatefitter.binned_distributions.binning import Binning, BinsInputType
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.systematics import SystematicsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType, DataColumnNamesInput
@@ -23,9 +23,14 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "HistogramPlot",
+    "HistogramPlot2D",
 ]
 
 plot_style.set_matplotlibrc_params()
+
+
+# TODO: Allow for irregular binning! -> Fix issue with _add_prebinned_component
+# TODO: Add HistogramPlot2D (One component only for now!)
 
 
 class HistogramPlot(ABC):
@@ -61,6 +66,7 @@ class HistogramPlot(ABC):
         label: str,
         histogram_key: str,
         data: DataInputType,
+        special_binning: Union[None, BinsInputType, Binning] = None,
         weights: WeightsInputType = None,
         systematics: SystematicsInputType = None,
         hist_type: Optional[str] = None,
@@ -68,7 +74,7 @@ class HistogramPlot(ABC):
         alpha: float = 1.0,
     ) -> None:
         if histogram_key not in self._histograms.histogram_keys:
-            new_histogram = Histogram(variable=self.variable, hist_type=hist_type)
+            new_histogram = Histogram(variable=self.variable, hist_type=hist_type, special_binning=special_binning)
             self._histograms.add_histogram(key=histogram_key, histogram=new_histogram)
 
         self._histograms[histogram_key].add_histogram_component(
@@ -94,7 +100,7 @@ class HistogramPlot(ABC):
         alpha: float = 1.0,
     ) -> None:
         if histogram_key not in self._histograms.histogram_keys:
-            new_histogram = Histogram(variable=self.variable, hist_type=hist_type)
+            new_histogram = Histogram(variable=self.variable, hist_type=hist_type, special_binning=original_binning)
             self._histograms.add_histogram(key=histogram_key, histogram=new_histogram)
 
         if data_column_names is not None:
@@ -228,3 +234,8 @@ class HistogramPlot(ABC):
 
     def write_hist_data_to_file(self, file_path: PathType):
         self._histograms.write_to_file(file_path=file_path)
+
+
+class HistogramPlot2D(ABC):
+    # TODO
+    pass
