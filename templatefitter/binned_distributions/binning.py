@@ -324,3 +324,30 @@ class Binning:
             scope=self.range[dimension],
             log_scale=self.log_scale_mask[dimension],
         )
+
+    @staticmethod
+    def _calc_bin_scaling(bin_widths: Tuple[float, ...]) -> np.ndarray:
+        min_bin_width = min(bin_widths)  # type: float
+        bin_widths_array = np.array(bin_widths)  # type: np.ndarray
+        if all(bw == min_bin_width for bw in bin_widths):
+            return np.ones_like(bin_widths_array)
+        else:
+            return 1.0 / np.around(bin_widths_array / min_bin_width, decimals=0)
+
+    def get_bin_scaling_per_dim_tuple(self) -> Tuple[np.ndarray, ...]:
+        return tuple([self._calc_bin_scaling(bin_widths=bws) for bws in self.bin_widths])
+
+    def get_bin_scaling_for_dim(self, dimension: int) -> np.ndarray:
+        if dimension >= self.dimensions or dimension < 0:
+            raise ValueError(
+                f"Argument 'dimension' must be an integer in [0, {self.dimensions - 1}], but {dimension} was provided!"
+            )
+        return self.get_bin_scaling_per_dim_tuple()[dimension]
+
+    def get_bin_scaling(self) -> np.ndarray:
+        if not self.dimensions == 1:
+            raise RuntimeError(
+                f"This function is only valid for 1 dimensional Binnings instances, "
+                f"but this instance has {self.dimensions} dimensions!"
+            )
+        return self.get_bin_scaling_for_dim(dimension=0)
