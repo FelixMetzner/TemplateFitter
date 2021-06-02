@@ -29,7 +29,6 @@ __all__ = [
 plot_style.set_matplotlibrc_params()
 
 
-# TODO: Allow for irregular binning! -> Fix issue with _add_prebinned_component
 # TODO: Add HistogramPlot2D (One component only for now!)
 
 

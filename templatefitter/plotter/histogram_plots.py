@@ -278,7 +278,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 minimal_number_of_bins=7,
             )
 
-        bin_scaling = 1.0 / np.around(self.bin_widths / self.minimal_bin_width, decimals=0)  # type: np.ndarray
+        bin_scaling = self.binning.get_bin_scaling()  # type: np.ndarray
 
         mc_bin_count, mc_uncert, norm_factor = self.get_bin_info_for_component(
             component_key=self.mc_key,

@@ -1,26 +1,20 @@
 """
 Plotting tools to illustrate fit results produced with this package
 """
-import os
 import copy
 import logging
 import itertools
-import numpy as np
 
-from abc import ABC, abstractmethod
-from matplotlib import pyplot as plt
+from abc import ABC
 from typing import Optional, Union, Tuple, List, Dict, NamedTuple, Generator, Any, Type
 
-from templatefitter.utility import PathType
 from templatefitter.fit_model.channel import Channel
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.fit_model.data_channel import DataChannelContainer
-from templatefitter.binned_distributions.binned_distribution import DataColumnNamesInput
 
 from templatefitter.plotter import plot_style
-from templatefitter.plotter.plot_utilities import export, AxesType
 from templatefitter.plotter.histogram_variable import HistVariable
-from templatefitter.plotter.histogram_plot_base import HistogramPlot
+from templatefitter.plotter.histogram_plot_base import HistogramPlot, HistogramPlot2D
 
 from templatefitter.fit_model.model_builder import FitModel
 
@@ -28,6 +22,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "FitPlotBase",
+    "FitPlot2DBase",
     "SubBinInfos",
     "FitPlotterBase",
 ]
@@ -35,7 +30,7 @@ __all__ = [
 plot_style.set_matplotlibrc_params()
 
 
-class FitPlotBase(HistogramPlot, ABC):  # TODO: Implement and use in result and template plots
+class FitPlotBase(HistogramPlot, ABC):
     def __init__(
         self,
         variable: HistVariable,
@@ -50,12 +45,16 @@ class FitPlotBase(HistogramPlot, ABC):  # TODO: Implement and use in result and 
         return self._binning
 
 
+class FitPlot2DBase(HistogramPlot2D, ABC):  # TODO Implement HistogramPlot2D first and then use it here.
+    pass
+
+
 class SubBinInfos(NamedTuple):
     bin_ids: Tuple[int, ...]
     bin_edges: Tuple[Tuple[float, float], ...]
 
 
-class FitPlotterBase(ABC):  # TODO: Implement and use in result and template plots
+class FitPlotterBase(ABC):
     def __init__(
         self,
         variables: Tuple[HistVariable, ...],
