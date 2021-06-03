@@ -33,7 +33,6 @@ __all__ = [
     # "FitTemplates2DHeatMapPlotter",  # TODO
 ]
 
-# TODO: Allow for irregular binning! -> Fix issue with _add_prebinned_component
 
 plot_style.set_matplotlibrc_params()
 
@@ -93,11 +92,6 @@ class FitTemplatePlot(FitPlotBase):
         self._check_required_histograms()
 
         bin_scaling = self.binning.get_bin_scaling()  # type: np.ndarray
-
-        old_bin_scaling = 1.0 / np.around(
-            self.bin_widths / self.minimal_bin_width, decimals=0
-        )  # type: np.ndarray  # TODO: Remove once tested
-        assert (bin_scaling == old_bin_scaling).all(), (bin_scaling, old_bin_scaling)  # TODO: Remove once tested
 
         template_bin_counts = self._histograms[self.hist_key].get_bin_counts(factor=bin_scaling)
         assert isinstance(template_bin_counts, list) and len(template_bin_counts) == 1, template_bin_counts

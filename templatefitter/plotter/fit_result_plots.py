@@ -93,11 +93,6 @@ class FitResultPlot(FitPlotBase):
 
         bin_scaling = self.binning.get_bin_scaling()  # type: np.ndarray
 
-        old_bin_scaling = 1.0 / np.around(
-            self.bin_widths / self.minimal_bin_width, decimals=0
-        )  # type: np.ndarray  # TODO: Remove once tested
-        assert (bin_scaling == old_bin_scaling).all(), (bin_scaling, old_bin_scaling)  # TODO: Remove once tested
-
         data_bin_count = self._histograms[self.data_key].get_bin_count_of_component(index=0)
         data_bin_errors_sq = self._histograms[self.data_key].get_histogram_squared_bin_errors_of_component(index=0)
 
