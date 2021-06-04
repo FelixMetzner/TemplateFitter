@@ -335,8 +335,8 @@ class FitTemplatesPlotter(FitPlotterBase):
 
     @staticmethod
     def _set_2d_axis_tick_labels(ax: AxesType, binning: Binning) -> None:
-        x_tick_positions = np.arange(binning.num_bins[0])  # type: np.array
-        y_tick_positions = np.arange(binning.num_bins[1])  # type: np.array
+        x_tick_positions = np.arange(binning.num_bins[0] + 1)  # type: np.array
+        y_tick_positions = np.arange(binning.num_bins[1] + 1)  # type: np.array
         x_tick_labels = np.array(binning.bin_edges[0])  # type: np.array
         y_tick_labels = np.array(binning.bin_edges[1])  # type: np.array
 
