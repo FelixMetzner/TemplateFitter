@@ -305,7 +305,7 @@ class FitTemplatesPlotter(FitPlotterBase):
 
                     color_map.set_bad(color=plot_style.KITColors.white)
                     value_matrix[value_matrix == 0.0] = np.nan
-                    heatmap = ax.imshow(X=value_matrix, cmap=color_map, aspect="auto")
+                    heatmap = ax.imshow(X=value_matrix.T, cmap=color_map, aspect="auto")
                     plt.colorbar(heatmap)
 
                     self._set_2d_axis_tick_labels(ax=ax, binning=current_binning)
@@ -348,7 +348,7 @@ class FitTemplatesPlotter(FitPlotterBase):
 
         x_labels = [f"{la:.2f}" for la in x_tick_labels]  # type: List[str]
         y_labels = [f"{la:.2f}" for la in y_tick_labels]  # type: List[str]
-        ax.set_xticklabels(labels=x_labels)
+        ax.set_xticklabels(labels=x_labels, rotate=45)
         ax.set_yticklabels(labels=y_labels)
 
     def _get_plot_title(
