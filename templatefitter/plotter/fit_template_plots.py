@@ -241,6 +241,7 @@ class FitTemplatesPlotter(FitPlotterBase):
         output_dir_path: Optional[PathType] = None,
         output_name_tag: Optional[str] = None,
         base_color: Union[None, str, Dict[str, str]] = None,
+        alternative_temp_color: Optional[Dict[str, str]] = None,
     ) -> Dict[str, List[PathType]]:
         output_lists = {
             "pdf": [],
@@ -256,6 +257,7 @@ class FitTemplatesPlotter(FitPlotterBase):
             c_map_base_color = base_color  # type: Union[str, Dict[str, str]]
         else:
             c_map_base_color = self.default_2d_c_map_base_color if base_color is None else base_color
+        alt_temp_color_dict = {} if alternative_temp_color is None else alternative_temp_color  # type: Dict[str, str]
 
         for mc_channel in self._fit_model.mc_channels_to_plot:
             for dim_pair in iter_combinations(list(range(mc_channel.binning.dimensions)), 2):
@@ -290,14 +292,13 @@ class FitTemplatesPlotter(FitPlotterBase):
 
                     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=self._fig_size, dpi=200)
 
-                    # TODO: Beginning of heatmap plot implementation
-
                     c_values = [0.0, np.max(value_matrix)]  # type: List[float]
+                    c_map_temp_color = alt_temp_color_dict.get(template_color, template_color)
                     if isinstance(c_map_base_color, dict):
                         base_c = c_map_base_color.get(template_color, self.default_2d_c_map_base_color)  # type: str
-                        colors = [base_c, template_color]  # type: List[str]
+                        colors = [base_c, c_map_temp_color]  # type: List[str]
                     else:
-                        colors = [c_map_base_color, template_color]
+                        colors = [c_map_base_color, c_map_temp_color]
 
                     c_norm = plt.Normalize(min(c_values), max(c_values))
                     c_tuples = list(zip(map(c_norm, c_values), colors))
@@ -309,7 +310,6 @@ class FitTemplatesPlotter(FitPlotterBase):
                     plt.colorbar(heatmap)
 
                     self._set_2d_axis_tick_labels(ax=ax, binning=current_binning)
-                    # TODO: End of heatmap plot implementation
 
                     ax.set_title(self._get_plot_title(template=template, channel=mc_channel), loc="right")
 
