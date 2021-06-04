@@ -151,6 +151,9 @@ class FitTemplatePlot(FitPlotBase):
 
 class FitTemplatesPlotter(FitPlotterBase):
     plot_name_prefix = "fit_template_plot"  # type: str
+    plot_2d_name_prefix = "fit_template_2d_plot"  # type: str
+
+    default_2d_c_map_base_color = plot_style.KITColors.light_grey  # type: str
 
     def __init__(
         self,
@@ -236,6 +239,7 @@ class FitTemplatesPlotter(FitPlotterBase):
         use_initial_values: bool = True,
         output_dir_path: Optional[PathType] = None,
         output_name_tag: Optional[str] = None,
+        base_color: Optional[str] = None,
     ) -> Dict[str, List[PathType]]:
         output_lists = {
             "pdf": [],
@@ -247,9 +251,11 @@ class FitTemplatesPlotter(FitPlotterBase):
                 "Parameter 'output_name_tag' and 'output_dir_path' must either both be provided or both set to None!"
             )
 
+        c_map_base_color = self.default_2d_c_map_base_color if base_color is None else base_color  # type: str
+
         for mc_channel in self._fit_model.mc_channels_to_plot:
             for dim_pair in iter_combinations(list(range(mc_channel.binning.dimensions)), 2):
-                current_binning = mc_channel.binning.get_binning_for_x_dimensions(dimension=dim_pair)
+                current_binning = mc_channel.binning.get_binning_for_x_dimensions(dimensions=dim_pair)
 
                 x_variable = self.channel_variables(dimension=dim_pair[0])[mc_channel.name]  # type: HistVariable
                 y_variable = self.channel_variables(dimension=dim_pair[1])[mc_channel.name]  # type: HistVariable
@@ -283,7 +289,7 @@ class FitTemplatesPlotter(FitPlotterBase):
                     # TODO: Beginning of heatmap plot implementation
 
                     c_values = [0.0, np.max(value_matrix)]  # type: List[float]
-                    colors = [plot_style.KITColors.light_grey, template_color]  # type: List[str]
+                    colors = [c_map_base_color, template_color]  # type: List[str]
 
                     c_norm = plt.Normalize(min(c_values), max(c_values))
                     c_tuples = list(zip(map(c_norm, c_values), colors))
@@ -312,7 +318,7 @@ class FitTemplatesPlotter(FitPlotterBase):
 
                         dims_str = f"{dim_pair[0]}_{dim_pair[1]}"  # type: str
                         template_info = f"{mc_channel.name}_template_{template.process_name}{add_info}"
-                        filename = f"{self.plot_name_prefix}_{output_name_tag}_dim_{dims_str}_{template_info}"
+                        filename = f"{self.plot_2d_name_prefix}_{output_name_tag}_dim_{dims_str}_{template_info}"
 
                         export(fig=fig, filename=filename, target_dir=output_dir_path, close_figure=True)
                         output_lists["pdf"].append(os.path.join(output_dir_path, f"{filename}.pdf"))
