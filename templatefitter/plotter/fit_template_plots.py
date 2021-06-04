@@ -5,9 +5,10 @@ Plotting tools to visualize fit templates
 import os
 import logging
 import numpy as np
-import matplotlib.colors as mpl_colors
 
 from matplotlib import pyplot as plt
+from matplotlib import colors as mpl_colors
+from matplotlib import ticker as mpl_ticker
 from itertools import combinations as iter_combinations
 from typing import Union, Optional, Tuple, List, Dict, Type
 
@@ -239,7 +240,7 @@ class FitTemplatesPlotter(FitPlotterBase):
         use_initial_values: bool = True,
         output_dir_path: Optional[PathType] = None,
         output_name_tag: Optional[str] = None,
-        base_color: Optional[str] = None,
+        base_color: Union[None, str, Dict[str, str]] = None,
     ) -> Dict[str, List[PathType]]:
         output_lists = {
             "pdf": [],
@@ -251,7 +252,10 @@ class FitTemplatesPlotter(FitPlotterBase):
                 "Parameter 'output_name_tag' and 'output_dir_path' must either both be provided or both set to None!"
             )
 
-        c_map_base_color = self.default_2d_c_map_base_color if base_color is None else base_color  # type: str
+        if isinstance(base_color, dict):
+            c_map_base_color = base_color  # type: Union[str, Dict[str, str]]
+        else:
+            c_map_base_color = self.default_2d_c_map_base_color if base_color is None else base_color
 
         for mc_channel in self._fit_model.mc_channels_to_plot:
             for dim_pair in iter_combinations(list(range(mc_channel.binning.dimensions)), 2):
@@ -289,7 +293,11 @@ class FitTemplatesPlotter(FitPlotterBase):
                     # TODO: Beginning of heatmap plot implementation
 
                     c_values = [0.0, np.max(value_matrix)]  # type: List[float]
-                    colors = [c_map_base_color, template_color]  # type: List[str]
+                    if isinstance(c_map_base_color, dict):
+                        base_c = c_map_base_color.get(template_color, self.default_2d_c_map_base_color)  # type: str
+                        colors = [base_c, template_color]  # type: List[str]
+                    else:
+                        colors = [c_map_base_color, template_color]
 
                     c_norm = plt.Normalize(min(c_values), max(c_values))
                     c_tuples = list(zip(map(c_norm, c_values), colors))
@@ -300,8 +308,7 @@ class FitTemplatesPlotter(FitPlotterBase):
                     heatmap = ax.imshow(X=value_matrix, cmap=color_map, aspect="auto")
                     plt.colorbar(heatmap)
 
-                    # TODO: Set x and y ticks!
-
+                    self._set_2d_axis_tick_labels(ax=ax, binning=current_binning)
                     # TODO: End of heatmap plot implementation
 
                     ax.set_title(self._get_plot_title(template=template, channel=mc_channel), loc="right")
@@ -325,6 +332,24 @@ class FitTemplatesPlotter(FitPlotterBase):
                         output_lists["png"].append(os.path.join(output_dir_path, f"{filename}.png"))
 
         return output_lists
+
+    @staticmethod
+    def _set_2d_axis_tick_labels(ax: AxesType, binning: Binning) -> None:
+        x_tick_positions = np.arange(binning.num_bins[0])  # type: np.array
+        y_tick_positions = np.arange(binning.num_bins[1])  # type: np.array
+        x_tick_labels = np.array(binning.bin_edges[0])  # type: np.array
+        y_tick_labels = np.array(binning.bin_edges[1])  # type: np.array
+
+        ax.set_xticks(ticks=x_tick_positions)
+        ax.set_yticks(ticks=y_tick_positions)
+
+        ax.xaxis.set_minor_locator(locator=mpl_ticker.NullLocator())
+        ax.yaxis.set_minor_locator(locator=mpl_ticker.NullLocator())
+
+        x_labels = [f"{la:.2f}" for la in x_tick_labels]  # type: List[str]
+        y_labels = [f"{la:.2f}" for la in y_tick_labels]  # type: List[str]
+        ax.set_xticklabels(labels=x_labels)
+        ax.set_yticklabels(labels=y_labels)
 
     def _get_plot_title(
         self,
