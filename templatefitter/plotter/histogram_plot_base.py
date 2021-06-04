@@ -23,19 +23,12 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "HistogramPlot",
-    "HistogramPlot2D",
 ]
 
 plot_style.set_matplotlibrc_params()
 
 
-# TODO: Add HistogramPlot2D (One component only for now!)
-
-
 class HistogramPlot(ABC):
-    """
-    Base class for histogram plots.
-    """
 
     legend_cols_default = 1  # type: int
     legend_loc_default = plt.rcParams["legend.loc"]  # type: Union[int, str]
@@ -233,8 +226,3 @@ class HistogramPlot(ABC):
 
     def write_hist_data_to_file(self, file_path: PathType):
         self._histograms.write_to_file(file_path=file_path)
-
-
-class HistogramPlot2D(ABC):
-    # TODO
-    pass

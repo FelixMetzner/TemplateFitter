@@ -14,7 +14,7 @@ from templatefitter.fit_model.data_channel import DataChannelContainer
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram_variable import HistVariable
-from templatefitter.plotter.histogram_plot_base import HistogramPlot, HistogramPlot2D
+from templatefitter.plotter.histogram_plot_base import HistogramPlot
 
 from templatefitter.fit_model.model_builder import FitModel
 
@@ -22,7 +22,6 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "FitPlotBase",
-    "FitPlot2DBase",
     "SubBinInfos",
     "FitPlotterBase",
 ]
@@ -43,10 +42,6 @@ class FitPlotBase(HistogramPlot, ABC):
     @property
     def binning(self) -> Binning:
         return self._binning
-
-
-class FitPlot2DBase(HistogramPlot2D, ABC):  # TODO Implement HistogramPlot2D first and then use it here.
-    pass
 
 
 class SubBinInfos(NamedTuple):

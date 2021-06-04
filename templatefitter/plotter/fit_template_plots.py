@@ -5,8 +5,10 @@ Plotting tools to visualize fit templates
 import os
 import logging
 import numpy as np
+import matplotlib.colors as mpl_colors
 
 from matplotlib import pyplot as plt
+from itertools import combinations as iter_combinations
 from typing import Union, Optional, Tuple, List, Dict, Type
 
 from templatefitter.utility import PathType
@@ -29,8 +31,6 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     "FitTemplatePlot",
     "FitTemplatesPlotter",
-    # "FitTemplates2DHeatMapPlot",  # TODO
-    # "FitTemplates2DHeatMapPlotter",  # TODO
 ]
 
 
@@ -231,6 +231,95 @@ class FitTemplatesPlotter(FitPlotterBase):
 
         return output_lists
 
+    def plot_2d_templates(
+        self,
+        use_initial_values: bool = True,
+        output_dir_path: Optional[PathType] = None,
+        output_name_tag: Optional[str] = None,
+    ) -> Dict[str, List[PathType]]:
+        output_lists = {
+            "pdf": [],
+            "png": [],
+        }  # type: Dict[str, List[PathType]]
+
+        if (output_dir_path is None) != (output_name_tag is None):
+            raise ValueError(
+                "Parameter 'output_name_tag' and 'output_dir_path' must either both be provided or both set to None!"
+            )
+
+        for mc_channel in self._fit_model.mc_channels_to_plot:
+            for dim_pair in iter_combinations(list(range(mc_channel.binning.dimensions)), 2):
+                current_binning = mc_channel.binning.get_binning_for_x_dimensions(dimension=dim_pair)
+
+                x_variable = self.channel_variables(dimension=dim_pair[0])[mc_channel.name]  # type: HistVariable
+                y_variable = self.channel_variables(dimension=dim_pair[1])[mc_channel.name]  # type: HistVariable
+
+                for template in mc_channel.templates:
+                    template_bin_count, template_bin_error_sq = template.project_onto_two_dimensions(
+                        bin_counts=template.expected_bin_counts(use_initial_values=use_initial_values),
+                        dimensions=dim_pair,
+                        bin_errors_squared=template.expected_bin_errors_squared(use_initial_values=use_initial_values),
+                    )
+
+                    template_color = self._get_template_color(key=template.process_name, original_color=template.color)
+
+                    bin_scaling_tuple = current_binning.get_bin_scaling_per_dim_tuple()  # type: Tuple[np.ndarray, ...]
+                    bin_scaling = np.outer(*bin_scaling_tuple)  # type: np.ndarray
+                    assert len(bin_scaling.shape) == 2, bin_scaling.shape
+                    assert bin_scaling.shape[0] == bin_scaling_tuple[0].shape[0], (
+                        bin_scaling.shape,
+                        bin_scaling_tuple[0].shape,
+                    )
+                    assert bin_scaling.shape[1] == bin_scaling_tuple[1].shape[0], (
+                        bin_scaling.shape,
+                        bin_scaling_tuple[1].shape,
+                    )
+
+                    assert template_bin_count.shape == bin_scaling.shape, (template_bin_count.shape, bin_scaling.shape)
+                    value_matrix = template_bin_count * bin_scaling  # type: np.ndarray
+
+                    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=self._fig_size, dpi=200)
+
+                    # TODO: Beginning of heatmap plot implementation
+
+                    c_values = [0.0, np.max(value_matrix)]  # type: List[float]
+                    colors = [plot_style.KITColors.light_grey, template_color]  # type: List[str]
+
+                    c_norm = plt.Normalize(min(c_values), max(c_values))
+                    c_tuples = list(zip(map(c_norm, c_values), colors))
+                    color_map = mpl_colors.LinearSegmentedColormap.from_list(name="", colors=c_tuples)
+
+                    color_map.set_bad(color=plot_style.KITColors.white)
+                    value_matrix[value_matrix == 0.0] = np.nan
+                    heatmap = ax.imshow(X=value_matrix, cmap=color_map, aspect="auto")
+                    plt.colorbar(heatmap)
+
+                    # TODO: Set x and y ticks!
+
+                    # TODO: End of heatmap plot implementation
+
+                    ax.set_title(self._get_plot_title(template=template, channel=mc_channel), loc="right")
+
+                    ax.set_xlabel(x_variable.x_label, plot_style.xlabel_pos)
+                    ax.set_ylabel(y_variable.x_label, plot_style.ylabel_pos)
+
+                    if output_dir_path is not None:
+                        assert output_name_tag is not None
+
+                        add_info = ""
+                        if use_initial_values:
+                            add_info = "_with_initial_values"
+
+                        dims_str = f"{dim_pair[0]}_{dim_pair[1]}"  # type: str
+                        template_info = f"{mc_channel.name}_template_{template.process_name}{add_info}"
+                        filename = f"{self.plot_name_prefix}_{output_name_tag}_dim_{dims_str}_{template_info}"
+
+                        export(fig=fig, filename=filename, target_dir=output_dir_path, close_figure=True)
+                        output_lists["pdf"].append(os.path.join(output_dir_path, f"{filename}.pdf"))
+                        output_lists["png"].append(os.path.join(output_dir_path, f"{filename}.png"))
+
+        return output_lists
+
     def _get_plot_title(
         self,
         template: Template,
@@ -260,12 +349,3 @@ class FitTemplatesPlotter(FitPlotterBase):
         return self._get_attribute_from_optional_arguments_dict(
             attribute_name="mc_label_dict", key=template.process_name, default_value=template.latex_label
         )
-
-
-# class FitTemplates2DHeatMapPlot(FitPlotBase):
-#     # TODO Generalize heat map plot in validation plots!
-#     pass
-#
-#
-# class FitTemplates2DHeatMapPlotter(FitPlotterBase):
-#     pass

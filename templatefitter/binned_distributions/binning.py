@@ -325,6 +325,22 @@ class Binning:
             log_scale=self.log_scale_mask[dimension],
         )
 
+    def get_binning_for_x_dimensions(self, dimensions: Tuple[int, ...]) -> "Binning":
+        assert isinstance(dimensions, tuple), (dimensions, type(dimensions).__name__)
+        assert all(isinstance(dim, int) for dim in dimensions), (dimensions, [type(d).__name__ for d in dimensions])
+        assert all(0 <= dim < self.dimensions for dim in dimensions), (dimensions, self.dimensions)
+        assert tuple(set(dimensions)) == dimensions, dimensions
+
+        if len(dimensions) == self.dimensions:
+            return self
+
+        return Binning(
+            bins=tuple([self.bin_edges[dim] for dim in dimensions]),
+            dimensions=len(dimensions),
+            scope=tuple([self.range[dim] for dim in dimensions]),
+            log_scale=tuple([self.log_scale_mask[dim] for dim in dimensions]),
+        )
+
     @staticmethod
     def _calc_bin_scaling(bin_widths: Tuple[float, ...]) -> np.ndarray:
         min_bin_width = min(bin_widths)  # type: float

@@ -254,14 +254,14 @@ class BinnedDistribution(ABC):
         if self.dimensions == 1 and dimension == 0:
             return bin_counts, bin_errors_squared
 
-        # TODO: The following part could requires better treatment of the bin errors!
+        # TODO: The following part requires better treatment of the bin errors!
         if dimension < 0 or dimension >= self.dimensions:
             raise ValueError(
                 f"Parameter 'dimension' must be in [0, {self.dimensions - 1}] "
                 f"as the distribution has {self.dimensions} dimensions! You provided {dimension}."
             )
         other_dimensions = tuple(dim for dim in range(self.dimensions) if dim != dimension)
-        projected_bin_count = bin_counts.sum(axis=other_dimensions)
+        projected_bin_count = bin_counts.sum(axis=other_dimensions)  # type: np.ndarray
 
         assert len(projected_bin_count.shape) == 1, projected_bin_count.shape
         assert len(projected_bin_count) == self.num_bins[dimension], (len(projected_bin_count), self.num_bins[dimension])
@@ -272,6 +272,60 @@ class BinnedDistribution(ABC):
             assert len(projected_errors_sq) == self.num_bins[dimension], (
                 len(projected_errors_sq),
                 self.num_bins[dimension],
+            )
+        else:
+            projected_errors_sq = None
+
+        return projected_bin_count, projected_errors_sq
+
+    def project_onto_two_dimensions(
+        self,
+        bin_counts: np.ndarray,
+        dimensions: Tuple[int, int],
+        bin_errors_squared: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        # Covering 2-dimensional case where no projection is necessary.
+        if self.dimensions == 2 and set(dimensions) == {0, 1}:
+            return bin_counts, bin_errors_squared
+
+        # TODO: The following part requires better treatment of the bin errors!
+        if not (dimensions[0] < dimensions[1] and len(dimensions) == 2):
+            raise ValueError(
+                f"Parameter 'dimensions' must be tuple of two integers from [0, {self.dimensions - 1}] "
+                f"as the distribution has {self.dimensions} dimensions!\n"
+                f"Furthermore, the first integer must be smaller than the second!\n"
+                f"You provided {dimensions}."
+            )
+
+        if not all(0 <= dim < self.dimensions for dim in dimensions):
+            raise ValueError(
+                f"Parameter 'dimensions' must be tuple of two integers from [0, {self.dimensions - 1}] "
+                f"as the distribution has {self.dimensions} dimensions! You provided {dimensions}."
+            )
+
+        other_dimensions = tuple(dim for dim in range(self.dimensions) if dim not in dimensions)
+        projected_bin_count = bin_counts.sum(axis=other_dimensions)  # type: np.ndarray
+
+        assert len(projected_bin_count.shape) == 2, projected_bin_count.shape
+        assert projected_bin_count.shape[0] == self.num_bins[dimensions[0]], (
+            projected_bin_count.shape,
+            self.num_bins[dimensions[0]],
+        )
+        assert projected_bin_count.shape[1] == self.num_bins[dimensions[1]], (
+            projected_bin_count.shape,
+            self.num_bins[dimensions[1]],
+        )
+
+        if bin_errors_squared is not None:
+            projected_errors_sq = bin_errors_squared.sum(axis=other_dimensions)
+            assert len(projected_errors_sq.shape) == 2, projected_bin_count.shape
+            assert projected_errors_sq.shape[0] == self.num_bins[dimensions[0]], (
+                projected_errors_sq.shape,
+                self.num_bins[dimensions[0]],
+            )
+            assert projected_errors_sq.shape[1] == self.num_bins[dimensions[1]], (
+                projected_errors_sq.shape,
+                self.num_bins[dimensions[1]],
             )
         else:
             projected_errors_sq = None
