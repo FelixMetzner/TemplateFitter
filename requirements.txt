@@ -1,6 +1,5 @@
 cycler>=0.10.0
 iminuit>=2.6.0
-keras>=2.1.4
 matplotlib>=3.3.4
 numba>=0.53.1
 numdifftools>=0.9.39

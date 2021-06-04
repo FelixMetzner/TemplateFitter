@@ -11,13 +11,13 @@ import scipy.stats as scipy_stats
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
-from keras.preprocessing.sequence import pad_sequences
 from typing import Optional, Union, List, Tuple, Dict, NamedTuple
 
 from templatefitter.utility import xlogyx, cov2corr
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
+from templatefitter.fit_model.utility import pad_sequences
 from templatefitter.binned_distributions.binning import Binning
 from templatefitter.fit_model.data_channel import DataChannelContainer
 from templatefitter.fit_model.channel import ChannelContainer, Channel
