@@ -305,7 +305,7 @@ class FitTemplatesPlotter(FitPlotterBase):
 
                     color_map.set_bad(color=plot_style.KITColors.white)
                     value_matrix[value_matrix == 0.0] = np.nan
-                    heatmap = ax.imshow(X=value_matrix.T, cmap=color_map, aspect="auto")
+                    heatmap = ax.imshow(X=np.flip(value_matrix.T, axis=0), cmap=color_map, aspect="auto")
                     plt.colorbar(heatmap)
 
                     self._set_2d_axis_tick_labels(ax=ax, binning=current_binning)
@@ -335,8 +335,8 @@ class FitTemplatesPlotter(FitPlotterBase):
 
     @staticmethod
     def _set_2d_axis_tick_labels(ax: AxesType, binning: Binning) -> None:
-        x_tick_positions = np.arange(binning.num_bins[0] + 1)  # type: np.array
-        y_tick_positions = np.arange(binning.num_bins[1] + 1)  # type: np.array
+        x_tick_positions = np.arange(binning.num_bins[0] + 1) - 0.5  # type: np.array
+        y_tick_positions = np.arange(binning.num_bins[1] + 1) - 0.5  # type: np.array
         x_tick_labels = np.array(binning.bin_edges[0])  # type: np.array
         y_tick_labels = np.array(binning.bin_edges[1])  # type: np.array
 
@@ -347,8 +347,8 @@ class FitTemplatesPlotter(FitPlotterBase):
         ax.yaxis.set_minor_locator(locator=mpl_ticker.NullLocator())
 
         x_labels = [f"{la:.2f}" for la in x_tick_labels]  # type: List[str]
-        y_labels = [f"{la:.2f}" for la in y_tick_labels]  # type: List[str]
-        ax.set_xticklabels(labels=x_labels, rotation=45)
+        y_labels = [f"{la:.2f}" for la in y_tick_labels[::-1]]  # type: List[str]
+        ax.set_xticklabels(labels=x_labels, rotation=45, ha="left")
         ax.set_yticklabels(labels=y_labels)
 
     def _get_plot_title(
