@@ -348,7 +348,7 @@ class FitTemplatesPlotter(FitPlotterBase):
 
         x_labels = [f"{la:.2f}" for la in x_tick_labels]  # type: List[str]
         y_labels = [f"{la:.2f}" for la in y_tick_labels]  # type: List[str]
-        ax.set_xticklabels(labels=x_labels, rotate=45)
+        ax.set_xticklabels(labels=x_labels, rotation=45)
         ax.set_yticklabels(labels=y_labels)
 
     def _get_plot_title(
