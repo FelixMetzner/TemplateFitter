@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 from multiprocessing import Pool
-from typing import Union, Tuple, List, Dict
+from typing import Optional, Union, Tuple, List, Dict, Sequence
 
 from templatefitter.fit_model.model_builder import FitModel
 from templatefitter.minimizer import (
@@ -65,6 +65,7 @@ class TemplateFitter:
         get_hesse: bool = True,
         verbose: bool = True,
         fix_nui_params: bool = False,
+        parameters_to_fix: Optional[Sequence[Union[str, int]]] = None,
     ) -> MinimizeResult:
         """
         Performs maximum likelihood fit by minimizing the provided negative log likelihood function.
@@ -85,6 +86,8 @@ class TemplateFitter:
             Can be computationally expensive if the number of parameters
             in the likelihood is high. It is only needed for the scipy
             minimization method. Default is True.
+        parameters_to_fix : sequence, optional
+            Additional parameters to fix. Default: None
 
         Returns
         -------
@@ -101,6 +104,10 @@ class TemplateFitter:
         if fix_nui_params:
             for param_id in self._fit_model.floating_nuisance_parameter_indices:
                 minimizer.set_param_fixed(param_id=param_id)
+
+        if parameters_to_fix is not None:
+            for param_to_fix in parameters_to_fix:
+                minimizer.set_param_fixed(param_id=param_to_fix)
 
         for param_id_or_str in self._fixed_parameters:
             minimizer.set_param_fixed(param_id=param_id_or_str)
