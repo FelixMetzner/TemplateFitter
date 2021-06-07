@@ -63,8 +63,11 @@ class FitModel:
     def __init__(
         self,
         parameter_handler: ParameterHandler,
+        ignore_empty_mc_bins: bool = False,
     ):
         self._params = parameter_handler  # type: ParameterHandler
+
+        self._ignore_empty_mc_bins = ignore_empty_mc_bins  # type: bool
 
         self._model_parameters = []  # type: List[ModelParameter]
         self._model_parameters_mapping = {}  # type: Dict[str, int]
@@ -80,6 +83,7 @@ class FitModel:
         self._data_channels = DataChannelContainer()  # type: DataChannelContainer
         self._original_data_channels = None  # type: Optional[DataChannelContainer]
         self._data_bin_counts = None  # type: Optional[np.ndarray]
+        self._masked_data_bin_counts = None  # type: Optional[np.ndarray]
         self._data_bin_count_checked = False  # type: bool
         self._data_stat_errors_sq = None  # type: Optional[np.ndarray]
         self._data_stat_errors_checked = False  # type: bool
@@ -2205,6 +2209,21 @@ class FitModel:
 
         return constraint_term
 
+    def get_masked_data_bin_count(self, mc_bin_count: np.ndarray) -> np.ndarray:
+        # TODO: Test this new feature!
+        if not self._ignore_empty_mc_bins:
+            return self.get_flattened_data_bin_counts()
+
+        if self._masked_data_bin_counts is None:
+            self._masked_data_bin_counts = np.copy(self.get_flattened_data_bin_counts())
+
+        data_bin_count = self._masked_data_bin_counts  # type: np.ndarray
+
+        assert data_bin_count.shape == mc_bin_count.shape, (data_bin_count.shape, mc_bin_count.shape)
+        data_bin_count[mc_bin_count == 0.0] = 0.0
+
+        return data_bin_count
+
     @jit(forceobj=True)
     def chi2(
         self,
@@ -2216,13 +2235,14 @@ class FitModel:
         else:
             nuisance_parameter_vector, nuisance_parameter_matrix = self.get_nuisance_parameters(parameter_vector)
 
-        expected_b_count = self.calculate_expected_bin_count(
+        expected_bin_count = self.calculate_expected_bin_count(
             parameter_vector=parameter_vector,
             nuisance_parameters=nuisance_parameter_matrix,
-        )
+        )  # type: np.ndarray
 
         chi2_data_term = np.sum(
-            (expected_b_count - self.get_flattened_data_bin_counts()) ** 2 / (2 * self.get_squared_data_stat_errors()),
+            (expected_bin_count - self.get_masked_data_bin_count(mc_bin_count=expected_bin_count)) ** 2
+            / (2 * self.get_squared_data_stat_errors()),
             axis=None,
         )
 
@@ -2251,10 +2271,10 @@ class FitModel:
             nuisance_parameters=nuisance_parameter_matrix,
         )
 
+        data_bin_count = self.get_masked_data_bin_count(mc_bin_count=expected_bin_count)  # type: np.ndarray
+
         poisson_term = np.sum(
-            expected_bin_count
-            - self.get_flattened_data_bin_counts()
-            - xlogyx(self.get_flattened_data_bin_counts(), expected_bin_count),
+            expected_bin_count - data_bin_count - xlogyx(data_bin_count, expected_bin_count),
             axis=None,
         )
 
