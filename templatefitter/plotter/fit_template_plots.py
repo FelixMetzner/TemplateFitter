@@ -293,6 +293,11 @@ class FitTemplatesPlotter(FitPlotterBase):
                     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=self._fig_size, dpi=200)
 
                     c_values = [0.0, np.max(value_matrix)]  # type: List[float]
+
+                    if np.sum(template_bin_count) == 0:
+                        c_values = [0.0, 1.0]  # type: List[float]
+                        value_matrix = np.ones_like(value_matrix) * 0.8
+
                     c_map_temp_color = alt_temp_color_dict.get(template_color, template_color)
                     if isinstance(c_map_base_color, dict):
                         base_c = c_map_base_color.get(template_color, self.default_2d_c_map_base_color)  # type: str
@@ -315,6 +320,18 @@ class FitTemplatesPlotter(FitPlotterBase):
 
                     ax.set_xlabel(x_variable.x_label, plot_style.xlabel_pos)
                     ax.set_ylabel(y_variable.x_label, plot_style.ylabel_pos)
+
+                    if np.sum(template_bin_count) == 0:
+                        ax.text(
+                            x=0.5,
+                            y=0.5,
+                            s="No Data",
+                            fontsize="x-large",
+                            ha="center",
+                            va="center",
+                            zorder=10,
+                            transform=ax.transAxes,
+                        )
 
                     if output_dir_path is not None:
                         assert output_name_tag is not None
