@@ -2214,15 +2214,16 @@ class FitModel:
         if not self._ignore_empty_mc_bins:
             return self.get_flattened_data_bin_counts()
 
+        # We assume that the yields are always > 0 and, hence, the masking will never change!
         if self._masked_data_bin_counts is None:
-            self._masked_data_bin_counts = np.copy(self.get_flattened_data_bin_counts())
+            data_bin_count = np.copy(self.get_flattened_data_bin_counts())  # type: np.ndarray
 
-        data_bin_count = self._masked_data_bin_counts  # type: np.ndarray
+            assert data_bin_count.shape == mc_bin_count.shape, (data_bin_count.shape, mc_bin_count.shape)
+            data_bin_count[mc_bin_count == 0.0] = 0.0
 
-        assert data_bin_count.shape == mc_bin_count.shape, (data_bin_count.shape, mc_bin_count.shape)
-        data_bin_count[mc_bin_count == 0.0] = 0.0
+            self._masked_data_bin_counts = data_bin_count
 
-        return data_bin_count
+        return self._masked_data_bin_counts
 
     @jit(forceobj=True)
     def chi2(
