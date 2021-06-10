@@ -2210,7 +2210,6 @@ class FitModel:
         return constraint_term
 
     def get_masked_data_bin_count(self, mc_bin_count: np.ndarray) -> np.ndarray:
-        # TODO: Test this new feature!
         if not self._ignore_empty_mc_bins:
             return self.get_flattened_data_bin_counts()
 
