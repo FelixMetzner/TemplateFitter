@@ -268,6 +268,22 @@ class Binning:
         return self._num_bins
 
     @property
+    def num_bins_squeezed(self) -> Tuple[int, ...]:
+        squeezed_num_bins = tuple([bs for bs in self.num_bins if bs != 1])  # type: Tuple[int, ...]
+        assert int(np.prod(squeezed_num_bins)) == self.num_bins_total, (
+            squeezed_num_bins,
+            np.prod(squeezed_num_bins),
+            self.num_bins_total,
+            self.num_bins,
+        )
+        assert all(len(edges) == 2 for edges, n_bins in zip(self.bin_edges, self.num_bins) if n_bins == 1), (
+            self.num_bins,
+            self.bin_edges,
+            squeezed_num_bins,
+        )
+        return squeezed_num_bins
+
+    @property
     def num_bins_total(self) -> int:
         return int(np.prod(self.num_bins))
 

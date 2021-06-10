@@ -69,8 +69,6 @@ class BinnedDistribution(ABC):
 
         self._bin_counts = None  # type: Optional[np.ndarray]
         self._bin_errors_sq = None  # type: Optional[np.ndarray]
-        self._shape = self.num_bins  # type: Tuple[int, ...]
-        self._check_shapes()
 
         self._data_column_names = None  # type: Optional[List[str]]
         self._init_data_column_names(
@@ -108,42 +106,46 @@ class BinnedDistribution(ABC):
     @property
     def num_bins(self) -> Tuple[int, ...]:
         """ Number of bins; multiple values if multi-dimensional """
-        return self._binning.num_bins
+        return self.binning.num_bins
+
+    @property
+    def num_bins_squeezed(self) -> Tuple[int, ...]:
+        return self.binning.num_bins_squeezed
 
     @property
     def num_bins_total(self) -> int:
         """ Number of bins after flattening, so the total number of bins """
-        return self._binning.num_bins_total
+        return self.binning.num_bins_total
 
     @property
     def bin_edges(self) -> BinEdgesType:
         """ Bin edges; Tuple of length = self.dimensions and containing tuples with bin edges for each dimension """
-        return self._binning.bin_edges
+        return self.binning.bin_edges
 
     @property
     def bin_edges_flattened(self) -> np.ndarray:
         """ Bin edges flattened to one dimension; Length = sum of (number of bins + 1) for each dimension """
-        return self._binning.bin_edges_flattened
+        return self.binning.bin_edges_flattened
 
     @property
     def bin_mids(self) -> Tuple[Tuple[float, ...], ...]:
         """ Central value for each bin """
-        return self._binning.bin_mids
+        return self.binning.bin_mids
 
     @property
     def shape(self) -> Tuple[int, ...]:
         """ Shape of the numpy array holding the binned distribution """
-        return self._shape
+        return self.num_bins_squeezed
 
     @property
     def range(self) -> Tuple[Tuple[float, float], ...]:
         """ Lower and upper bound of each dimension of the binned distribution """
-        return self._binning.range
+        return self.binning.range
 
     @property
     def dimensions(self) -> int:
         """ Dimensions of the distribution """
-        return self._binning.dimensions
+        return self.binning.dimensions
 
     @property
     def is_empty(self) -> bool:
@@ -331,10 +333,6 @@ class BinnedDistribution(ABC):
             projected_errors_sq = None
 
         return projected_bin_count, projected_errors_sq
-
-    def _check_shapes(self) -> None:
-        assert self.shape == self.num_bins, (self.shape, self.num_bins)
-        assert np.prod(self.shape) == self.num_bins_total, (self.shape, self.num_bins_total)
 
     def _init_data_column_names(self, data_column_names: DataColumnNamesInput, data: Optional[DataInputType]):
         if isinstance(data_column_names, str):
@@ -534,7 +532,7 @@ class BinnedDistributionFromData(BinnedDistribution):
             cov += sys_info.get_covariance_matrix(
                 data=self.base_data.data,
                 weights=self.base_data.weights,
-                binning=self._binning,
+                binning=self.binning,
             )
 
         assert len(cov.shape) == 2, cov.shape
