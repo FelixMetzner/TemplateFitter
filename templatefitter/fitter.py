@@ -325,6 +325,7 @@ class TemplateFitter:
         yield_parameter: str,
         verbose: bool = True,
         fix_nui_params: bool = False,
+        catch_exception: bool = False,
     ) -> float:
         """
         Calculate significance for the specified yield parameter using the profile likelihood ratio.
@@ -350,6 +351,8 @@ class TemplateFitter:
             Whether to show output. Default is True.
         fix_nui_params : bool, optional
             Whether to fix nuisance parameters. Default is False.
+        catch_exception : bool, optional
+            Whether to catch IndexError in calculation (will return 0.0 if error occurs). Default is False.
 
         Returns
         -------
@@ -404,11 +407,18 @@ class TemplateFitter:
 
         minimizer_bkg.set_param_fixed(param_id=yield_parameter)
         logging.info("Background")
-        profile_result = minimizer_bkg.minimize(
-            initial_param_values=self._nll.x0,
-            verbose=verbose,
-            check_success=False,
-        )
+        try:
+            profile_result = minimizer_bkg.minimize(
+                initial_param_values=self._nll.x0,
+                verbose=verbose,
+                check_success=False,
+            )
+        except IndexError as ie:
+            if catch_exception:
+                logging.warning(f"IndexError caught in significance calculation:\n{str(ie)}\nReturning zero...")
+                return 0.0
+            else:
+                raise ie
 
         assert profile_result.params[yield_parameter][0] == 0.0, profile_result.params[yield_parameter][0]
 
