@@ -360,6 +360,9 @@ class FitResultPlotter(FitPlotterBase):
             )
 
         for mc_channel in self._fit_model.mc_channels_to_plot:
+            if project_to >= mc_channel.binning.dimensions:
+                continue
+
             binning = mc_channel.binning.get_binning_for_one_dimension(dimension=project_to)
             data_column_name_for_plot = mc_channel.data_column_names[project_to]
 

@@ -260,6 +260,9 @@ class FitTemplatesPlotter(FitPlotterBase):
         alt_temp_color_dict = {} if alternative_temp_color is None else alternative_temp_color  # type: Dict[str, str]
 
         for mc_channel in self._fit_model.mc_channels_to_plot:
+            if mc_channel.binning.dimensions < 2:
+                continue
+
             for dim_pair in iter_combinations(list(range(mc_channel.binning.dimensions)), 2):
                 current_binning = mc_channel.binning.get_binning_for_x_dimensions(dimensions=dim_pair)
 
