@@ -158,13 +158,13 @@ class FitTemplatesPlotter(FitPlotterBase):
 
     def __init__(
         self,
-        variables: Tuple[HistVariable, ...],
+        variables_by_channel: Union[Dict[str, Tuple[HistVariable, ...]], Tuple[HistVariable, ...]],
         fit_model: FitModel,
         fig_size: Tuple[float, float] = (5, 5),
         **kwargs,
     ) -> None:
         super().__init__(
-            variables=variables,
+            variables_by_channel=variables_by_channel,
             fit_model=fit_model,
             reference_dimension=0,
             fig_size=fig_size,
@@ -295,7 +295,7 @@ class FitTemplatesPlotter(FitPlotterBase):
                     c_values = [0.0, np.max(value_matrix)]  # type: List[float]
 
                     if np.sum(template_bin_count) == 0:
-                        c_values = [0.0, 1.0]  # type: List[float]
+                        c_values = [0.0, 1.0]
                         value_matrix = np.ones_like(value_matrix) * 0.8
 
                     c_map_temp_color = alt_temp_color_dict.get(template_color, template_color)

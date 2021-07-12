@@ -50,17 +50,27 @@ class SubBinInfos(NamedTuple):
 
 
 class FitPlotterBase(ABC):
+    base_input_error_info = (
+        "The argument 'variables_by_channel' must be either"
+        "\n\t- a tuple of HistVariable instances, or"
+        "\n\t- a dictionary mapping channel name strings to a tuple of HistVariable instances.\n"
+        "If the former is the case, it is assumed, that for all channels, "
+        "the same variables are used."
+    )  # type: str
+
     def __init__(
         self,
-        variables: Tuple[HistVariable, ...],
+        variables_by_channel: Union[Dict[str, Tuple[HistVariable, ...]], Tuple[HistVariable, ...]],
         fit_model: FitModel,
         reference_dimension: int = 0,
         fig_size: Tuple[float, float] = (5, 5),
         **kwargs,
     ) -> None:
-        self._variables = variables  # type: Tuple[HistVariable, ...]
-
         self._fit_model = fit_model  # type: FitModel
+
+        self._variables_by_channel = self._get_variables_dict(
+            variables_by_channel_input=variables_by_channel
+        )  # type: Dict[str, Tuple[HistVariable, ...]]
 
         self._base_reference_dimension = reference_dimension  # type: int
 
@@ -80,15 +90,50 @@ class FitPlotterBase(ABC):
         assert self._plotter_class is not None
         return self._plotter_class
 
+    def _get_variables_dict(
+        self,
+        variables_by_channel_input: Union[Dict[str, Tuple[HistVariable, ...]], Tuple[HistVariable, ...]],
+    ) -> Dict[str, Tuple[HistVariable, ...]]:
+        _vbc = variables_by_channel_input
+        _channel_names = tuple([ch.name for ch in self._fit_model.mc_channels_to_plot])  # type: Tuple[str, ...]
+
+        if isinstance(_vbc, dict):
+            assert all(isinstance(k, str) for k in _vbc.keys()), _vbc.keys()
+            assert set(_vbc.keys()) == set(_channel_names), (
+                tuple(_vbc.keys()),
+                _channel_names,
+            )
+            assert all(isinstance(v, tuple) for v in _vbc.values()), [type(v) for v in _vbc.values()]
+            assert all(isinstance(hv, HistVariable) for v in _vbc.values() for hv in v), [
+                type(hv).__name__ for v in _vbc.values() for hv in v
+            ]
+
+            return _vbc
+        elif isinstance(_vbc, tuple):
+            if not all(isinstance(hv, HistVariable) for hv in _vbc):
+                raise TypeError(
+                    f"{self.base_input_error_info}\nThe error occurred, because the provided tuple "
+                    f"contained objects of the types {[type(h).__name__ for h in _vbc]}"
+                )
+            return {ch_name: _vbc for ch_name in _channel_names}
+        else:
+            raise TypeError(
+                f"{self.base_input_error_info}\nThe error occurred, because the provided object of type "
+                f"{type(_vbc).__name__} does not fulfill these requirements."
+            )
+
     def _get_histogram_infos_from_model(
         self,
         fit_model: FitModel,
     ) -> None:
         for mc_channel in fit_model.mc_channels_to_plot:
             ch_column_names = mc_channel.data_column_names
-            assert len(ch_column_names) == len(self.variables), (len(ch_column_names), len(self.variables))
-            assert all(c == v.df_label for c, v in zip(ch_column_names, self.variables)), [
-                (c, v.df_label) for c, v in zip(ch_column_names, self.variables)
+            assert len(ch_column_names) == len(self.variables_by_channel[mc_channel.name]), (
+                len(ch_column_names),
+                len(self.variables_by_channel[mc_channel.name]),
+            )
+            assert all(c == v.df_label for c, v in zip(ch_column_names, self.variables_by_channel[mc_channel.name])), [
+                (c, v.df_label) for c, v in zip(ch_column_names, self.variables_by_channel[mc_channel.name])
             ]
 
             self._channel_name_list.append(mc_channel.name)
@@ -137,13 +182,14 @@ class FitPlotterBase(ABC):
 
     def variable(
         self,
+        channel_name: str,
         dimension: int,
     ) -> HistVariable:
-        return self._variables[dimension]
+        return self._variables_by_channel[channel_name][dimension]
 
     @property
-    def variables(self) -> Tuple[HistVariable, ...]:
-        return self._variables
+    def variables_by_channel(self) -> Dict[str, Tuple[HistVariable, ...]]:
+        return self._variables_by_channel
 
     @property
     def channel_names(self) -> List[str]:
@@ -172,7 +218,7 @@ class FitPlotterBase(ABC):
         )
 
         channel_dim_dict = {}  # type: Dict[int, HistVariable]
-        for dimension, hist_variable in enumerate(self.variables):
+        for dimension, hist_variable in enumerate(self.variables_by_channel[channel_name]):
             binning = original_binning.get_binning_for_one_dimension(dimension=dimension)
             assert binning.dimensions == 1, binning.dimensions
             assert len(binning.num_bins) == 1, binning.num_bins

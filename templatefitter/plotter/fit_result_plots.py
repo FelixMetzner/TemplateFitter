@@ -202,14 +202,14 @@ class FitResultPlot(FitPlotBase):
 class FitResultPlotter(FitPlotterBase):
     def __init__(
         self,
-        variables: Tuple[HistVariable, ...],
+        variables_by_channel: Union[Dict[str, Tuple[HistVariable, ...]], Tuple[HistVariable, ...]],
         fit_model: FitModel,
         reference_dimension: int = 0,
         fig_size: Tuple[float, float] = (5, 5),
         **kwargs,
     ) -> None:
         super().__init__(
-            variables=variables,
+            variables_by_channel=variables_by_channel,
             fit_model=fit_model,
             reference_dimension=reference_dimension,
             fig_size=fig_size,
