@@ -192,7 +192,7 @@ class HistVariable:
     ) -> "HistVariable":
         assert all(base_hist_var.df_label in df.columns for df in dfs), base_hist_var.df_label
 
-        if base_hist_var.scope is not None:
+        if base_hist_var.has_scope():
             return base_hist_var
 
         if any(len(df.index) == 0 for df in dfs):
