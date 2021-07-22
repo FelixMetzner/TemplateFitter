@@ -344,12 +344,24 @@ class DataMCHistogramPlot(HistogramPlot):
             label=self._histograms[self.data_key].labels[0],
         )
 
-        chi2, ndf, p_val, toy_output = self.do_goodness_of_fit_test(
-            method=gof_check_method,
-            mc_bin_count=mc_bin_count,
-            data_bin_count=data_bin_count,
-            mc_is_normalized_to_data=normalize_to_data,
-        )
+        try:
+            chi2, ndf, p_val, toy_output = self.do_goodness_of_fit_test(
+                method=gof_check_method,
+                mc_bin_count=mc_bin_count,
+                data_bin_count=data_bin_count,
+                mc_is_normalized_to_data=normalize_to_data,
+            )
+        except IndexError as e:
+            logging.warning(
+                f"Could not run goodness of fit check with {gof_check_method} method "
+                f"for variable {self.variable.df_label}! Reverting to check with pearson method!"
+            )
+            chi2, ndf, p_val, toy_output = self.do_goodness_of_fit_test(
+                method="pearson",
+                mc_bin_count=mc_bin_count,
+                data_bin_count=data_bin_count,
+                mc_is_normalized_to_data=normalize_to_data,
+            )
 
         if draw_legend:
             if style == "stacked":
