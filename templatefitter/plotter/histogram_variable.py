@@ -218,7 +218,7 @@ class HistVariable:
             n_bins=base_hist_var.n_bins,
             scope=new_scope,
             var_name=base_hist_var.variable_name,
-            unit=base_hist_var.unit,
+            unit=base_hist_var.unit if base_hist_var.unit else None,
             use_log_scale=base_hist_var.use_log_scale,
         )
 
