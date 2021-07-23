@@ -9,7 +9,7 @@ import numpy as np
 
 from matplotlib import pyplot as plt, figure
 from uncertainties import unumpy as unp, ufloat
-from typing import Optional, Union, Tuple, List
+from typing import Optional, Union, Tuple, List, NamedTuple
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram import Histogram
@@ -34,7 +34,20 @@ __all__ = [
 
 plot_style.set_matplotlibrc_params()
 
-DataMCComparisonOutputType = Tuple[Optional[float], Optional[int], Optional[float], Optional[ToyInfoOutputType]]
+
+class DataMCComparisonOutput(NamedTuple):
+    chi2: float
+    ndf: int
+    p_val: float
+    test_method: str
+    toy_output: Optional[ToyInfoOutputType]
+
+    @property
+    def test_method_id(self) -> str:
+        return self.test_method.capitalize()[0]
+
+
+DataMCComparisonOutputType = Optional[DataMCComparisonOutput]
 
 
 class SimpleHistogramPlot(HistogramPlot):
@@ -345,18 +358,18 @@ class DataMCHistogramPlot(HistogramPlot):
         )
 
         try:
-            chi2, ndf, p_val, toy_output = self.do_goodness_of_fit_test(
+            comparison_output = self.do_goodness_of_fit_test(
                 method=gof_check_method,
                 mc_bin_count=mc_bin_count,
                 data_bin_count=data_bin_count,
                 mc_is_normalized_to_data=normalize_to_data,
-            )
+            )  # type: DataMCComparisonOutputType
         except IndexError as e:
             logging.warning(
                 f"Could not run goodness of fit check with {gof_check_method} method "
                 f"for variable {self.variable.df_label}! Reverting to check with pearson method!"
             )
-            chi2, ndf, p_val, toy_output = self.do_goodness_of_fit_test(
+            comparison_output = self.do_goodness_of_fit_test(
                 method="pearson",
                 mc_bin_count=mc_bin_count,
                 data_bin_count=data_bin_count,
@@ -400,7 +413,7 @@ class DataMCHistogramPlot(HistogramPlot):
 
         plt.subplots_adjust(hspace=0.08)
 
-        return chi2, ndf, p_val, toy_output
+        return comparison_output
 
     def get_bin_info_for_component(
         self,
@@ -457,16 +470,16 @@ class DataMCHistogramPlot(HistogramPlot):
         mc_is_normalized_to_data: bool,
     ) -> DataMCComparisonOutputType:
         if method is None:
-            return None, None, None, None
+            return None
 
         dof = self.number_of_bins - 1 if mc_is_normalized_to_data else self.number_of_bins
 
         if method.lower() == "pearson":
             chi2, ndf, p_val = pearson_chi2_test(data=data_bin_count, expectation=mc_bin_count, dof=dof)
-            return chi2, ndf, p_val, None
+            return DataMCComparisonOutput(chi2=chi2, ndf=ndf, p_val=p_val, test_method=method, toy_output=None)
         elif method.lower() == "cowan":
             chi2, ndf, p_val = cowan_binned_likelihood_gof(data=data_bin_count, expectation=mc_bin_count, dof=dof)
-            return chi2, ndf, p_val, None
+            return DataMCComparisonOutput(chi2=chi2, ndf=ndf, p_val=p_val, test_method=method, toy_output=None)
         elif method.lower() == "toys":
             chi2, p_val, toy_output = toy_chi2_test(
                 data=data_bin_count,
@@ -474,7 +487,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 error=data_bin_count,
                 mc_cov=self._histograms[self.mc_key].get_covariance_matrix(),
             )
-            return chi2, dof, p_val, toy_output
+            return DataMCComparisonOutput(chi2=chi2, ndf=dof, p_val=p_val, test_method=method, toy_output=toy_output)
         else:
             raise ValueError(
                 f"The provided goodness of fit method identifier '{method}' is not valid!\n"
