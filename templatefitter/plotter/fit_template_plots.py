@@ -194,10 +194,7 @@ class FitTemplatesPlotter(FitPlotterBase):
                 current_binning = mc_channel.binning.get_binning_for_one_dimension(dimension=dimension)
                 data_column_name_for_plot = mc_channel.data_column_names[dimension]
 
-                for template in mc_channel.templates:
-                    if template.is_irrelevant:
-                        continue
-
+                for template in mc_channel.templates_in_plot_order:
                     current_plot = self.plotter_class(
                         variable=self.channel_variables(dimension=dimension)[mc_channel.name],
                         binning=current_binning,
@@ -272,10 +269,7 @@ class FitTemplatesPlotter(FitPlotterBase):
                 x_variable = self.channel_variables(dimension=dim_pair[0])[mc_channel.name]  # type: HistVariable
                 y_variable = self.channel_variables(dimension=dim_pair[1])[mc_channel.name]  # type: HistVariable
 
-                for template in mc_channel.templates:
-                    if template.is_irrelevant:
-                        continue
-
+                for template in mc_channel.templates_in_plot_order:
                     template_bin_count, template_bin_error_sq = template.project_onto_two_dimensions(
                         bin_counts=template.expected_bin_counts(use_initial_values=use_initial_values),
                         dimensions=dim_pair,

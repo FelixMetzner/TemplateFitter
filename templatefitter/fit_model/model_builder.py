@@ -426,6 +426,7 @@ class FitModel:
         name: Optional[str] = None,
         components: Optional[List[Union[int, str, Component]]] = None,
         latex_label: Optional[str] = None,
+        plot_order: Optional[Tuple[str, ...]] = None,
     ) -> Union[int, Tuple[int, Channel]]:
         self._check_is_not_finalized()
         creates_new_channel = False
@@ -491,7 +492,13 @@ class FitModel:
                     raise ValueError(f"Unexpected type {type(component)} for element of provided list of components.")
 
             creates_new_channel = True
-            channel = Channel(params=self._params, name=name, components=component_list, latex_label=latex_label)
+            channel = Channel(
+                params=self._params,
+                name=name,
+                components=component_list,
+                latex_label=latex_label,
+                plot_order=plot_order,
+            )
         else:
             raise ValueError(input_error_text)
 

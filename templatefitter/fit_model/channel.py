@@ -29,6 +29,7 @@ class Channel(Sequence):
         name: str,
         latex_label: Optional[str] = None,
         components: Optional[List[Component]] = None,
+        plot_order: Optional[Tuple[str, ...]] = None,
     ) -> None:
         self._channel_components = []  # type: List[Component]
         super().__init__()
@@ -37,6 +38,8 @@ class Channel(Sequence):
         self._name = name  # type: str
         self._binning = None  # type: Optional[Binning]
         self._channel_index = None  # type: Optional[int]
+
+        self._plot_order = plot_order  # type: Optional[Tuple[str, ...]]
 
         if latex_label is None:
             self._latex_label = name  # type str
@@ -232,6 +235,24 @@ class Channel(Sequence):
     @property
     def templates(self) -> Tuple[Template, ...]:
         return tuple([tmp for comp in self._channel_components for tmp in comp.sub_templates])
+
+    @property
+    def templates_in_plot_order(self) -> Tuple[Template, ...]:
+        if self._plot_order is None:
+            return tuple(t for t in self.templates if not t.is_irrelevant)
+        else:
+            template_names = [t.name for t in self.templates if not t.is_irrelevant]  # type: List[str]
+            template_map = {t.name: t for t in self.templates if not t.is_irrelevant}  # type: Dict[str, Template]
+            assert len(template_map.keys()) == len(template_names), (
+                len(template_map.keys()),
+                len(template_names),
+                list(template_map.keys()),
+                template_names,
+            )
+            assert all(t in template_names for t in self._plot_order), [
+                t for t in self._plot_order if t not in template_names
+            ]
+            return tuple(template_map[tn] for tn in self._plot_order)
 
     @property
     def process_names(self) -> List[str]:
