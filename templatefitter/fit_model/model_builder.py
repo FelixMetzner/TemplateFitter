@@ -859,7 +859,7 @@ class FitModel:
             )
         else:
             logging.info(
-                "Fraction parameters are not used, as no templates of the same channel share " "a common yield parameter."
+                "Fraction parameters are not used, as no templates of the same channel share a common yield parameter."
             )
             assert self.fraction_conversion.needed is False
             assert np.all(self.fraction_conversion.conversion_vector == 1), self.fraction_conversion.conversion_vector
