@@ -389,14 +389,18 @@ class FitTemplatesPlotter(FitPlotterBase):
         key: str,
         original_color: str,
     ) -> str:
-        return self._get_attribute_from_optional_arguments_dict(
-            attribute_name="template_color_dict", key=key, default_value=original_color
+        return self._get_str_attribute_from_optional_arguments_dict(
+            attribute_name="template_color_dict",
+            key=key,
+            default_value=original_color,
         )
 
     def _get_template_label(
         self,
         template: Template,
     ) -> str:
-        return self._get_attribute_from_optional_arguments_dict(
-            attribute_name="mc_label_dict", key=template.process_name, default_value=template.latex_label
+        return self._get_str_attribute_from_optional_arguments_dict(
+            attribute_name="mc_label_dict",
+            key=template.process_name,
+            default_value=template.latex_label,
         )

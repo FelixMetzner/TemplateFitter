@@ -328,6 +328,12 @@ class FitResultPlotter(FitPlotterBase):
 
                     axs.set_title(info_title, loc=bin_info_pos, fontsize=6, color=plot_style.KITColors.dark_grey)
 
+                self.add_info_text(
+                    axis=axs,
+                    fig=fig,
+                    key=mc_channel.name,
+                )
+
                 if output_dir_path is not None:
                     assert output_name_tag is not None
 
@@ -419,6 +425,12 @@ class FitResultPlotter(FitPlotterBase):
             )
 
             axs.set_title(self._get_channel_label(channel=mc_channel), loc="right")
+
+            self.add_info_text(
+                axis=axs,
+                fig=fig,
+                key=mc_channel.name,
+            )
 
             if output_dir_path is not None:
                 assert output_name_tag is not None

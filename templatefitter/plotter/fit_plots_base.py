@@ -1,6 +1,7 @@
 """
 Plotting tools to illustrate fit results produced with this package
 """
+
 import copy
 import logging
 import itertools
@@ -15,6 +16,7 @@ from templatefitter.fit_model.data_channel import DataChannelContainer
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram_variable import HistVariable
 from templatefitter.plotter.histogram_plot_base import HistogramPlot
+from templatefitter.plotter.plot_utilities import FigureType, AxesType
 
 from templatefitter.fit_model.model_builder import FitModel
 
@@ -279,7 +281,7 @@ class FitPlotterBase(ABC):
         key: str,
         original_color: str,
     ) -> str:
-        return self._get_attribute_from_optional_arguments_dict(
+        return self._get_str_attribute_from_optional_arguments_dict(
             attribute_name="mc_color_dict",
             key=key,
             default_value=original_color,
@@ -290,13 +292,23 @@ class FitPlotterBase(ABC):
         key: str,
         original_label: str,
     ) -> str:
-        return self._get_attribute_from_optional_arguments_dict(
+        return self._get_str_attribute_from_optional_arguments_dict(
             attribute_name="mc_label_dict",
             key=key,
             default_value=original_label,
         )
 
-    def _get_attribute_from_optional_arguments_dict(
+    def _get_optional_argument_value(
+        self,
+        argument_name: str,
+        default_value: Any,
+    ) -> Any:
+        if argument_name in self._optional_arguments_dict:
+            return self._optional_arguments_dict[argument_name]
+        else:
+            return default_value
+
+    def _get_str_attribute_from_optional_arguments_dict(
         self,
         attribute_name: str,
         key: str,
@@ -476,3 +488,46 @@ class FitPlotterBase(ABC):
             string_list.append(info_str)
 
         return "\n".join(string_list)
+
+    def add_info_text(
+        self,
+        axis: AxesType,
+        fig: FigureType,
+        key: Optional[str] = None,
+    ) -> None:
+        additional_info_str = self._get_optional_argument_value(
+            argument_name="additional_info_str",
+            default_value=None,
+        )
+        assert additional_info_str is None or isinstance(additional_info_str, (str, dict)), (
+            additional_info_str,
+            type(additional_info_str),
+        )
+
+        if additional_info_str is not None:
+            if isinstance(additional_info_str, str):
+                this_additional_info_str = additional_info_str  # type: str
+            elif isinstance(additional_info_str, dict):
+                assert key is not None
+                _dict_entry = additional_info_str[key]
+                assert isinstance(_dict_entry, str), (_dict_entry, type(_dict_entry))
+                this_additional_info_str = _dict_entry
+            else:
+                raise TypeError(
+                    f"Optional argument additional_info_str must be of type str or Dict[str, str], "
+                    f"but object of type {type(additional_info_str).__name__} was provided."
+                )
+
+            fig.canvas.draw()  # Figure needs to be drawn so that the relative coordinates can be calculated.
+
+            legend_pos = axis.get_legend().get_window_extent()
+            legend_left_lower_edge_pos_in_ax_coords = axis.transAxes.inverted().transform(legend_pos.min)
+            axis.text(
+                x=legend_left_lower_edge_pos_in_ax_coords[0],
+                y=legend_left_lower_edge_pos_in_ax_coords[1],
+                s=this_additional_info_str,
+                transform=axis.transAxes,
+                va="top",
+                ha="left",
+                linespacing=1.5,
+            )
