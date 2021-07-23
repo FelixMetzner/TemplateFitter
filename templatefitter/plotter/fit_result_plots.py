@@ -271,6 +271,8 @@ class FitResultPlotter(FitPlotterBase):
                 )
 
                 for template in mc_channel.templates:
+                    if template.is_irrelevant:
+                        continue
                     template_bin_count = template.expected_bin_counts(use_initial_values=use_initial_values)
                     template_bin_error_sq = template.expected_bin_errors_squared(use_initial_values=use_initial_values)
 
@@ -380,6 +382,9 @@ class FitResultPlotter(FitPlotterBase):
             )
 
             for template in mc_channel.templates:
+                if template.is_irrelevant:
+                    continue
+
                 template_bin_count, template_bin_error_sq = template.project_onto_dimension(
                     bin_counts=template.expected_bin_counts(use_initial_values=use_initial_values),
                     dimension=project_to,

@@ -202,6 +202,10 @@ class Template(BinnedDistributionFromData):
         return self._efficiency_parameter.param_id
 
     @property
+    def is_irrelevant(self) -> bool:
+        return self.efficiency_parameter.value == 0.0 and not self.efficiency_parameter.floating
+
+    @property
     def fraction_parameter(self) -> Optional[TemplateParameter]:
         return self._fraction_parameter
 
