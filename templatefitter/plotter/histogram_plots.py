@@ -364,7 +364,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 data_bin_count=data_bin_count,
                 mc_is_normalized_to_data=normalize_to_data,
             )  # type: DataMCComparisonOutputType
-        except IndexError as e:
+        except IndexError:
             logging.warning(
                 f"Could not run goodness of fit check with {gof_check_method} method "
                 f"for variable {self.variable.df_label}! Reverting to check with pearson method!"
@@ -570,9 +570,6 @@ class DataMCHistogramPlot(HistogramPlot):
             else:
                 _max_val = None
 
-            assert isinstance(_max_val, float), (type(_max_val).__name__, _max_val)
-            max_val = _max_val  # type: float
-
             axis.axhline(y=0, color=plot_style.KITColors.dark_grey, alpha=0.8)
             axis.errorbar(
                 self.bin_mids,
@@ -586,6 +583,9 @@ class DataMCHistogramPlot(HistogramPlot):
 
             if not include_outlier_info:
                 return
+
+            assert isinstance(_max_val, float), (type(_max_val).__name__, _max_val)
+            max_val = _max_val  # type: float
 
             for bin_mid, r_val, mc_val, data_val in zip(self.bin_mids, ratio, uh_mc, uh_data):
                 if mc_val == 0.0 and (
