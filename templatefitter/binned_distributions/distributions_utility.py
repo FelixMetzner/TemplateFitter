@@ -574,8 +574,8 @@ def _run_adaptive_binning_for_1d_case(
     assert isinstance(new_binning[0], tuple), type(new_binning[0])
     assert all(isinstance(be, float) for be in new_binning[0]), [type(be) for be in new_binning[0]]
 
-    assert new_binning[0][0] == bin_edges[0][0]
-    assert new_binning[0][-1] == bin_edges[0][-1]
+    assert new_binning[0][0] == bin_edges[0][0], (start_from, new_binning, bin_edges)
+    assert new_binning[0][-1] == bin_edges[0][-1], (start_from, new_binning, bin_edges)
 
     return new_binning
 
