@@ -230,7 +230,7 @@ def run_adaptive_binning(
 
     if common_dims == 1:
         assert isinstance(minimal_number_of_bins, int), (minimal_number_of_bins, type(minimal_number_of_bins).__name__)
-        return _run_adaptive_binning_for_1d_case(
+        return _run_save_1d_adaptive_binning(
             distributions=distributions,
             bin_edges=bin_edges,
             start_from="auto",
@@ -361,6 +361,60 @@ def run_adaptive_binning(
     return final_bin_edges
 
 
+class OneDimAdaptiveBinningError(Exception):
+    """Class for errors which can occur during 1d adaptive binning."""
+
+    pass
+
+
+def _run_save_1d_adaptive_binning(
+    distributions: Sequence[BinnedDistribution],
+    bin_edges: BinEdgesType,
+    start_from: str = "auto",
+    minimal_bin_count: int = 5,
+    minimal_number_of_bins: int = 7,
+) -> BinEdgesType:
+    if start_from in ["left", "right"]:
+        return _run_adaptive_binning_for_1d_case(
+            distributions=distributions,
+            bin_edges=bin_edges,
+            start_from=start_from,
+            minimal_bin_count=minimal_bin_count,
+            minimal_number_of_bins=minimal_number_of_bins,
+        )
+
+    try:
+        return _run_adaptive_binning_for_1d_case(
+            distributions=distributions,
+            bin_edges=bin_edges,
+            start_from=start_from,
+            minimal_bin_count=minimal_bin_count,
+            minimal_number_of_bins=minimal_number_of_bins,
+        )
+    except OneDimAdaptiveBinningError:
+        bins = [np.array(list(bin_edges[0]))]
+        initial_hist = np.sum(
+            np.array(
+                [np.histogramdd(d.base_data.data, bins=bins, weights=d.base_data.weights)[0] for d in distributions]
+            ),
+            axis=0,
+        )
+
+        max_bin = np.argmax(initial_hist)
+        if max_bin / len(initial_hist) < 0.5:
+            method = "left"  # type: str
+        else:
+            method = "right"
+
+        return _run_adaptive_binning_for_1d_case(
+            distributions=distributions,
+            bin_edges=bin_edges,
+            start_from=method,
+            minimal_bin_count=minimal_bin_count,
+            minimal_number_of_bins=minimal_number_of_bins,
+        )
+
+
 def _run_adaptive_binning_for_1d_case(
     distributions: Sequence[BinnedDistribution],
     bin_edges: BinEdgesType,
@@ -464,7 +518,8 @@ def _run_adaptive_binning_for_1d_case(
         )
     elif start_from == "max":
         max_bin = np.argmax(initial_hist)
-        assert np.all(initial_hist[max_bin - 2 : max_bin + 3] >= min_count)
+        if not np.all(initial_hist[max_bin - 2 : max_bin + 3] >= min_count):
+            raise OneDimAdaptiveBinningError("1D adaptive binning starting from max cannot be run, due to empty bins")
         original_mid = bin_edges_1d[max_bin - 1 : max_bin + 2]
         adopted_left = _run_adaptive_binning_for_1d_case(
             distributions=distributions,
