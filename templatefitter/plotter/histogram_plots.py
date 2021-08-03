@@ -18,6 +18,7 @@ from templatefitter.plotter.histogram_variable import HistVariable
 from templatefitter.plotter.histogram_plot_base import HistogramPlot
 
 from templatefitter.binned_distributions.weights import WeightsInputType
+from templatefitter.binned_distributions.binning import Binning, BinsInputType
 from templatefitter.binned_distributions.systematics import SystematicsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType
 
@@ -196,18 +197,28 @@ class DataMCHistogramPlot(HistogramPlot):
     def __init__(self, variable: HistVariable) -> None:
         super().__init__(variable=variable)
 
+        self._special_binning = None  # type: Union[None, BinsInputType, Binning]
+
     def add_data_component(
         self,
         label: str,
         data: DataInputType,
         color: str = plot_style.KITColors.kit_black,
+        special_binning: Union[None, BinsInputType, Binning] = None,
     ) -> None:
         if self.data_key in self._histograms.histogram_keys:
             raise RuntimeError(f"A data component has already been added to {self.__class__.__name__} instance!")
+        if special_binning:
+            if not self._special_binning:
+                self._special_binning = special_binning
+            else:
+                assert self._special_binning == special_binning, (self._special_binning, special_binning)
+
         self._add_component(
             label=label,
             histogram_key=self.data_key,
             data=data,
+            special_binning=special_binning,
             weights=None,
             systematics=None,
             hist_type="stepfilled",  # TODO: Define new own hist_type for data plots!
@@ -222,11 +233,19 @@ class DataMCHistogramPlot(HistogramPlot):
         weights: WeightsInputType = None,
         systematics: SystematicsInputType = None,
         color: Optional[str] = None,
+        special_binning: Union[None, BinsInputType, Binning] = None,
     ) -> None:
+        if special_binning:
+            if not self._special_binning:
+                self._special_binning = special_binning
+            else:
+                assert self._special_binning == special_binning, (self._special_binning, special_binning)
+
         self._add_component(
             label=label,
             histogram_key=self.mc_key,
             data=data,
+            special_binning=special_binning,
             weights=weights,
             systematics=systematics,
             hist_type="stepfilled",
@@ -284,7 +303,7 @@ class DataMCHistogramPlot(HistogramPlot):
             ratio_type=ratio_type,
         )
 
-        if adaptive_binning:
+        if adaptive_binning and not self._special_binning:
             self._histograms.apply_adaptive_binning_based_on_key(
                 key=self.mc_key,
                 minimal_bin_count=5,
