@@ -203,6 +203,7 @@ def mc_chi_squared_from_toys(
 
     toy_chi_squared = calc_chi_squared(obs=toys, exp=exp, exp_unc=exp_unc)
 
+    assert np.min(toy_chi_squared) < np.max(toy_chi_squared), (np.min(toy_chi_squared), np.max(toy_chi_squared))
     return obs_chi_squared, toy_chi_squared
 
 
