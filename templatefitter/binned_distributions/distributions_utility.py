@@ -492,13 +492,22 @@ def _run_adaptive_binning_for_1d_case(
                 tuple(np.r_[original, adapted]),
             ]
         )
-        new_binning = _run_adaptive_binning_for_1d_case(
-            distributions=distributions,
-            bin_edges=new_edges,
-            start_from=start_from,
-            minimal_bin_count=min_count,
-            minimal_number_of_bins=min_count,
-        )
+        try:
+            new_binning = _run_adaptive_binning_for_1d_case(
+                distributions=distributions,
+                bin_edges=new_edges,
+                start_from=start_from,
+                minimal_bin_count=min_count,
+                minimal_number_of_bins=min_count,
+            )
+        except OneDimAdaptiveBinningError:
+            new_binning = _run_adaptive_binning_for_1d_case(
+                distributions=distributions,
+                bin_edges=new_edges,
+                start_from="auto",
+                minimal_bin_count=min_count,
+                minimal_number_of_bins=min_count,
+            )
     elif start_from == "right":
         starting_point = len(initial_hist) - np.argmax(np.flip(initial_hist) < min_count)
         offset = 0 if len(initial_hist[:starting_point]) % 2 == 0 else 1
@@ -509,13 +518,22 @@ def _run_adaptive_binning_for_1d_case(
                 tuple(np.r_[adapted, original]),
             ]
         )
-        new_binning = _run_adaptive_binning_for_1d_case(
-            distributions=distributions,
-            bin_edges=new_edges,
-            start_from=start_from,
-            minimal_bin_count=min_count,
-            minimal_number_of_bins=min_count,
-        )
+        try:
+            new_binning = _run_adaptive_binning_for_1d_case(
+                distributions=distributions,
+                bin_edges=new_edges,
+                start_from=start_from,
+                minimal_bin_count=min_count,
+                minimal_number_of_bins=min_count,
+            )
+        except OneDimAdaptiveBinningError:
+            new_binning = _run_adaptive_binning_for_1d_case(
+                distributions=distributions,
+                bin_edges=new_edges,
+                start_from="auto",
+                minimal_bin_count=min_count,
+                minimal_number_of_bins=min_count,
+            )
     elif start_from == "max":
         max_bin = np.argmax(initial_hist)
         if not np.all(initial_hist[max_bin - 2 : max_bin + 3] >= min_count):
@@ -574,8 +592,10 @@ def _run_adaptive_binning_for_1d_case(
     assert isinstance(new_binning[0], tuple), type(new_binning[0])
     assert all(isinstance(be, float) for be in new_binning[0]), [type(be) for be in new_binning[0]]
 
-    assert new_binning[0][0] == bin_edges[0][0], (start_from, new_binning, bin_edges)
-    assert new_binning[0][-1] == bin_edges[0][-1], (start_from, new_binning, bin_edges)
+    if not new_binning[0][0] == bin_edges[0][0]:
+        raise OneDimAdaptiveBinningError(f"Lower bin edge does not match: {start_from}, {new_binning}, {bin_edges}")
+    if not new_binning[0][-1] == bin_edges[0][-1]:
+        raise OneDimAdaptiveBinningError(f"Upper bin edge does not match: {start_from}, {new_binning}, {bin_edges}")
 
     return new_binning
 
