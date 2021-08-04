@@ -303,7 +303,7 @@ class DataMCHistogramPlot(HistogramPlot):
             ratio_type=ratio_type,
         )
 
-        if adaptive_binning and not self._special_binning:
+        if adaptive_binning:
             self._histograms.apply_adaptive_binning_based_on_key(
                 key=self.mc_key,
                 minimal_bin_count=5,
