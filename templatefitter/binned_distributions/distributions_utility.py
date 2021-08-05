@@ -484,36 +484,56 @@ def _run_adaptive_binning_for_1d_case(
 
     if start_from == "left":
         starting_point = np.argmax(initial_hist < min_count)
-        offset = 1 if len(initial_hist[starting_point:]) % 2 == 0 else 0
-        original = bin_edges_1d[: starting_point + offset]
-        adapted = bin_edges_1d[starting_point + offset :][1::2]
-        new_edges = (tuple(np.r_[original, adapted]),)
-        if len(new_edges[0]) - 1 < min_count:
+        if starting_point < np.floor(min_count / 2):
+            logging.info(
+                f"Adaptive binning stopped as starting point is too far left: {starting_point} for {len(bin_edges[0]) - 1}"
+            )
             new_binning = bin_edges
         else:
-            new_binning = _run_adaptive_binning_for_1d_case(
-                distributions=distributions,
-                bin_edges=new_edges,
-                start_from=start_from,
-                minimal_bin_count=min_count,
-                minimal_number_of_bins=min_count,
-            )
+            offset = 1 if len(initial_hist[starting_point:]) % 2 == 0 else 0
+            original = bin_edges_1d[: starting_point + offset]
+            adapted = bin_edges_1d[starting_point + offset :][1::2]
+            new_edges = (tuple(np.r_[original, adapted]),)
+            if (
+                len(new_edges[0]) - 1 < min_count
+                or new_edges[0][0] != bin_edges_1d[0]
+                or new_edges[0][1] != bin_edges_1d[1]
+            ):
+                new_binning = bin_edges
+            else:
+                new_binning = _run_adaptive_binning_for_1d_case(
+                    distributions=distributions,
+                    bin_edges=new_edges,
+                    start_from=start_from,
+                    minimal_bin_count=min_count,
+                    minimal_number_of_bins=min_count,
+                )
     elif start_from == "right":
         starting_point = len(initial_hist) - np.argmax(np.flip(initial_hist) < min_count)
-        offset = 0 if len(initial_hist[:starting_point]) % 2 == 0 else 1
-        original = bin_edges_1d[starting_point + offset :]
-        adapted = bin_edges_1d[: starting_point + offset][::2]
-        new_edges = (tuple(np.r_[adapted, original]),)
-        if len(new_edges[0]) - 1 < min_count:
+        if starting_point > len(bin_edges[0]) - np.floor(min_count / 2):
+            logging.info(
+                f"Adaptive binning stopped as starting point is too far right: {starting_point} for {len(bin_edges[0]) - 1}"
+            )
             new_binning = bin_edges
         else:
-            new_binning = _run_adaptive_binning_for_1d_case(
-                distributions=distributions,
-                bin_edges=new_edges,
-                start_from=start_from,
-                minimal_bin_count=min_count,
-                minimal_number_of_bins=min_count,
-            )
+            offset = 0 if len(initial_hist[:starting_point]) % 2 == 0 else 1
+            original = bin_edges_1d[starting_point + offset :]
+            adapted = bin_edges_1d[: starting_point + offset][::2]
+            new_edges = (tuple(np.r_[adapted, original]),)
+            if (
+                len(new_edges[0]) - 1 < min_count
+                or new_edges[0][0] != bin_edges_1d[0]
+                or new_edges[0][1] != bin_edges_1d[1]
+            ):
+                new_binning = bin_edges
+            else:
+                new_binning = _run_adaptive_binning_for_1d_case(
+                    distributions=distributions,
+                    bin_edges=new_edges,
+                    start_from=start_from,
+                    minimal_bin_count=min_count,
+                    minimal_number_of_bins=min_count,
+                )
     elif start_from == "max":
         max_bin = np.argmax(initial_hist)
         if not np.all(initial_hist[max_bin - 2 : max_bin + 3] >= min_count):
