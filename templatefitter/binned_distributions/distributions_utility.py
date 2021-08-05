@@ -487,24 +487,14 @@ def _run_adaptive_binning_for_1d_case(
         offset = 1 if len(initial_hist[starting_point:]) % 2 == 0 else 0
         original = bin_edges_1d[: starting_point + offset]
         adapted = bin_edges_1d[starting_point + offset :][1::2]
-        new_edges = tuple(
-            [
-                tuple(np.r_[original, adapted]),
-            ]
-        )
-        try:
+        new_edges = (tuple(np.r_[original, adapted]),)
+        if len(new_edges[0]) - 1 < min_count:
+            new_binning = bin_edges
+        else:
             new_binning = _run_adaptive_binning_for_1d_case(
                 distributions=distributions,
                 bin_edges=new_edges,
                 start_from=start_from,
-                minimal_bin_count=min_count,
-                minimal_number_of_bins=min_count,
-            )
-        except OneDimAdaptiveBinningError:
-            new_binning = _run_adaptive_binning_for_1d_case(
-                distributions=distributions,
-                bin_edges=new_edges,
-                start_from="auto",
                 minimal_bin_count=min_count,
                 minimal_number_of_bins=min_count,
             )
@@ -513,24 +503,14 @@ def _run_adaptive_binning_for_1d_case(
         offset = 0 if len(initial_hist[:starting_point]) % 2 == 0 else 1
         original = bin_edges_1d[starting_point + offset :]
         adapted = bin_edges_1d[: starting_point + offset][::2]
-        new_edges = tuple(
-            [
-                tuple(np.r_[adapted, original]),
-            ]
-        )
-        try:
+        new_edges = (tuple(np.r_[adapted, original]),)
+        if len(new_edges[0]) - 1 < min_count:
+            new_binning = bin_edges
+        else:
             new_binning = _run_adaptive_binning_for_1d_case(
                 distributions=distributions,
                 bin_edges=new_edges,
                 start_from=start_from,
-                minimal_bin_count=min_count,
-                minimal_number_of_bins=min_count,
-            )
-        except OneDimAdaptiveBinningError:
-            new_binning = _run_adaptive_binning_for_1d_case(
-                distributions=distributions,
-                bin_edges=new_edges,
-                start_from="auto",
                 minimal_bin_count=min_count,
                 minimal_number_of_bins=min_count,
             )
@@ -541,31 +521,19 @@ def _run_adaptive_binning_for_1d_case(
         original_mid = bin_edges_1d[max_bin - 1 : max_bin + 2]
         adopted_left = _run_adaptive_binning_for_1d_case(
             distributions=distributions,
-            bin_edges=tuple(
-                [
-                    tuple(bin_edges_1d[: max_bin - 1]),
-                ]
-            ),
+            bin_edges=(tuple(bin_edges_1d[: max_bin - 1]),),
             start_from="right",
             minimal_bin_count=min_count,
             minimal_number_of_bins=min_count,
         )[0]
         adopted_right = _run_adaptive_binning_for_1d_case(
             distributions=distributions,
-            bin_edges=tuple(
-                [
-                    tuple(bin_edges_1d[max_bin + 2 :]),
-                ]
-            ),
+            bin_edges=(tuple(bin_edges_1d[max_bin + 2 :]),),
             start_from="left",
             minimal_bin_count=min_count,
             minimal_number_of_bins=min_count,
         )[0]
-        new_binning = tuple(
-            [
-                tuple(np.r_[adopted_left, original_mid, adopted_right]),
-            ]
-        )
+        new_binning = (tuple(np.r_[adopted_left, original_mid, adopted_right]),)
     elif start_from == "auto":
         max_bin = np.argmax(initial_hist)
         if max_bin / len(initial_hist) < 0.15:
