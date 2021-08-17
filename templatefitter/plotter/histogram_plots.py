@@ -503,7 +503,7 @@ class DataMCHistogramPlot(HistogramPlot):
             chi2, p_val, toy_output = toy_chi2_test(
                 data=data_bin_count,
                 expectation=mc_bin_count,
-                error=data_bin_count,
+                error=np.where(data_bin_count >= 1, data_bin_count, np.ones(data_bin_count.shape)),
                 mc_cov=self._histograms[self.mc_key].get_covariance_matrix(),
             )
             return DataMCComparisonOutput(chi2=chi2, ndf=dof, p_val=p_val, test_method=method, toy_output=toy_output)
