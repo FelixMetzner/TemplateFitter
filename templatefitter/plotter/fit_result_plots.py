@@ -324,7 +324,7 @@ class FitResultPlotter(FitPlotterBase):
                         info_title = "\n".join([padding + info for info in sub_bin_info_text.split("\n")])
 
                     if bin_info_pos == "right":
-                        info_title = r"$\;$" + "\n" + info_title
+                        info_title = info_title
 
                     axs.set_title(info_title, loc=bin_info_pos, fontsize=6, color=plot_style.KITColors.dark_grey)
 
