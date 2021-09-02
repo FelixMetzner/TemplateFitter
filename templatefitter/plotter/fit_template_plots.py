@@ -138,6 +138,8 @@ class FitTemplatePlot(FitPlotBase):
                 y_axis_scale=y_scale,
             )
 
+        ax1.set_ylim(bottom=0.0, top=None)
+
         ax1.set_ylabel(self._get_y_label(normed=False), plot_style.ylabel_pos)
         ax1.set_xlabel(self._variable.x_label, plot_style.xlabel_pos)
 
