@@ -373,7 +373,7 @@ class Template(BinnedDistributionFromData):
         """
         relative_uncertainties = self._get_relative_uncertainties_for_plotting(use_stat_only=False)
         # TODO:
-        return self.expected_bin_counts(use_initial_values=use_initial_values) * relative_uncertainties
+        return np.square(self.expected_bin_counts(use_initial_values=use_initial_values) * relative_uncertainties)
 
     def get_template_shape_for_expected_bin_counts(
         self,
