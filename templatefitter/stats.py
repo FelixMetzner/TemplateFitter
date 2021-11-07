@@ -5,7 +5,6 @@ Provides statistical methods for goodness of fit test
 import numpy as np
 
 from scipy.stats import chi2
-from scipy.integrate import quad
 from typing import Optional, Union, Tuple, List
 
 __all__ = [
@@ -62,7 +61,7 @@ def pearson_chi2_test(
         chi_sq = np.sum((data - expectation) ** 2 / expectation)
 
     assert isinstance(chi_sq, float), type(chi_sq)
-    p_val = quad(chi2.pdf, chi_sq, np.inf, args=(dof,))[0]
+    p_val = chi2.sf(chi_sq, df=dof)
     return chi_sq, dof, p_val
 
 
@@ -109,7 +108,7 @@ def cowan_binned_likelihood_gof(
     chi_sq = 2 * np.sum(data * np.log(data / expectation) + expectation - data)
 
     assert isinstance(chi_sq, float), type(chi_sq)
-    p_val = quad(chi2.pdf, chi_sq, np.inf, args=(dof,))[0]
+    p_val = chi2.sf(chi_sq, df=dof)
     return chi_sq, dof, p_val
 
 
