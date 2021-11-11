@@ -144,11 +144,46 @@ def calc_chi_squared(
         return np.sum(np.nan_to_num((obs - exp) ** 2 / exp_unc))
 
 
+def calc_chi_squared_with_cov(
+    obs: np.ndarray,
+    exp: np.ndarray,
+    exp_cov: np.ndarray,
+) -> Union[float, np.ndarray]:
+    """
+    Calculates the chi squared difference between an expected and an observed histogrammed distribution.
+    In this calculation the covariance matrix of the expectation is considered.
+    If obs is 2-dimensional (contains multiple histograms), an array of chi squared values will be returned.
+
+    Parameters
+    ----------
+    obs: np.ndarray
+        Array containing histogrammed observed data for which the distribution
+        shall be compared to the expected distribution. Shape is (len(exp),) or
+        (len(exp), >=1), where len(exp) is the number of bins of the histogrammed
+        expected distribution.
+    exp: np.ndarray
+        Array containing the histogrammed expected distribution. Shape is (num_bins, ).
+    exp_cov: np.ndarray
+        2D-Array containing the covariance matrix of the histogrammed expected distribution. Shape (num_bins, num_bins)
+    Returns
+    -------
+    float or np.ndarray
+        Resulting chi squared value or array of chi squared values.
+    """
+    diff = obs - exp  # type: np.ndarray
+    inverse_cov = np.linalg.inv(exp_cov)  # type: np.ndarray
+    if len(obs.shape) > 1:
+        return np.sum(np.nan_to_num(diff.T * inverse_cov * diff), axis=1)
+    else:
+        return np.sum(np.nan_to_num(diff.T * inverse_cov * diff))
+
+
 def mc_chi_squared_from_toys(
     obs: np.ndarray,
     exp: np.ndarray,
     exp_unc: np.ndarray,
     mc_cov: Optional[np.ndarray] = None,
+    use_text_book_approach: bool = False,
     toys_size: int = 1000000,
     seed: int = 13377331,
 ) -> Tuple[float, np.ndarray]:
@@ -183,25 +218,37 @@ def mc_chi_squared_from_toys(
     _exp = exp[exp_ge_zero]
     _exp_unc = exp_unc[exp_ge_zero]
 
-    obs_chi_squared = calc_chi_squared(obs=_obs, exp=_exp, exp_unc=_exp_unc)
+    _mc_cov = np.array([])  # type: np.ndarray
+    has_valid_cov = not (mc_cov is None or not np.any(mc_cov))  # type: bool
 
-    np.random.seed(seed=seed)
-    if mc_cov is None or not np.any(mc_cov):
-        # if covariance matrix is None or contains only zeros (checked with "not np.any(mc_cov)"): use poisson approach
-        toys = np.random.poisson(_exp, size=(toys_size, len(_exp)))
-    else:
-        _mc_cov = mc_cov  # type: np.ndarray
-        if not _exp.shape[0] == mc_cov.shape[0] == mc_cov.shape[1]:
+    if has_valid_cov:
+        _mc_cov = mc_cov
+        if not _exp.shape[0] == _mc_cov.shape[0] == _mc_cov.shape[1]:
             assert len(exp_ge_zero.shape) == 1, exp_ge_zero.shape
             exp_ge_zero_indices = [i for i, is_not in enumerate(exp_ge_zero) if is_not]  # type: List[int]
-            _mc_cov = mc_cov[np.ix_(exp_ge_zero_indices, exp_ge_zero_indices)]
+            _mc_cov = _mc_cov[np.ix_(exp_ge_zero_indices, exp_ge_zero_indices)]
 
-        toys = np.random.multivariate_normal(mean=_exp, cov=_mc_cov, size=toys_size)
+    if use_text_book_approach:
+        assert has_valid_cov, (type(mc_cov), mc_cov)
+        _obs_chi_squared = calc_chi_squared_with_cov(obs=_obs, exp=_exp, exp_cov=_mc_cov)
+        assert isinstance(_obs_chi_squared, float), (type(_obs_chi_squared), _obs_chi_squared)
+        obs_chi_squared = _obs_chi_squared  # type: float
+    else:
+        _obs_chi_squared = calc_chi_squared(obs=_obs, exp=_exp, exp_unc=_exp_unc)
+        assert isinstance(_obs_chi_squared, float), (type(_obs_chi_squared), _obs_chi_squared)
+        obs_chi_squared = _obs_chi_squared
+
+    np.random.seed(seed=seed)
+    if has_valid_cov and not use_text_book_approach:
+        toys = np.random.multivariate_normal(mean=_exp, cov=_mc_cov, size=toys_size)  # type: np.ndarray
         toys[toys < 0.0] = 0.0
         # toys_base = np.random.lognormal(mean=_exp, sigma=np.sqrt(np.diagonal(_mc_cov)), size=(toys_size, len(_exp)))
         # toys = np.random.poisson(lam=toys_base)
+    else:
+        # Use poisson approach for textbook approach or if no valid covariance matrix is provided.
+        toys = np.random.poisson(_exp, size=(toys_size, len(_exp)))
 
-    toy_chi_squared = calc_chi_squared(obs=toys, exp=_exp, exp_unc=_exp_unc)
+    toy_chi_squared = calc_chi_squared(obs=toys, exp=_exp, exp_unc=_exp_unc)  # type: np.ndarray
 
     assert np.min(toy_chi_squared) < np.max(toy_chi_squared), (np.min(toy_chi_squared), np.max(toy_chi_squared))
     return obs_chi_squared, toy_chi_squared
@@ -212,6 +259,7 @@ def _toy_chi2_test(
     expectation: np.ndarray,
     error: np.ndarray,
     mc_cov: Optional[np.ndarray] = None,
+    use_text_book_approach: bool = False,
     toys_size: int = 1000000,
 ) -> Tuple[float, float, ToyInfoOutputType]:
     obs_chi2, toys = mc_chi_squared_from_toys(
@@ -219,6 +267,7 @@ def _toy_chi2_test(
         exp=expectation,
         exp_unc=error,
         mc_cov=mc_cov,
+        use_text_book_approach=use_text_book_approach,
         toys_size=toys_size,
     )
 
@@ -237,6 +286,7 @@ def toy_chi2_test(
     expectation: np.ndarray,
     error: np.ndarray,
     mc_cov: Optional[np.ndarray] = None,
+    use_text_book_approach: bool = False,
     toys_size: int = 1000000,
     max_attempts: int = 3,
 ) -> Tuple[float, float, ToyInfoOutputType]:
@@ -275,6 +325,7 @@ def toy_chi2_test(
                 expectation=expectation,
                 error=error,
                 mc_cov=mc_cov,
+                use_text_book_approach=use_text_book_approach,
                 toys_size=int(toys_size * 0.1 ** try_count),
             )
         except IndexError as ie:

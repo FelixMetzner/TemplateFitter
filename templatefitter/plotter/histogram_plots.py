@@ -7,9 +7,10 @@ import logging
 import warnings
 import numpy as np
 
+from dataclasses import dataclass
 from matplotlib import pyplot as plt, figure
 from uncertainties import unumpy as unp, ufloat
-from typing import Optional, Union, Tuple, List, NamedTuple
+from typing import Optional, Union, Tuple, List
 
 from templatefitter.plotter import plot_style
 from templatefitter.plotter.histogram import Histogram
@@ -36,12 +37,24 @@ __all__ = [
 plot_style.set_matplotlibrc_params()
 
 
-class DataMCComparisonOutput(NamedTuple):
+@dataclass(frozen=True)
+class DataMCComparisonOutput:
     chi2: float
     ndf: int
     p_val: float
     test_method: str
     toy_output: Optional[ToyInfoOutputType]
+
+    def __post_init__(self) -> None:
+        if self.test_method not in self.valid_test_methods():
+            raise ValueError(
+                f"Argument test_method must be one of {self.valid_test_methods()} but is '{self.test_method}'!"
+            )
+
+    @staticmethod
+    def valid_test_methods() -> Tuple[str, ...]:
+        valid_test_method_names = ("pearson", "cowan", "toys", "toys_inverted")  # type: Tuple[str, ...]
+        return valid_test_method_names
 
     @property
     def test_method_id(self) -> str:
@@ -186,7 +199,6 @@ class StackedHistogramPlot(HistogramPlot):
 class DataMCHistogramPlot(HistogramPlot):
     valid_styles = ["stacked", "summed"]  # type: List[str]
     valid_ratio_types = ["normal", "vs_uncert"]  # type: List[str]
-    valid_gof_methods = ["pearson", "cowan", "toys"]  # type: List[str]
 
     data_key = "data_histogram"  # type: str
     mc_key = "mc_histogram"  # type: str
@@ -312,12 +324,12 @@ class DataMCHistogramPlot(HistogramPlot):
 
         bin_scaling = self.binning.get_bin_scaling()  # type: np.ndarray
 
-        mc_bin_count, mc_uncert, norm_factor = self.get_bin_info_for_component(
+        mc_bin_count, mc_uncert_sq, stat_mc_uncert_sq, norm_factor = self.get_bin_info_for_component(
             component_key=self.mc_key,
             data_key=self.data_key,
             normalize_to_data=normalize_to_data,
             include_sys=include_sys,
-        )  # type: np.ndarray, np.ndarray, float
+        )  # type: np.ndarray, np.ndarray, np.ndarray, float
 
         data_bin_count = self._histograms[self.data_key].get_bin_count_of_component(index=0)  # type: np.ndarray
 
@@ -343,9 +355,9 @@ class DataMCHistogramPlot(HistogramPlot):
 
             ax1.bar(
                 x=self.bin_mids,
-                height=2 * np.sqrt(mc_uncert),
+                height=2 * np.sqrt(mc_uncert_sq),
                 width=self.bin_widths,
-                bottom=mc_bin_count * bin_scaling - np.sqrt(mc_uncert),
+                bottom=mc_bin_count * bin_scaling - np.sqrt(mc_uncert_sq),
                 color="black",
                 hatch="///////",
                 fill=False,
@@ -355,9 +367,9 @@ class DataMCHistogramPlot(HistogramPlot):
         elif style.lower() == "summed":
             ax1.bar(
                 x=self.bin_mids,
-                height=2 * np.sqrt(mc_uncert),
+                height=2 * np.sqrt(mc_uncert_sq),
                 width=self.bin_widths,
-                bottom=mc_bin_count * bin_scaling - np.sqrt(mc_uncert),
+                bottom=mc_bin_count * bin_scaling - np.sqrt(mc_uncert_sq),
                 color=sum_color,
                 lw=0,
                 label="MC" if not normalize_to_data else r"MC $\times$ " + f"{norm_factor:.2f}",
@@ -381,6 +393,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 method=gof_check_method,
                 mc_bin_count=mc_bin_count,
                 data_bin_count=data_bin_count,
+                stat_mc_uncertainty_sq=stat_mc_uncert_sq,
                 mc_is_normalized_to_data=normalize_to_data,
             )  # type: DataMCComparisonOutputType
         except IndexError:
@@ -392,6 +405,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 method="pearson",
                 mc_bin_count=mc_bin_count,
                 data_bin_count=data_bin_count,
+                stat_mc_uncertainty_sq=stat_mc_uncert_sq,
                 mc_is_normalized_to_data=normalize_to_data,
             )
 
@@ -422,7 +436,7 @@ class DataMCHistogramPlot(HistogramPlot):
             ratio_type=ratio_type,
             data_bin_count=data_bin_count,
             mc_bin_count=mc_bin_count,
-            mc_error_sq=mc_uncert,
+            mc_error_sq=mc_uncert_sq,
             markers_with_width=markers_with_width,
             systematics_are_included=include_sys,
             marker_color=plot_style.KITColors.kit_black,
@@ -440,7 +454,7 @@ class DataMCHistogramPlot(HistogramPlot):
         data_key: Optional[str] = None,
         normalize_to_data: bool = False,
         include_sys: bool = False,
-    ) -> Tuple[np.ndarray, np.ndarray, float]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
         if component_key is None:
             component_key = self.mc_key
         if component_key not in self._histograms.histogram_keys:
@@ -465,27 +479,31 @@ class DataMCHistogramPlot(HistogramPlot):
             norm_factor = self._histograms[data_key].raw_data_size / self._histograms[component_key].raw_weight_sum
             component_bin_count *= norm_factor
 
-        component_stat_uncert = self._histograms[component_key].get_statistical_uncertainty_per_bin(
+        component_stat_uncert_sq = self._histograms[component_key].get_statistical_uncertainty_per_bin(
             normalization_factor=norm_factor
         )
-        component_uncert = component_stat_uncert
+        component_uncert_sq = copy.deepcopy(component_stat_uncert_sq)
 
         if include_sys:
             sys_uncertainty_squared = self._histograms[component_key].get_systematic_uncertainty_per_bin()
             if sys_uncertainty_squared is not None:
-                component_uncert += sys_uncertainty_squared
+                component_uncert_sq += sys_uncertainty_squared
 
         assert len(component_bin_count.shape) == 1, component_bin_count.shape
         assert component_bin_count.shape[0] == self.number_of_bins, (component_bin_count.shape, self.number_of_bins)
-        assert component_bin_count.shape == component_uncert.shape, (component_bin_count.shape, component_uncert.shape)
+        assert component_bin_count.shape == component_uncert_sq.shape, (
+            component_bin_count.shape,
+            component_uncert_sq.shape,
+        )
 
-        return component_bin_count, component_uncert, norm_factor
+        return component_bin_count, component_uncert_sq, component_stat_uncert_sq, norm_factor
 
     def do_goodness_of_fit_test(
         self,
         method: Optional[str],
         mc_bin_count: np.ndarray,
         data_bin_count: np.ndarray,
+        stat_mc_uncertainty_sq: np.ndarray,
         mc_is_normalized_to_data: bool,
     ) -> DataMCComparisonOutputType:
         if method is None:
@@ -504,13 +522,22 @@ class DataMCHistogramPlot(HistogramPlot):
                 data=data_bin_count,
                 expectation=mc_bin_count,
                 error=np.where(data_bin_count >= 1, data_bin_count, np.ones(data_bin_count.shape)),
-                mc_cov=self._histograms[self.mc_key].get_covariance_matrix(),
+                mc_cov=self._histograms[self.mc_key].get_covariance_matrix() + np.diag(stat_mc_uncertainty_sq),
+                use_text_book_approach=True,
+            )
+            return DataMCComparisonOutput(chi2=chi2, ndf=dof, p_val=p_val, test_method=method, toy_output=toy_output)
+        elif method.lower() == "toys_inverted":
+            chi2, p_val, toy_output = toy_chi2_test(
+                data=data_bin_count,
+                expectation=mc_bin_count,
+                error=np.where(data_bin_count >= 1, data_bin_count, np.ones(data_bin_count.shape)),
+                mc_cov=self._histograms[self.mc_key].get_covariance_matrix() + np.diag(stat_mc_uncertainty_sq),
             )
             return DataMCComparisonOutput(chi2=chi2, ndf=dof, p_val=p_val, test_method=method, toy_output=toy_output)
         else:
             raise ValueError(
                 f"The provided goodness of fit method identifier '{method}' is not valid!\n"
-                f"It must be one of {DataMCHistogramPlot.valid_gof_methods}!"
+                f"It must be one of {DataMCComparisonOutput.valid_test_methods()}!"
             )
 
     def add_residual_ratio_plot(
@@ -684,9 +711,9 @@ class DataMCHistogramPlot(HistogramPlot):
                 f"The argument 'ratio_type' must be one of {DataMCHistogramPlot.valid_ratio_types}!"
                 f"Provided was '{ratio_type}'"
             )
-        if gof_check_method is not None and gof_check_method.lower() not in DataMCHistogramPlot.valid_gof_methods:
+        if gof_check_method is not None and gof_check_method.lower() not in DataMCComparisonOutput.valid_test_methods():
             raise ValueError(
-                f"The argument 'gof_check_method' must be one of {DataMCHistogramPlot.valid_gof_methods} "
+                f"The argument 'gof_check_method' must be one of {DataMCComparisonOutput.valid_test_methods()} "
                 f"or None! Provided was '{gof_check_method}'"
             )
 
