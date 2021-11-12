@@ -173,9 +173,9 @@ def calc_chi_squared_with_cov(
     diff = obs - exp  # type: np.ndarray
     inverse_cov = np.linalg.inv(exp_cov)  # type: np.ndarray
     if len(obs.shape) > 1:
-        return np.sum(np.nan_to_num(diff.T * inverse_cov * diff), axis=1)
+        return np.sum(np.tensordot(diff, inverse_cov, axes=1) * diff, axis=1)
     else:
-        return np.sum(np.nan_to_num(diff.T * inverse_cov * diff))
+        return np.sum(np.nan_to_num(diff.T @ inverse_cov @ diff))
 
 
 def mc_chi_squared_from_toys(
@@ -214,9 +214,34 @@ def mc_chi_squared_from_toys(
         Sampled chi squared values obtained from exp via toys.
     """
     exp_ge_zero = exp > 0  # type: np.ndarray
-    _obs = obs[exp_ge_zero]
-    _exp = exp[exp_ge_zero]
-    _exp_unc = exp_unc[exp_ge_zero]
+    _obs = obs[exp_ge_zero]  # type: np.ndarray
+    _exp = exp[exp_ge_zero]  # type: np.ndarray
+    _exp_unc = exp_unc[exp_ge_zero]  # type: np.ndarray
+
+    # no_valid_cov = mc_cov is None or not np.any(mc_cov)  # type: bool  # Covariance matrix is None or contains only 0
+    #
+    # obs_chi_squared = calc_chi_squared(obs=_obs, exp=_exp, exp_unc=_exp_unc)
+    #
+    # np.random.seed(seed=seed)
+    # if no_valid_cov:
+    #     # if no valid covariance matrix: use poisson approach
+    #     toys = np.random.poisson(_exp, size=(toys_size, len(_exp)))
+    # else:
+    #     _mc_cov = mc_cov  # type: np.ndarray
+    #     if not _exp.shape[0] == mc_cov.shape[0] == mc_cov.shape[1]:
+    #         assert len(exp_ge_zero.shape) == 1, exp_ge_zero.shape
+    #         exp_ge_zero_indices = [i for i, is_not in enumerate(exp_ge_zero) if is_not]  # type: List[int]
+    #         _mc_cov = mc_cov[np.ix_(exp_ge_zero_indices, exp_ge_zero_indices)]
+    #
+    #     toys = np.random.multivariate_normal(mean=_exp, cov=_mc_cov, size=toys_size)
+    #     toys[toys < 0.0] = 0.0
+    #     # toys_base = np.random.lognormal(mean=_exp, sigma=np.sqrt(np.diagonal(_mc_cov)), size=(toys_size, len(_exp)))
+    #     # toys = np.random.poisson(lam=toys_base)
+    #
+    # toy_chi_squared = calc_chi_squared(obs=toys, exp=_exp, exp_unc=_exp_unc)
+    #
+    # assert np.min(toy_chi_squared) < np.max(toy_chi_squared), (np.min(toy_chi_squared), np.max(toy_chi_squared))
+    # return obs_chi_squared, toy_chi_squared
 
     _mc_cov = np.array([])  # type: np.ndarray
     has_valid_cov = not (mc_cov is None or not np.any(mc_cov))  # type: bool
