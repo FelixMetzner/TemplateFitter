@@ -175,7 +175,7 @@ def calc_chi_squared_with_cov(
     if len(obs.shape) > 1:
         return np.sum(np.tensordot(diff, inverse_cov, axes=1) * diff, axis=1)
     else:
-        return np.sum(np.nan_to_num(diff.T @ inverse_cov @ diff))
+        return diff.T @ inverse_cov @ diff
 
 
 def mc_chi_squared_from_toys(
