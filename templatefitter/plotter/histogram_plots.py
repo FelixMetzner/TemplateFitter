@@ -518,11 +518,12 @@ class DataMCHistogramPlot(HistogramPlot):
             chi2, ndf, p_val = cowan_binned_likelihood_gof(data=data_bin_count, expectation=mc_bin_count, dof=dof)
             return DataMCComparisonOutput(chi2=chi2, ndf=ndf, p_val=p_val, test_method=method, toy_output=None)
         elif method.lower() == "toys":
+            data_err_sq = np.where(data_bin_count >= 1, data_bin_count, np.ones(data_bin_count.shape))  # type: np.ndarray
             chi2, p_val, toy_output = toy_chi2_test(
                 data=data_bin_count,
                 expectation=mc_bin_count,
-                error=np.where(data_bin_count >= 1, data_bin_count, np.ones(data_bin_count.shape)),
-                mc_cov=self._histograms[self.mc_key].get_covariance_matrix() + np.diag(data_bin_count),
+                error=data_err_sq,
+                mc_cov=self._histograms[self.mc_key].get_covariance_matrix() + np.diag(data_err_sq),
                 use_text_book_approach=True,
             )
             return DataMCComparisonOutput(chi2=chi2, ndf=dof, p_val=p_val, test_method=method, toy_output=toy_output)
