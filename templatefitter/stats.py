@@ -246,7 +246,10 @@ def mc_chi_squared_from_toys(
         # Use poisson approach for textbook approach or if no valid covariance matrix is provided.
         toys = np.random.poisson(_exp, size=(toys_size, len(_exp)))
 
-    toy_chi_squared = calc_chi_squared(obs=toys, exp=_exp, exp_unc=_exp_unc)  # type: np.ndarray
+    if use_text_book_approach:
+        toy_chi_squared = calc_chi_squared_with_cov(obs=toys, exp=_exp, exp_cov=_mc_cov)  # type: np.ndarray
+    else:
+        toy_chi_squared = calc_chi_squared(obs=toys, exp=_exp, exp_unc=_exp_unc)
 
     assert np.min(toy_chi_squared) < np.max(toy_chi_squared), (np.min(toy_chi_squared), np.max(toy_chi_squared))
     return obs_chi_squared, toy_chi_squared
