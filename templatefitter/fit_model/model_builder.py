@@ -920,10 +920,16 @@ class FitModel:
 
         The systematics can be handled independent for each bin and channel/template (Option 1a and 1b)
             -> number of nuisance parameters =
-                    (a): n_bins * n_channels    or
-                    (b): n_bins * n_channels * n_templates_p_ch
+                    (1a): n_bins * n_channels    or
+                    (1b): n_bins * n_channels * n_templates_p_ch
         or independent from each other (Option 2)
             -> number of nuisance parameters = n_systematics
+        or both (Option 3), with and without differentiation between templates:
+            -> number of nuisance parameters =
+                    (3a): n_bins * n_channels * n_systematics    or
+                    (3b): n_bins * n_channels * n_templates_p_ch * n_systematics
+
+
 
         The resulting systematic uncertainty matrix is stored in self._systematic_uncertainty_matrix and
         added to
