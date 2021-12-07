@@ -428,6 +428,9 @@ class DataMCHistogramPlot(HistogramPlot):
                     y_axis_scale=y_scale,
                 )
 
+        ax1.set_xlim(self.bin_edges[0], self.bin_edges[-1])
+        ax2.set_xlim(self.bin_edges[0], self.bin_edges[-1])
+
         ax1.set_ylabel(self._get_y_label(normed=False, evts_or_cands=y_label), plot_style.ylabel_pos)
         ax2.set_xlabel(self._variable.x_label, plot_style.xlabel_pos)
 
