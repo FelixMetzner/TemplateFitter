@@ -44,6 +44,7 @@ class DataMCComparisonOutput:
     p_val: float
     test_method: str
     toy_output: Optional[ToyInfoOutputType]
+    mc_scale_factor: Optional[float]
 
     def __post_init__(self) -> None:
         if self.test_method not in self.valid_test_methods():
@@ -395,6 +396,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 data_bin_count=data_bin_count,
                 stat_mc_uncertainty_sq=stat_mc_uncert_sq,
                 mc_is_normalized_to_data=normalize_to_data,
+                mc_scale_factor=norm_factor,
             )  # type: DataMCComparisonOutputType
         except IndexError:
             logging.warning(
@@ -407,6 +409,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 data_bin_count=data_bin_count,
                 stat_mc_uncertainty_sq=stat_mc_uncert_sq,
                 mc_is_normalized_to_data=normalize_to_data,
+                mc_scale_factor=norm_factor,
             )
 
         if draw_legend:
@@ -508,6 +511,7 @@ class DataMCHistogramPlot(HistogramPlot):
         data_bin_count: np.ndarray,
         stat_mc_uncertainty_sq: np.ndarray,
         mc_is_normalized_to_data: bool,
+        mc_scale_factor: float,
     ) -> DataMCComparisonOutputType:
         if method is None:
             return None
@@ -516,10 +520,24 @@ class DataMCHistogramPlot(HistogramPlot):
 
         if method.lower() == "pearson":
             chi2, ndf, p_val = pearson_chi2_test(data=data_bin_count, expectation=mc_bin_count, dof=dof)
-            return DataMCComparisonOutput(chi2=chi2, ndf=ndf, p_val=p_val, test_method=method, toy_output=None)
+            return DataMCComparisonOutput(
+                chi2=chi2,
+                ndf=ndf,
+                p_val=p_val,
+                test_method=method,
+                toy_output=None,
+                mc_scale_factor=mc_scale_factor if mc_is_normalized_to_data else None,
+            )
         elif method.lower() == "cowan":
             chi2, ndf, p_val = cowan_binned_likelihood_gof(data=data_bin_count, expectation=mc_bin_count, dof=dof)
-            return DataMCComparisonOutput(chi2=chi2, ndf=ndf, p_val=p_val, test_method=method, toy_output=None)
+            return DataMCComparisonOutput(
+                chi2=chi2,
+                ndf=ndf,
+                p_val=p_val,
+                test_method=method,
+                toy_output=None,
+                mc_scale_factor=mc_scale_factor if mc_is_normalized_to_data else None,
+            )
         elif method.lower() == "toys":
             data_err_sq = np.where(data_bin_count >= 1, data_bin_count, np.ones(data_bin_count.shape))  # type: np.ndarray
             chi2, p_val, toy_output = toy_chi2_test(
@@ -529,7 +547,14 @@ class DataMCHistogramPlot(HistogramPlot):
                 mc_cov=self._histograms[self.mc_key].get_covariance_matrix() + np.diag(data_err_sq),
                 use_text_book_approach=True,
             )
-            return DataMCComparisonOutput(chi2=chi2, ndf=dof, p_val=p_val, test_method=method, toy_output=toy_output)
+            return DataMCComparisonOutput(
+                chi2=chi2,
+                ndf=dof,
+                p_val=p_val,
+                test_method=method,
+                toy_output=toy_output,
+                mc_scale_factor=mc_scale_factor if mc_is_normalized_to_data else None,
+            )
         elif method.lower() == "toys_inverted":
             chi2, p_val, toy_output = toy_chi2_test(
                 data=data_bin_count,
@@ -537,7 +562,14 @@ class DataMCHistogramPlot(HistogramPlot):
                 error=np.where(data_bin_count >= 1, data_bin_count, np.ones(data_bin_count.shape)),
                 mc_cov=self._histograms[self.mc_key].get_covariance_matrix(),
             )
-            return DataMCComparisonOutput(chi2=chi2, ndf=dof, p_val=p_val, test_method=method, toy_output=toy_output)
+            return DataMCComparisonOutput(
+                chi2=chi2,
+                ndf=dof,
+                p_val=p_val,
+                test_method=method,
+                toy_output=toy_output,
+                mc_scale_factor=mc_scale_factor if mc_is_normalized_to_data else None,
+            )
         else:
             raise ValueError(
                 f"The provided goodness of fit method identifier '{method}' is not valid!\n"
