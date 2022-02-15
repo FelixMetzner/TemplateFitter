@@ -26,6 +26,7 @@ class ParameterInfo(NamedTuple):
     initial_value: float
     constraint_value: Optional[float]
     constraint_sigma: Optional[float]
+    relative_constraint: bool = False
 
     def info_as_string_list(self) -> List[str]:
         return [
@@ -43,12 +44,13 @@ class ParameterInfo(NamedTuple):
         info_list = self.info_as_string_list()
         return f"Parameter {info_list[0]}:\n" + "\n\t".join(info_list)
 
-    def get_with_constraint(
+    def get_with_constraint(self, value: float, sigma: float, relative: bool = False) -> "ParameterInfo":
+        return self._replace(constraint_value=value, constraint_sigma=sigma, relative_constraint=relative)
+
+    def constraint_is_relative(
         self,
-        value: float,
-        sigma: float,
-    ) -> "ParameterInfo":
-        return self._replace(constraint_value=value, constraint_sigma=sigma)
+    ) -> bool:
+        return self.relative_constraint
 
 
 class ParameterResetInfo(NamedTuple):
@@ -96,6 +98,7 @@ class ParameterHandler:
         initial_value: float,
         constraint_value: Optional[float],
         constraint_sigma: Optional[float],
+        relative_constraint: bool = False,
     ) -> int:
         if name in self._pars_dict:
             raise ValueError(
@@ -104,7 +107,9 @@ class ParameterHandler:
                 f"\t-" + "\n\t-".join(self._parameter_infos[self._pars_dict[name]].info_as_string_list())
             )
         self._check_parameter_types(parameter_types=[parameter_type])
-        self._check_constraint_input(constraint_value=constraint_value, constraint_sigma=constraint_sigma)
+        self._check_constraint_input(
+            constraint_value=constraint_value, constraint_sigma=constraint_sigma, relative_constraint=relative_constraint
+        )
 
         parameter_index = len(self._initial_pars)
         assert parameter_index not in self._pars_dict.values(), (parameter_index, self._pars_dict.values())
@@ -124,6 +129,7 @@ class ParameterHandler:
             initial_value=initial_value,
             constraint_value=constraint_value,
             constraint_sigma=constraint_sigma,
+            relative_constraint=relative_constraint,
         )
 
         self._initial_pars.append(initial_value)
@@ -154,6 +160,7 @@ class ParameterHandler:
         initial_values: Union[np.ndarray, List[float]],
         constraint_values: Optional[List[Optional[float]]],
         constraint_sigmas: Optional[List[Optional[float]]],
+        relative_constraints: Optional[List[bool]],
     ) -> List[int]:
         self._check_parameters_input(
             names=names,
@@ -163,15 +170,20 @@ class ParameterHandler:
             initial_values=initial_values,
             constraint_values=constraint_values,
             constraint_sigmas=constraint_sigmas,
+            relative_constraints=relative_constraints,
         )
         if constraint_values is None:
             assert constraint_sigmas is None, (constraint_values, constraint_sigmas)
+            assert relative_constraints is None
             c_values = [None] * len(names)  # type: List[Optional[float]]
             c_sigmas = [None] * len(names)  # type: List[Optional[float]]
+            c_rel = [False] * len(names)  # type: List[bool]
         else:
             assert constraint_sigmas is not None
+            assert relative_constraints is not None
             c_values = constraint_values
             c_sigmas = constraint_sigmas
+            c_rel = relative_constraints
 
         if isinstance(parameter_types, str):
             self._check_parameter_types(parameter_types=[parameter_types])
@@ -181,8 +193,8 @@ class ParameterHandler:
             types_list = parameter_types
 
         indices = []  # type: List[int]
-        zipped_infos = zip(names, model_indices, types_list, floating, initial_values, c_values, c_sigmas)
-        for name, m_index, p_type, flt, initial_val, cv, cs in zipped_infos:
+        zipped_infos = zip(names, model_indices, types_list, floating, initial_values, c_values, c_sigmas, c_rel)
+        for name, m_index, p_type, flt, initial_val, cv, cs, cr in zipped_infos:
             param_id = self.add_parameter(
                 name=name,
                 model_index=m_index,
@@ -191,6 +203,7 @@ class ParameterHandler:
                 initial_value=initial_val,
                 constraint_value=cv,
                 constraint_sigma=cs,
+                relative_constraint=cr,
             )
             indices.append(param_id)
 
@@ -201,8 +214,11 @@ class ParameterHandler:
         param_id: int,
         constraint_value: float,
         constraint_sigma: float,
+        relative_constraint: bool = False,
     ) -> None:
-        self._check_constraint_input(constraint_value=constraint_value, constraint_sigma=constraint_sigma)
+        self._check_constraint_input(
+            constraint_value=constraint_value, constraint_sigma=constraint_sigma, relative_constraint=relative_constraint
+        )
         assert param_id not in self.get_constraint_information()[0]
         assert self._parameter_infos[param_id].constraint_value is None, self._parameter_infos[param_id].constraint_value
         assert self._parameter_infos[param_id].constraint_sigma is None, self._parameter_infos[param_id].constraint_sigma
@@ -212,6 +228,7 @@ class ParameterHandler:
         self._parameter_infos[param_id] = self._parameter_infos[param_id].get_with_constraint(
             value=constraint_value,
             sigma=constraint_sigma,
+            relative=relative_constraint,
         )
 
         assert param_id in self.get_constraint_information()[0]
@@ -496,7 +513,7 @@ class ParameterHandler:
     def get_floating_parameters(self) -> np.ndarray:
         return self._np_pars[self._floating_parameter_indices]
 
-    def get_initial_values_of_floating_parameters(self) -> np.ndarray:
+    def get_initial_values_of_floating_parameters(self) -> Optional[np.ndarray]:
         assert self._is_finalized
         return self._initial_values_of_floating_parameters
 
@@ -576,16 +593,18 @@ class ParameterHandler:
             self.reset_parameter_initial_value(parameter_name=parameter_name)
         assert len(self._redefined_params_dict) == 0, len(self._redefined_params_dict)
 
-    def get_constraint_information(self) -> Tuple[List[int], List[float], List[float]]:
+    def get_constraint_information(self) -> Tuple[List[int], List[float], List[float], List[bool]]:
         constraint_param_indices = []  # type: List[int]
         constraint_values = []  # type: List[float]
         constraint_sigmas = []  # type: List[float]
+        relative_constraints = []  # type: List[bool]
         for param_info in self._parameter_infos:
             if param_info.constraint_value is not None:
                 assert param_info.constraint_sigma is not None
                 constraint_param_indices.append(param_info.param_id)
                 constraint_values.append(param_info.constraint_value)
                 constraint_sigmas.append(param_info.constraint_sigma)
+                relative_constraints.append(param_info.relative_constraint)
 
         assert len(constraint_param_indices) == len(set(constraint_param_indices)), (
             len(constraint_param_indices),
@@ -594,8 +613,9 @@ class ParameterHandler:
         )
         assert all(isinstance(cv, float) for cv in constraint_values), [type(cv) for cv in constraint_values]
         assert all(isinstance(cs, float) for cs in constraint_sigmas), [type(cs) for cs in constraint_sigmas]
+        assert all(isinstance(rc, bool) for rc in relative_constraints), [type(rc) for rc in relative_constraints]
 
-        return constraint_param_indices, constraint_values, constraint_sigmas
+        return constraint_param_indices, constraint_values, constraint_sigmas, relative_constraints
 
     @staticmethod
     def _check_parameters_input(
@@ -606,6 +626,7 @@ class ParameterHandler:
         initial_values: Union[np.ndarray, List[float]],
         constraint_values: Optional[List[Union[float, None]]],
         constraint_sigmas: Optional[List[Union[float, None]]],
+        relative_constraints: Optional[List[bool]],
     ) -> None:
         if isinstance(initial_values, np.ndarray) and len(initial_values.shape) != 1:
             raise ValueError(
@@ -648,6 +669,12 @@ class ParameterHandler:
         if not isinstance(constraint_sigmas, type(constraint_values)):
             raise ValueError(
                 "The parameter 'constraint_sigmas' must be of the same type as 'constraint_values'!\n"
+                "The must either be both None, or both lists containing 'None's and floats."
+            )
+
+        if not isinstance(relative_constraints, type(constraint_values)):
+            raise ValueError(
+                "The parameter 'relative_constraints' must be of the same type as 'constraint_values'!\n"
                 "The must either be both None, or both lists containing 'None's and floats."
             )
         if isinstance(constraint_values, list):
@@ -697,6 +724,7 @@ class ParameterHandler:
     def _check_constraint_input(
         constraint_value: Optional[float],
         constraint_sigma: Optional[float],
+        relative_constraint: Optional[bool],
     ) -> None:
         if constraint_value is None:
             if constraint_sigma is not None:
@@ -705,6 +733,12 @@ class ParameterHandler:
                     f"You provided:\n\tconstraint_value = {constraint_value}"
                     f"\n\tconstraint_sigma = {constraint_sigma}"
                 )
+            elif relative_constraint:
+                raise ValueError(
+                    "Setting the parameter 'relative_constraint' doesn't do anything"
+                    "if no value is given via the parameter 'constraint_value'"
+                )
+
         else:
             if not isinstance(constraint_value, float):
                 raise ValueError(
@@ -729,6 +763,7 @@ class Parameter(ABC):
         initial_value: float,
         constrain_to_value: Optional[float] = None,
         constraint_sigma: Optional[float] = None,
+        constraint_is_relative: bool = False,
     ) -> None:
         if parameter_type not in ParameterHandler.parameter_types:
             raise ValueError(
@@ -742,12 +777,21 @@ class Parameter(ABC):
         self._initial_value = initial_value  # type: float
         self._constraint_value = constrain_to_value  # type: Optional[float]
         self._constraint_sigma = constraint_sigma  # type: Optional[float]
-        if self._constraint_value is not None and (self._constraint_value != self._initial_value):
-            raise ValueError(
-                f"If a constraint is defined for a parameter, the initial value of the parameter "
-                f"should be the value the parameter is constrained to, but the input values are:\n"
-                f"\tinitial_value = {initial_value}\n\tconstrain_to_value = {constrain_to_value}"
-            )
+        self._relative_constraint = constraint_is_relative  # type: bool
+
+        if self.constraint_value is not None:
+            if self._constraint_value != self._initial_value:
+                raise ValueError(
+                    f"If a constraint is defined for a parameter, the initial value of the parameter "
+                    f"should be the value the parameter is constrained to, but the input values are:\n"
+                    f"\tinitial_value = {initial_value}\n\tconstrain_to_value = {constrain_to_value}"
+                )
+
+            if self._relative_constraint and self.constraint_value >= 1.0:
+                raise ValueError(
+                    "Relative constraints cannot be larger or equal to 1.0 "
+                    "as they are defined relative to the total yield."
+                )
 
         self._index = None  # type: Optional[int]
 
@@ -776,7 +820,11 @@ class Parameter(ABC):
         return self._constraint_sigma
 
     @property
-    def value(self) -> float:
+    def constraint_is_relative(self) -> bool:
+        return self._relative_constraint
+
+    @property
+    def value(self) -> Union[np.ndarray, float]:
         if self._index is None:
             return self.initial_value
         return self._params.get_parameters_by_index(self._index)
@@ -809,6 +857,7 @@ class Parameter(ABC):
             f"\n\tinitial value: {self._initial_value}"
             f"\n\tconstraint value: {self._constraint_value}"
             f"\n\tconstraint sigma: {self._constraint_sigma}"
+            f"\n\trelative constraint: {self._relative_constraint}"
         )
         _additional_info = self._additional_info()  # type: Optional[str]
         if _additional_info is not None:
@@ -831,6 +880,8 @@ class Parameter(ABC):
             return False
         if not self.constraint_sigma == other.constraint_sigma:
             return False
+        if not self._relative_constraint == other._relative_constraint:
+            return False
         if not self.parameter_type == other.parameter_type:
             return False
         if self.parameter_handler is not other.parameter_handler:
@@ -850,6 +901,7 @@ class TemplateParameter(Parameter):
         param_id: Optional[int],
         constrain_to_value: Optional[float] = None,
         constraint_sigma: Optional[float] = None,
+        constraint_is_relative: bool = False,
     ) -> None:
         super().__init__(
             name=name,
@@ -859,6 +911,7 @@ class TemplateParameter(Parameter):
             initial_value=initial_value,
             constrain_to_value=constrain_to_value,
             constraint_sigma=constraint_sigma,
+            constraint_is_relative=constraint_is_relative,
         )
         self._base_model_parameter = None  # type: Optional[ModelParameter]
 
@@ -893,6 +946,7 @@ class ModelParameter(Parameter):
         initial_value: float,
         constrain_to_value: Optional[float] = None,
         constraint_sigma: Optional[float] = None,
+        constraint_is_relative: bool = False,
     ) -> None:
         super().__init__(
             name=name,
@@ -902,6 +956,7 @@ class ModelParameter(Parameter):
             initial_value=initial_value,
             constrain_to_value=constrain_to_value,
             constraint_sigma=constraint_sigma,
+            constraint_is_relative=constraint_is_relative,
         )
         self._usage_list = []  # type: List[Tuple[TemplateParameter, int]]
         self._model_index = model_index  # type: int
@@ -921,6 +976,7 @@ class ModelParameter(Parameter):
             initial_value=self.initial_value,
             constraint_value=self.constraint_value,
             constraint_sigma=self.constraint_sigma,
+            relative_constraint=self.constraint_is_relative,
         )
         self.param_id = param_id
 

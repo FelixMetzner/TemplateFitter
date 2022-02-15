@@ -91,7 +91,7 @@ class FitModel:
         self._fraction_conversion = None  # type: Optional[FractionConversionInfo]
         self._inverse_template_bin_correlation_matrix = None  # type: Optional[np.ndarray]
 
-        self._systematics_covariance_matrices_per_channel = None  # type: Optional[List[np.ndarray]]
+        self._systematics_covariance_matrices_per_channel = None  # type: Optional[List[List[np.ndarray]]]
 
         self._has_data = False  # type: bool
         self._is_initialized = False  # type: bool
@@ -115,6 +115,7 @@ class FitModel:
         self._constraint_indices = None  # type: Optional[List[int]]
         self._constraint_values = None  # type: Optional[List[float]]
         self._constraint_sigmas = None  # type: Optional[List[float]]
+        self._relative_constraints = None  # type: Optional[List[bool]]
         self._has_constrained_parameters = False  # type: bool
 
         self._template_bin_counts = None  # type: Optional[np.ndarray]
@@ -144,6 +145,7 @@ class FitModel:
         initial_value: float,
         constrain_to_value: Optional[float] = None,
         constraint_sigma: Optional[float] = None,
+        constraint_is_relative: bool = False,
     ) -> Tuple[int, ModelParameter]:
         self._check_is_not_finalized()
         self._check_has_data(adding="model parameter")
@@ -165,6 +167,7 @@ class FitModel:
             initial_value=initial_value,
             constrain_to_value=constrain_to_value,
             constraint_sigma=constraint_sigma,
+            constraint_is_relative=constraint_is_relative,
         )
         self._model_parameters.append(model_parameter)
         self._model_parameters_mapping.update({name: model_index})
@@ -616,6 +619,47 @@ class FitModel:
 
         self._params.add_constraint_to_parameter(param_id=param_id, constraint_value=value, constraint_sigma=sigma)
 
+    def add_relative_constraint(
+        self,
+        name: str,
+        value: float,
+        sigma: float,
+    ) -> None:
+        self._check_is_not_finalized()
+
+        # TODO some checks, e.g. if constraint value is < 1
+
+        if name not in self._model_parameters_mapping.keys():
+            raise ValueError(
+                f"A ModelParameter with the name '{name}' was not added, yet, "
+                f"and hus a constrained cannot be applied to it!"
+            )
+
+        model_parameter = self._model_parameters[self._model_parameters_mapping[name]]
+        if model_parameter.constraint_value is not None:
+            raise RuntimeError(
+                f"The ModelParameter '{name}' already is constrained with the settings"
+                f"\n\tconstraint_value = {model_parameter.constraint_value}"
+                f"\n\tconstraint_sigma = {model_parameter.constraint_sigma}\n"
+                f"and thus your constrained (cv = {value}, cs = {sigma}) cannot be applied!"
+            )
+
+        param_id = model_parameter.param_id
+        assert param_id is not None
+        parameter_infos = self._params.get_parameter_infos_by_index(indices=param_id)[0]
+        assert parameter_infos.constraint_value == model_parameter.constraint_value, (
+            parameter_infos.constraint_value,
+            model_parameter.constraint_value,
+        )
+        assert parameter_infos.constraint_sigma == model_parameter.constraint_sigma, (
+            parameter_infos.constraint_sigma,
+            model_parameter.constraint_sigma,
+        )
+
+        self._params.add_constraint_to_parameter(
+            param_id=param_id, constraint_value=value, constraint_sigma=sigma, relative_constraint=True
+        )
+
     def add_data(
         self,
         channels: Dict[str, DataInputType],
@@ -678,12 +722,12 @@ class FitModel:
             )
 
         for channel in self._channels:
-            channel_data = None
+
+            templates = iter(channel.templates)
+            channel_data = copy.copy(next(templates).bin_counts)  # type: np.ndarray
+
             for template in channel.templates:
-                if channel_data is None:
-                    channel_data = copy.copy(template.bin_counts)
-                else:
-                    channel_data += template.bin_counts
+                channel_data += template.bin_counts
 
             self._data_channels.add_channel(
                 channel_name=channel.name,
@@ -706,16 +750,15 @@ class FitModel:
         self._data_channels = DataChannelContainer()
 
         for channel in self._channels:
-            channel_data = None  # type: Optional[np.ndarray]
-            for template in channel.templates:
-                if channel_data is None:
-                    channel_data = copy.copy(template.bin_counts)
-                else:
-                    assert channel_data.shape == template.bin_counts.shape, (
-                        channel_data.shape,
-                        template.bin_counts.shape,
-                    )
-                    channel_data += template.bin_counts
+            templates = iter(channel.templates)
+
+            channel_data = copy.copy(next(templates).bin_counts)  # type: np.ndarray
+            for template in templates:
+                assert channel_data.shape == template.bin_counts.shape, (
+                    channel_data.shape,
+                    template.bin_counts.shape,
+                )
+                channel_data += template.bin_counts
 
             if round_bin_counts:
                 channel_data = np.ceil(channel_data)
@@ -881,10 +924,11 @@ class FitModel:
             ), f"{len(yields_i)}\n" + "\n".join([f"{c.name}: {c.total_number_of_templates}" for c in self._channels])
 
     def _initialize_parameter_constraints(self) -> None:
-        indices, cvs, css = self._params.get_constraint_information()
+        indices, cvs, css, rcs = self._params.get_constraint_information()
         self._constraint_indices = indices
         self._constraint_values = cvs
         self._constraint_sigmas = css
+        self._relative_constraints = rcs
         if len(indices) > 0:
             self._has_constrained_parameters = True
 
@@ -901,6 +945,11 @@ class FitModel:
         assert len(self.constraint_indices) == len(self.constraint_sigmas), (
             len(self.constraint_indices),
             len(self.constraint_sigmas),
+        )
+
+        assert len(self.constraint_indices) == len(self.relative_constraints), (
+            len(self.constraint_indices),
+            len(self.relative_constraints),
         )
 
         self._constraints_checked = True
@@ -1770,7 +1819,7 @@ class FitModel:
     def calculate_expected_bin_count(
         self,
         parameter_vector: np.ndarray,
-        nuisance_parameters: np.ndarray,
+        nuisance_parameters: Optional[np.ndarray],
     ) -> np.ndarray:
         if not self._is_checked:
             assert isinstance(self.fraction_conversion, FractionConversionInfo), type(self.fraction_conversion)
@@ -1872,7 +1921,7 @@ class FitModel:
                 fraction_params.shape[0],
             )
 
-    def get_flattened_data_bin_counts(self) -> np.array:
+    def get_flattened_data_bin_counts(self) -> np.ndarray:
         if self._data_bin_counts is not None:
             return self._data_bin_counts
 
@@ -2004,7 +2053,12 @@ class FitModel:
         return self._constraint_sigmas
 
     @property
-    def systematics_covariance_matrices_per_channel(self) -> List[np.ndarray]:
+    def relative_constraints(self) -> List[bool]:
+        assert self._relative_constraints is not None
+        return self._relative_constraints
+
+    @property
+    def systematics_covariance_matrices_per_channel(self) -> List[List[np.ndarray]]:
         assert self._systematics_covariance_matrices_per_channel is not None
         return self._systematics_covariance_matrices_per_channel
 
@@ -2213,14 +2267,29 @@ class FitModel:
             parameter_vector=parameter_vector,
             indices=self.constraint_indices,
         )
+        absolute_cvalues, absolute_csigmas = self._make_constraints_absolute(parameter_vector)
 
-        constraint_term = np.sum(((self.constraint_values - constraint_pars) / self.constraint_sigmas) ** 2)
+        constraint_term = np.sum(((absolute_cvalues - constraint_pars) / absolute_csigmas) ** 2)
 
         if not self._constraint_term_checked:
             assert isinstance(constraint_term, float), (constraint_term, type(constraint_term))
             self._constraint_term_checked = True
 
         return constraint_term
+
+    def _make_constraints_absolute(self, parameter_vector: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+
+        if not any(self.relative_constraints):
+            return np.asarray(self.constraint_values), np.asarray(self.constraint_sigmas)
+
+        sum_of_yields = self.get_yields_vector(parameter_vector).sum()
+        constraint_values = np.asarray(self.constraint_values)
+        constraint_sigmas = np.asarray(self.constraint_sigmas)
+
+        constraint_values[self.relative_constraints] = constraint_values[self.relative_constraints] * sum_of_yields
+        constraint_sigmas[self.relative_constraints] = constraint_sigmas[self.relative_constraints] * sum_of_yields
+
+        return constraint_values, constraint_sigmas
 
     def get_masked_data_bin_count(self, mc_bin_count: np.ndarray) -> np.ndarray:
         if not self._ignore_empty_mc_bins:
@@ -2380,7 +2449,7 @@ class FitModel:
     def get_yield(
         self,
         process_name: str,
-    ) -> float:
+    ) -> Union[np.ndarray, float]:
         parameter_name = self.get_yield_parameter_name_from_process(process_name=process_name)
         return self._params.get_parameters_by_name(parameter_names=parameter_name)
 
@@ -2450,7 +2519,7 @@ class AbstractCostFunction(ABC):
         self._fix_nui_params = fix_nuisance_parameters  # type: bool
 
     @property
-    def x0(self) -> np.ndarray:
+    def x0(self) -> Optional[np.ndarray]:
         """ Returns initial parameters of the model """
         return self._params.get_initial_values_of_floating_parameters()
 
