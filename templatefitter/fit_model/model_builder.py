@@ -582,12 +582,7 @@ class FitModel:
 
         return component
 
-    def add_constraint(
-        self,
-        name: str,
-        value: float,
-        sigma: float,
-    ) -> None:
+    def add_constraint(self, name: str, value: float, sigma: float, relative: bool = False) -> None:
         self._check_is_not_finalized()
 
         if name not in self._model_parameters_mapping.keys():
@@ -617,47 +612,13 @@ class FitModel:
             model_parameter.constraint_sigma,
         )
 
-        self._params.add_constraint_to_parameter(param_id=param_id, constraint_value=value, constraint_sigma=sigma)
-
-    def add_relative_constraint(
-        self,
-        name: str,
-        value: float,
-        sigma: float,
-    ) -> None:
-        self._check_is_not_finalized()
-
-        # TODO some checks, e.g. if constraint value is < 1
-
-        if name not in self._model_parameters_mapping.keys():
+        if relative and (value >= 1.0):
             raise ValueError(
-                f"A ModelParameter with the name '{name}' was not added, yet, "
-                f"and hus a constrained cannot be applied to it!"
+                "Relative constraints cannot be equal or above 1.0 as they are defined" "relative to the total yield."
             )
-
-        model_parameter = self._model_parameters[self._model_parameters_mapping[name]]
-        if model_parameter.constraint_value is not None:
-            raise RuntimeError(
-                f"The ModelParameter '{name}' already is constrained with the settings"
-                f"\n\tconstraint_value = {model_parameter.constraint_value}"
-                f"\n\tconstraint_sigma = {model_parameter.constraint_sigma}\n"
-                f"and thus your constrained (cv = {value}, cs = {sigma}) cannot be applied!"
-            )
-
-        param_id = model_parameter.param_id
-        assert param_id is not None
-        parameter_infos = self._params.get_parameter_infos_by_index(indices=param_id)[0]
-        assert parameter_infos.constraint_value == model_parameter.constraint_value, (
-            parameter_infos.constraint_value,
-            model_parameter.constraint_value,
-        )
-        assert parameter_infos.constraint_sigma == model_parameter.constraint_sigma, (
-            parameter_infos.constraint_sigma,
-            model_parameter.constraint_sigma,
-        )
 
         self._params.add_constraint_to_parameter(
-            param_id=param_id, constraint_value=value, constraint_sigma=sigma, relative_constraint=True
+            param_id=param_id, constraint_value=value, constraint_sigma=sigma, relative_constraint=relative
         )
 
     def add_data(
