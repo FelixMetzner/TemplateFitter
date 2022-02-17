@@ -582,7 +582,13 @@ class FitModel:
 
         return component
 
-    def add_constraint(self, name: str, value: float, sigma: float, relative: bool = False) -> None:
+    def add_constraint(
+        self,
+        name: str,
+        value: float,
+        sigma: float,
+        relative: bool = False,
+    ) -> None:
         self._check_is_not_finalized()
 
         if name not in self._model_parameters_mapping.keys():
@@ -683,11 +689,10 @@ class FitModel:
             )
 
         for channel in self._channels:
+            assert len(channel.templates) > 0, "Cannot add Asimov data from empty list of templates."
+            channel_data = copy.copy(channel.templates[0].bin_counts)  # type: np.ndarray
 
-            templates = iter(channel.templates)
-            channel_data = copy.copy(next(templates).bin_counts)  # type: np.ndarray
-
-            for template in channel.templates:
+            for template in channel.templates[1:]:
                 channel_data += template.bin_counts
 
             self._data_channels.add_channel(
@@ -711,10 +716,9 @@ class FitModel:
         self._data_channels = DataChannelContainer()
 
         for channel in self._channels:
-            templates = iter(channel.templates)
-
-            channel_data = copy.copy(next(templates).bin_counts)  # type: np.ndarray
-            for template in templates:
+            assert len(channel.templates) > 0, "Cannot add toy data data from empty list of templates."
+            channel_data = copy.copy(channel.templates[0].bin_counts)  # type: np.ndarray
+            for template in channel.templates[1:]:
                 assert channel_data.shape == template.bin_counts.shape, (
                     channel_data.shape,
                     template.bin_counts.shape,
