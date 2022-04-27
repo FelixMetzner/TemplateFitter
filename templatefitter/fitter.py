@@ -415,7 +415,11 @@ class TemplateFitter:
             )
         except IndexError as ie:
             if catch_exception:
-                logging.warning(f"IndexError caught in significance calculation:\n{str(ie)}\nReturning zero...")
+                logging.warning(
+                    f"IndexError caught in significance calculation:\n{str(ie)}\n"
+                    f"Returning zero and resetting parameter..."
+                )
+                self._fit_model.reset_initial_parameter_value(parameter_name=yield_parameter)
                 return 0.0
             else:
                 raise ie
