@@ -1,0 +1,18 @@
+This file is a braindump and should be deleted before merging into master
+
+Core concepts:
+
+Parameter:
+    Anything that can theoretically be varied by the minimizer to find a valid minimum, be they normalization parameters,
+    efficiency parameters (if allowed by the number of degrees of freedom)
+    or nuisance parameters. So far every bin and every template has one associated nuisance parameter.
+
+Template:
+    A (normalized) histogram of a component in simulated data which is multiplied by the normalization parameter. The sum
+    of multiplied templates is adjusted to match the recorded data.
+
+Channel:
+    Reconstruction channel, i.e. a dataset reconstructed in real data which can (and will) contain multiple decay channels
+
+Component:
+    Decay channel, possibly found in multiple reconstruction channels.
