@@ -280,7 +280,7 @@ class ParameterHandler:
             (
                 (iv == p.initial_value)
                 or (reset_parameter_name is not None and p.name == reset_parameter_name)
-                or (p.name in self._redefined_params_dict.keys())
+                or (p.name in self._redefined_params_dict)
             )
             for iv, p in zip(self._initial_values_of_floating_parameters, floating_pis)
         ), "\n\t - ".join(
@@ -290,7 +290,7 @@ class ParameterHandler:
                 if not (
                     (iv == pi.initial_value)
                     or (pi.name == reset_parameter_name)
-                    or pi.name in self._redefined_params_dict.keys()
+                    or pi.name in self._redefined_params_dict
                 )
             ]
         )
@@ -381,9 +381,9 @@ class ParameterHandler:
     ) -> str:
         if self._inverted_pars_dict is None:
             _inverted_dict = {v: k for k, v in self._pars_dict.items()}  # type: Dict[int, str]
-            assert len(_inverted_dict.keys()) == len(self._pars_dict.keys()), (
-                len(_inverted_dict.keys()),
-                len(self._pars_dict.keys()),
+            assert len(_inverted_dict) == len(self._pars_dict), (
+                len(_inverted_dict),
+                len(self._pars_dict),
             )
             self._inverted_pars_dict = _inverted_dict
         return self._inverted_pars_dict[param_id]
@@ -571,7 +571,7 @@ class ParameterHandler:
             self._create_floating_parameter_initial_value_info()
 
     def reset_all_parameter_initial_values(self) -> None:
-        names_of_changed_parameter = [pri for pri in self._redefined_params_dict.keys()]
+        names_of_changed_parameter = [pri for pri in self._redefined_params_dict]
         for parameter_name in names_of_changed_parameter:
             self.reset_parameter_initial_value(parameter_name=parameter_name)
         assert len(self._redefined_params_dict) == 0, len(self._redefined_params_dict)

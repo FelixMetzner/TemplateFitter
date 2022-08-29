@@ -154,7 +154,7 @@ class FitModel:
         self._check_is_not_finalized()
         self._check_has_data(adding="model parameter")
 
-        if name in self._model_parameters_mapping.keys():
+        if name in self._model_parameters_mapping:
             raise RuntimeError(
                 f"The model parameter with the name {name} already exists!\n"
                 f"It has the following properties:\n"
@@ -185,7 +185,7 @@ class FitModel:
         self._check_is_not_finalized()
         self._check_has_data(adding="template")
 
-        if template.name in self._templates_mapping.keys():
+        if template.name in self._templates_mapping:
             raise RuntimeError(
                 f"The template with the name {template.name} is already registered!\n"
                 f"It has the index {self._templates_mapping[template.name]}\n"
@@ -368,7 +368,7 @@ class FitModel:
         else:
             raise ValueError(component_input_error_text)
 
-        if component.name in self._components_mapping.keys():
+        if component.name in self._components_mapping:
             raise RuntimeError(
                 f"A component with the name {component.name} is already registered!\n"
                 f"It has the index {self._components_mapping[component.name]}\n"
@@ -547,7 +547,7 @@ class FitModel:
             ]
         )
         new_component_name = f"component_from_template_{template.name}"
-        assert new_component_name not in self._components_mapping.keys(), (
+        assert new_component_name not in self._components_mapping, (
             new_component_name,
             self._components_mapping.keys(),
         )
@@ -578,7 +578,7 @@ class FitModel:
     ) -> None:
         self._check_is_not_finalized()
 
-        if name not in self._model_parameters_mapping.keys():
+        if name not in self._model_parameters_mapping:
             raise ValueError(
                 f"A ModelParameter with the name '{name}' was not added, yet, "
                 f"and hus a constrained cannot be applied to it!"
@@ -624,13 +624,13 @@ class FitModel:
                 f"You provided data for {len(channels)} channels, "
                 f"but the model has {self.number_of_channels} channels defined!"
             )
-        if not all(ch.name in channels.keys() for ch in self._channels):
+        if not all(ch.name in channels for ch in self._channels):
             raise ValueError(
                 "The provided data channels do not match the ones defined in the model:"
                 "Defined channels: \n\t-"
                 + "\n\t-".join([c.name for c in self._channels])
                 + "\nProvided channels: \n\t-"
-                + "\n\t-".join([c for c in channels.keys()])
+                + "\n\t-".join([c for c in channels])
             )
         if channel_weights is not None:
             logging.warning(
@@ -1244,7 +1244,7 @@ class FitModel:
             assert name_or_index < len(self._model_parameters), (name_or_index, len(self._model_parameters))
             return self._model_parameters[name_or_index]
         elif isinstance(name_or_index, str):
-            assert name_or_index in self._model_parameters_mapping.keys(), (
+            assert name_or_index in self._model_parameters_mapping, (
                 name_or_index,
                 self._model_parameters_mapping.keys(),
             )
@@ -1263,7 +1263,7 @@ class FitModel:
             assert name_or_index < len(self._templates), (name_or_index, len(self._templates))
             return self._templates[name_or_index]
         elif isinstance(name_or_index, str):
-            assert name_or_index in self._templates_mapping.keys(), (name_or_index, self._templates_mapping.keys())
+            assert name_or_index in self._templates_mapping, (name_or_index, self._templates_mapping.keys())
             return self._templates[self._templates_mapping[name_or_index]]
         else:
             raise ValueError(
@@ -1296,7 +1296,7 @@ class FitModel:
             assert name_or_index < len(self._components), (name_or_index, len(self._components))
             return self._components[name_or_index]
         elif isinstance(name_or_index, str):
-            assert name_or_index in self._components_mapping.keys(), (name_or_index, self._components_mapping.keys())
+            assert name_or_index in self._components_mapping, (name_or_index, self._components_mapping.keys())
             return self._components[self._components_mapping[name_or_index]]
         else:
             raise ValueError(
@@ -1487,7 +1487,7 @@ class FitModel:
                 f"\tModel's ParameterHandler: {self._params}\n"
                 f"\tModelParameters's ParameterHandler: {model_parameter.parameter_handler}\n"
             )
-        if model_parameter.name not in self._model_parameters_mapping.keys():
+        if model_parameter.name not in self._model_parameters_mapping:
             raise RuntimeError(
                 f"The model parameter you provided is not registered to the model you are "
                 f"trying to use it in.\nYour model parameter has the following properties:\n"
