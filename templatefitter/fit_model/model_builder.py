@@ -18,9 +18,8 @@ from templatefitter.utility import xlogyx, cov2corr
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
 from templatefitter.fit_model.utility import pad_sequences
-from templatefitter.binned_distributions.binning import Binning
 from templatefitter.fit_model.data_channel import DataChannelContainer
-from templatefitter.fit_model.channel import ChannelContainer, Channel
+from templatefitter.fit_model.channel import ModelChannels, Channel
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
@@ -80,7 +79,7 @@ class FitModel:
         self._components = []  # type: List[Component]
         self._components_mapping = {}  # type: Dict[str, int]
 
-        self._channels = ChannelContainer()  # type: ChannelContainer
+        self._channels = ModelChannels()  # type: ModelChannels
 
         self._data_channels = DataChannelContainer()  # type: DataChannelContainer
         self._original_data_channels = None  # type: Optional[DataChannelContainer]
@@ -119,7 +118,6 @@ class FitModel:
         self._constraint_sigmas = None  # type: Optional[List[float]]
         self._has_constrained_parameters = False  # type: bool
 
-        self._template_bin_counts = None  # type: Optional[np.ndarray]
         self._template_shapes_checked = False  # type: bool
         self._template_bin_errors_sq_per_ch_and_temp = None  # type: Optional[List[List[np.ndarray]]]
         self._template_stat_error_sq_matrix_per_channel = None  # type: Optional[List[np.ndarray]]
@@ -139,6 +137,20 @@ class FitModel:
 
         # Setting a random seed for the toy data set generation with scypi
         np.random.seed(seed=7694747)
+
+    _attrs = [
+        "template_bin_counts" "binning",
+        "max_number_of_bins_flattened",
+        "number_of_bins_flattened_per_channel",
+        "number_of_components",
+        "number_of_templates",
+        "total_number_of_templates",
+        "number_of_independent_templates",
+        "number_of_dependent_templates",
+        "number_of_expected_independent_yields",
+        "min_number_of_independent_yields",
+        "number_of_fraction_parameters",
+    ]
 
     # region add templates, parameters, components, channels, data
 
@@ -894,57 +906,30 @@ class FitModel:
     # endregion
 
     # region Properties
+
+    def __getattr__(self, attr):
+        """
+        Forwarding the attributes to self._channels for backwards compatibility.
+        :param attr: The attribute name
+        :return: A forwarded attribute of ModelChannels
+        """
+
+        if attr in self._attrs:
+            try:
+                return getattr(self._channels, attr)
+            except AttributeError:
+                raise AttributeError(f"{self.__class__.__name__} object has no attribute {attr}")
+        elif attr in dir(self._channels):
+            raise AttributeError(
+                f"Attribute {attr} exists for {self._channels.__class__.__name__} but is not forwarded"
+                f"to {self.__class__.__name__}."
+            )
+        else:
+            raise AttributeError(f"{self.__class__.__name__} object has no attribute {attr}.")
+
     @property
     def number_of_channels(self) -> int:
         return len(self._channels)
-
-    @property
-    def binning(self) -> Tuple[Binning, ...]:
-        return tuple(channel.binning for channel in self._channels)
-
-    @property
-    def max_number_of_bins_flattened(self) -> int:
-        return max(ch_binning.num_bins_total for ch_binning in self.binning)
-
-    @property
-    def number_of_bins_flattened_per_channel(self) -> List[int]:
-        return [ch_binning.num_bins_total for ch_binning in self.binning]
-
-    @property
-    def number_of_components(self) -> Tuple[int, ...]:
-        return tuple(len(channel) for channel in self._channels)
-
-    @property
-    def total_number_of_templates(self) -> int:
-        return sum([c.total_number_of_templates for c in self._channels])
-
-    @property
-    # Number of templates per channel
-    def number_of_templates(self) -> Tuple[int, ...]:
-        return tuple(sum([comp.number_of_subcomponents for comp in ch.components]) for ch in self._channels)
-
-    @property
-    def number_of_independent_templates(self) -> Tuple[int, ...]:
-        return tuple(
-            sum([1 if comp.shared_yield else comp.number_of_subcomponents for comp in ch.components])
-            for ch in self._channels
-        )
-
-    @property
-    def number_of_dependent_templates(self) -> Tuple[int, ...]:
-        return tuple([t - it for t, it in zip(self.number_of_templates, self.number_of_independent_templates)])
-
-    @property
-    def number_of_expected_independent_yields(self) -> int:
-        return max(self.number_of_independent_templates)
-
-    @property
-    def min_number_of_independent_yields(self) -> int:
-        return min(self.number_of_independent_templates)
-
-    @property
-    def number_of_fraction_parameters(self) -> Tuple[int, ...]:
-        return tuple(sum([comp.required_fraction_parameters for comp in ch.components]) for ch in self._channels)
 
     @property
     def fraction_conversion(self) -> FractionConversionInfo:
@@ -1003,7 +988,7 @@ class FitModel:
         return self._params.get_floating_parameter_types()
 
     @property
-    def mc_channels_to_plot(self) -> ChannelContainer:
+    def mc_channels_to_plot(self) -> ModelChannels:
         if not self._is_initialized:
             raise RuntimeError("The FitModel is not fully initialized, yet!")
         return self._channels
@@ -1061,8 +1046,7 @@ class FitModel:
         # TODO: Maybe add some more checks...
         assert cov_matrices_per_ch_and_temp is not None
 
-        template_bin_counts = self.get_template_bin_counts()
-        assert template_bin_counts is not None
+        assert self.template_bin_counts is not None
 
         # TODO: The following combination is only valid for Option 1b!
 
@@ -1081,16 +1065,16 @@ class FitModel:
 
         shape_uncertainties = np.stack(padded_shape_uncertainties_per_ch)
 
-        assert template_bin_counts.shape == shape_uncertainties.shape, (
-            template_bin_counts.shape,
+        assert self.template_bin_counts.shape == shape_uncertainties.shape, (
+            self.template_bin_counts.shape,
             shape_uncertainties.shape,
         )
 
         relative_shape_uncertainties = np.divide(
             shape_uncertainties,
-            template_bin_counts,
+            self.template_bin_counts,
             out=np.zeros_like(shape_uncertainties),
-            where=template_bin_counts != 0.0,
+            where=self.template_bin_counts != 0.0,
         )
 
         self._relative_shape_uncertainties = relative_shape_uncertainties
@@ -1134,20 +1118,6 @@ class FitModel:
 
         self._nuisance_matrix_shape = nuisance_matrix_shape
         return nuisance_matrix_shape
-
-    def get_template_bin_counts(self) -> np.ndarray:
-        if self._template_bin_counts is not None:
-            return self._template_bin_counts
-
-        bin_counts_per_channel = [np.stack([tmp.bin_counts.flatten() for tmp in ch.templates]) for ch in self._channels]
-        padded_bin_counts_per_channel = self._apply_padding_to_templates(bin_counts_per_channel=bin_counts_per_channel)
-        template_bin_counts = np.stack(padded_bin_counts_per_channel)
-
-        if not self._template_shapes_checked:
-            self._check_template_shapes(template_bin_counts=template_bin_counts)
-
-        self._template_bin_counts = template_bin_counts
-        return self._template_bin_counts
 
     def get_template_bin_errors_sq_per_ch_and_temp(self) -> List[List[np.ndarray]]:
         if self._template_bin_errors_sq_per_ch_and_temp is not None:
@@ -1895,37 +1865,6 @@ class FitModel:
         ), "\n".join([f"{i}] <= {t}" for i, t in zip(self.number_of_independent_templates, self.number_of_templates)])
         return not (self.number_of_independent_templates == self.number_of_templates)
 
-    def _check_template_shapes(
-        self,
-        template_bin_counts: np.ndarray,
-    ) -> None:
-        # Check order of processes in channels:
-        _first_channel = self._channels[0]
-        assert isinstance(_first_channel, Channel), type(_first_channel).__name__
-        assert all(ch.process_names == _first_channel.process_names for ch in self._channels), [
-            ch.process_names for ch in self._channels
-        ]
-
-        # Check shape of template_bin_counts
-        assert len(template_bin_counts.shape) == 3, (len(template_bin_counts.shape), template_bin_counts.shape)
-        assert template_bin_counts.shape[0] == self.number_of_channels, (
-            template_bin_counts.shape,
-            template_bin_counts.shape[0],
-            self.number_of_channels,
-        )
-        assert all(template_bin_counts.shape[1] == ts_in_ch for ts_in_ch in self.number_of_templates), (
-            template_bin_counts.shape,
-            template_bin_counts.shape[1],
-            [t_ch for t_ch in self.number_of_templates],
-        )
-        assert template_bin_counts.shape[2] == self.max_number_of_bins_flattened, (
-            template_bin_counts.shape,
-            template_bin_counts.shape[2],
-            self.max_number_of_bins_flattened,
-        )
-
-        self._template_shapes_checked = True
-
     def _check_template_bin_errors_shapes(self, bin_errors_per_ch: List[np.ndarray]) -> None:
         assert len(bin_errors_per_ch) == self.number_of_channels, (len(bin_errors_per_ch), self.number_of_channels)
         assert all(isinstance(a, np.ndarray) for a in bin_errors_per_ch), [type(a) for a in bin_errors_per_ch]
@@ -1950,16 +1889,14 @@ class FitModel:
         if nuisance_parameters is None and self._template_shape is not None:
             return self._template_shape
 
-        template_bin_counts = self.get_template_bin_counts()
-
         if nuisance_parameters is not None:
             # Apply shape uncertainties:
             relative_shape_uncertainties = self.get_relative_shape_uncertainties()
-            templates_with_shape_uncertainties = template_bin_counts * (
+            templates_with_shape_uncertainties = self.template_bin_counts * (
                 1.0 + nuisance_parameters * relative_shape_uncertainties
             )
         else:
-            templates_with_shape_uncertainties = template_bin_counts
+            templates_with_shape_uncertainties = self.template_bin_counts
 
         # Normalization of template bin counts with shape uncertainties to obtain the template shapes:
         norm_denominator = templates_with_shape_uncertainties.sum(axis=2)[:, :, np.newaxis]
@@ -2393,34 +2330,6 @@ class FitModel:
                     )
 
         return output_string
-
-    def _apply_padding_to_templates(
-        self,
-        bin_counts_per_channel: List[np.ndarray],
-    ) -> List[np.ndarray]:
-        if not self._template_shapes_checked:
-            assert all(
-                [bc.shape[1] == ch.binning.num_bins_total for bc, ch in zip(bin_counts_per_channel, self._channels)]
-            ), "\t" + "\n\t".join(
-                [f"{bc.shape[1]} : {ch.binning.num_bins_total}" for bc, ch in zip(bin_counts_per_channel, self._channels)]
-            )
-
-        max_n_bins = max([bc.shape[1] for bc in bin_counts_per_channel])
-
-        if all(bc.shape[1] == max_n_bins for bc in bin_counts_per_channel):
-            return bin_counts_per_channel
-        else:
-            pad_widths = self._pad_widths_per_channel()
-            return [
-                np.pad(bc, pad_width=pad_width, mode="constant", constant_values=0)
-                for bc, pad_width in zip(bin_counts_per_channel, pad_widths)
-            ]
-
-    def _pad_widths_per_channel(self) -> List[List[Tuple[int, int]]]:
-        max_n_bins = max([ch.binning.num_bins_total for ch in self._channels])
-        if not self._is_checked:
-            assert max_n_bins == self.max_number_of_bins_flattened, (max_n_bins, self.max_number_of_bins_flattened)
-        return [[(0, 0), (0, max_n_bins - ch.binning.num_bins_total)] for ch in self._channels]
 
     def _apply_padding_to_data_bin_count(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
         if not self._data_bin_count_checked:
