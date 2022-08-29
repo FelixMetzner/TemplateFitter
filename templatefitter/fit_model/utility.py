@@ -4,9 +4,7 @@ Utility functions
 
 import numpy as np
 
-__all__ = [
-    "pad_sequences",
-]
+__all__ = ["pad_sequences", "check_bin_count_shape"]
 
 
 def pad_sequences(
@@ -91,3 +89,20 @@ def pad_sequences(
         else:
             raise ValueError('Padding type "%s" not understood' % padding)
     return x
+
+
+def check_bin_count_shape(bin_count: np.ndarray, number_of_channels: int, max_number_of_bins: int, where: str) -> None:
+    assert bin_count is not None, where
+    assert len(bin_count.shape) == 2, (where, bin_count.shape, len(bin_count.shape))
+    assert bin_count.shape[0] == number_of_channels, (
+        where,
+        bin_count.shape,
+        bin_count.shape[0],
+        number_of_channels,
+    )
+    assert bin_count.shape[1] == max_number_of_bins, (
+        where,
+        bin_count.shape,
+        bin_count.shape[1],
+        max_number_of_bins,
+    )

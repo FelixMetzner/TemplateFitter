@@ -17,8 +17,8 @@ from templatefitter.utility import xlogyx, cov2corr
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
-from templatefitter.fit_model.utility import pad_sequences
-from templatefitter.fit_model.data_channel import DataChannelContainer
+from templatefitter.fit_model.utility import pad_sequences, check_bin_count_shape
+from templatefitter.fit_model.data_channel import ModelDataChannels
 from templatefitter.fit_model.channel import ModelChannels, Channel
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType
@@ -81,13 +81,10 @@ class FitModel:
 
         self._channels = ModelChannels()  # type: ModelChannels
 
-        self._data_channels = DataChannelContainer()  # type: DataChannelContainer
-        self._original_data_channels = None  # type: Optional[DataChannelContainer]
-        self._data_bin_counts = None  # type: Optional[np.ndarray]
+        self._data_channels = ModelDataChannels()  # type: ModelDataChannels
+        self._original_data_channels = None  # type: Optional[ModelDataChannels]
+
         self._masked_data_bin_counts = None  # type: Optional[np.ndarray]
-        self._data_bin_count_checked = False  # type: bool
-        self._data_stat_errors_sq = None  # type: Optional[np.ndarray]
-        self._data_stat_errors_checked = False  # type: bool
 
         self._fraction_conversion = None  # type: Optional[FractionConversionInfo]
         self._inverse_template_bin_correlation_matrix = None  # type: Optional[np.ndarray]
@@ -706,7 +703,7 @@ class FitModel:
             # Backing up original data_channels
             self._original_data_channels = self._data_channels
 
-        self._data_channels = DataChannelContainer()
+        self._data_channels = ModelDataChannels()
 
         for channel in self._channels:
             channel_data = None  # type: Optional[np.ndarray]
@@ -736,7 +733,7 @@ class FitModel:
 
         # Resetting data bin count and data bin error cache
         self._data_stat_errors_sq = None
-        self._data_bin_counts = None
+        self._data_channels._data_bin_counts = None
 
         self._has_data = True
 
@@ -994,7 +991,7 @@ class FitModel:
         return self._channels
 
     @property
-    def data_channels_to_plot(self) -> DataChannelContainer:
+    def data_channels_to_plot(self) -> ModelDataChannels:
         if not self._is_initialized:
             raise RuntimeError("The FitModel is not fully initialized, yet!")
         return self._data_channels
@@ -1002,41 +999,6 @@ class FitModel:
     # endregion
 
     # region Get channels, templates, parameters, components, efficiencies
-
-    def get_flattened_data_bin_counts(self) -> np.array:
-        if self._data_bin_counts is not None:
-            return self._data_bin_counts
-
-        flat_data_bin_counts = [data_channel.bin_counts.flatten() for data_channel in self._data_channels]
-        padded_flat_data_bin_counts = self._apply_padding_to_data_bin_count(bin_counts_per_channel=flat_data_bin_counts)
-        data_bin_count_matrix = np.stack(padded_flat_data_bin_counts)
-
-        if not self._data_bin_count_checked:
-            self._check_bin_count_shape(bin_count=data_bin_count_matrix, where="get_flattened_data_bin_counts")
-            self._data_bin_count_checked = True
-
-        self._data_bin_counts = data_bin_count_matrix
-        return data_bin_count_matrix
-
-    def get_squared_data_stat_errors(self) -> np.ndarray:
-        if self._data_stat_errors_sq is not None:
-            return self._data_stat_errors_sq
-
-        flat_data_stat_errors_sq = [data_channel.bin_errors_sq.flatten() for data_channel in self._data_channels]
-        padded_flat_data_stat_errors_sq = self._apply_padding_to_data_bin_count(
-            bin_counts_per_channel=flat_data_stat_errors_sq,
-        )
-        data_stat_errors_sq = np.stack(padded_flat_data_stat_errors_sq)
-
-        if not self._data_stat_errors_checked:
-            assert data_stat_errors_sq.shape == self.get_flattened_data_bin_counts().shape, (
-                data_stat_errors_sq.shape,
-                self.get_flattened_data_bin_counts().shape,
-            )
-            self._data_stat_errors_checked = True
-
-        self._data_stat_errors_sq = data_stat_errors_sq
-        return data_stat_errors_sq
 
     def get_relative_shape_uncertainties(self) -> np.ndarray:
         if self._relative_shape_uncertainties is not None:
@@ -1415,22 +1377,6 @@ class FitModel:
                 self.fraction_conversion.conversion_matrix.shape[1],
                 fraction_params.shape[0],
             )
-
-    def _check_bin_count_shape(self, bin_count: np.ndarray, where: str) -> None:
-        assert bin_count is not None, where
-        assert len(bin_count.shape) == 2, (where, bin_count.shape, len(bin_count.shape))
-        assert bin_count.shape[0] == self.number_of_channels, (
-            where,
-            bin_count.shape,
-            bin_count.shape[0],
-            self.number_of_channels,
-        )
-        assert bin_count.shape[1] == self.max_number_of_bins_flattened, (
-            where,
-            bin_count.shape,
-            bin_count.shape[1],
-            self.max_number_of_bins_flattened,
-        )
 
     def _check_parameter_constraints(self) -> None:
         if self._has_constrained_parameters:
@@ -2106,7 +2052,12 @@ class FitModel:
             bin_count = np.einsum("ij, ijk -> ik", (yield_parameters * normed_efficiency_parameters), normed_templates)
 
         if not self._is_checked:
-            self._check_bin_count_shape(bin_count=bin_count, where="calculate_expected_bin_count")
+            check_bin_count_shape(
+                bin_count=bin_count,
+                number_of_channels=self.number_of_channels,
+                max_number_of_bins=self.max_number_of_bins_flattened,
+                where="calculate_expected_bin_count",
+            )
             self._is_checked = True
 
         return bin_count
@@ -2160,11 +2111,17 @@ class FitModel:
 
     def get_masked_data_bin_count(self, mc_bin_count: np.ndarray) -> np.ndarray:
         if not self._ignore_empty_mc_bins:
-            return self.get_flattened_data_bin_counts()
+            return self._data_channels.get_flattened_data_bin_counts(
+                number_of_channels=self.number_of_channels, max_number_of_model_bins=self.max_number_of_bins_flattened
+            )
 
         # We assume that the yields are always > 0 and, hence, the masking will never change!
         if self._masked_data_bin_counts is None:
-            data_bin_count = np.copy(self.get_flattened_data_bin_counts())  # type: np.ndarray
+            data_bin_count = np.copy(
+                self._data_channels.get_flattened_data_bin_counts(
+                    number_of_channels=self.number_of_channels, max_number_of_model_bins=self.max_number_of_bins_flattened
+                )
+            )  # type: np.ndarray
 
             assert data_bin_count.shape == mc_bin_count.shape, (data_bin_count.shape, mc_bin_count.shape)
             data_bin_count[mc_bin_count == 0.0] = 0.0
@@ -2191,7 +2148,7 @@ class FitModel:
 
         chi2_data_term = np.sum(
             (expected_bin_count - self.get_masked_data_bin_count(mc_bin_count=expected_bin_count)) ** 2
-            / (2 * self.get_squared_data_stat_errors()),
+            / (2 * self._data_channels.get_squared_data_stat_errors()),
             axis=None,
         )
 
@@ -2330,30 +2287,6 @@ class FitModel:
                     )
 
         return output_string
-
-    def _apply_padding_to_data_bin_count(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
-        if not self._data_bin_count_checked:
-            assert all(len(bc.shape) == 1 for bc in bin_counts_per_channel), [bc.shape for bc in bin_counts_per_channel]
-            assert all(len(bc) == b.num_bins_total for bc, b in zip(bin_counts_per_channel, self.binning)), "\n".join(
-                [
-                    f"{ch.name}: data_bins = {len(bc)} --- template_bins = {b.num_bins_total}"
-                    for ch, bc, b in zip(self._channels, bin_counts_per_channel, self.binning)
-                ]
-            )
-
-        max_n_bins = max([len(bc) for bc in bin_counts_per_channel])
-
-        if not self._data_bin_count_checked:
-            assert max_n_bins == self.max_number_of_bins_flattened, (max_n_bins, self.max_number_of_bins_flattened)
-
-        if all(len(bc) == max_n_bins for bc in bin_counts_per_channel):
-            return bin_counts_per_channel
-        else:
-            pad_widths = [(0, max_n_bins - ch.binning.num_bins_total) for ch in self._channels]
-            return [
-                np.pad(bc, pad_width=pad_width, mode="constant", constant_values=0)
-                for bc, pad_width in zip(bin_counts_per_channel, pad_widths)
-            ]
 
     # endregion
 
