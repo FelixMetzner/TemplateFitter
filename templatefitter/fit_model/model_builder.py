@@ -17,6 +17,7 @@ from templatefitter.utility import xlogyx, cov2corr
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
+from templatefitter.fit_model.constraint import Constraint, ConstraintContainer
 from templatefitter.fit_model.utility import pad_sequences, check_bin_count_shape, immutable_cached_property
 from templatefitter.fit_model.data_channel import ModelDataChannels
 from templatefitter.fit_model.channel import ModelChannels, Channel
@@ -188,10 +189,7 @@ class FitModel:
 
         self._bin_nuisance_params_checked = False  # type: bool
 
-        self._constraint_indices = None  # type: Optional[List[int]]
-        self._constraint_values = None  # type: Optional[List[float]]
-        self._constraint_sigmas = None  # type: Optional[List[float]]
-        self._has_constrained_parameters = False  # type: bool
+        self._constraint_container = ConstraintContainer()
 
         self._template_shapes_checked = False  # type: bool
         self._template_shape = None  # type: Optional[np.ndarray]
@@ -845,13 +843,9 @@ class FitModel:
             conversion_vector=conversion_vectors[0],
         )
 
-    def _initialize_parameter_constraints(self) -> None:
+    def _collect_parameter_constraints(self) -> None:
         indices, cvs, css = self._params.get_constraint_information()
-        self._constraint_indices = indices
-        self._constraint_values = cvs
-        self._constraint_sigmas = css
-        if len(indices) > 0:
-            self._has_constrained_parameters = True
+        self._constraint_container.extend(Constraint(idx, cv, cs) for idx, cv, cs in zip(indices, cvs, css))
 
     def _initialize_template_uncertainties(self) -> None:
         """
@@ -982,18 +976,15 @@ class FitModel:
 
     @property
     def constraint_indices(self) -> List[int]:
-        assert self._constraint_indices is not None
-        return self._constraint_indices
+        return [c.constraint_index for c in self._constraint_container]
 
     @property
     def constraint_values(self) -> List[float]:
-        assert self._constraint_values is not None
-        return self._constraint_values
+        return [c.central_value for c in self._constraint_container]
 
     @property
     def constraint_sigmas(self) -> List[float]:
-        assert self._constraint_sigmas is not None
-        return self._constraint_sigmas
+        return [c.uncertainty for c in self._constraint_container]
 
     @property
     def systematics_covariance_matrices_per_channel(self) -> List[np.ndarray]:
@@ -1376,23 +1367,6 @@ class FitModel:
                 self.fraction_conversion.conversion_matrix.shape[1],
                 fraction_params.shape[0],
             )
-
-    def _check_parameter_constraints(self) -> None:
-        if self._has_constrained_parameters:
-            assert len(self.constraint_indices) > 0, (self._has_constrained_parameters, self.constraint_indices)
-        else:
-            assert len(self.constraint_indices) == 0, (self._has_constrained_parameters, self.constraint_indices)
-
-        assert len(self.constraint_indices) == len(self.constraint_values), (
-            len(self.constraint_indices),
-            len(self.constraint_values),
-        )
-        assert len(self.constraint_indices) == len(self.constraint_sigmas), (
-            len(self.constraint_indices),
-            len(self.constraint_sigmas),
-        )
-
-        self._constraints_checked = True
 
     def _check_model_parameter_registration(self, model_parameter: ModelParameter) -> None:
         if model_parameter.parameter_handler is not self._params:
@@ -2091,7 +2065,7 @@ class FitModel:
         self,
         parameter_vector: np.ndarray,
     ) -> float:
-        if not self._has_constrained_parameters:
+        if not self._constraint_container:
             return 0.0
 
         constraint_pars = self._params.get_combined_parameters_by_index(
@@ -2255,8 +2229,7 @@ class FitModel:
         self._initialize_fraction_conversion()
         self._check_fraction_conversion()
 
-        self._initialize_parameter_constraints()
-        self._check_parameter_constraints()
+        self._collect_parameter_constraints()
 
         self._initialize_template_uncertainties()
         self._check_systematics_uncertainty_matrices()
