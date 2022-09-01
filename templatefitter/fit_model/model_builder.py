@@ -157,9 +157,7 @@ class FitModel:
         self._model_parameters_mapping = {}  # type: Dict[str, int]
 
         self._template_manager = FitObjectManager[Template]()
-
-        self._components = []  # type: List[Component]
-        self._components_mapping = {}  # type: Dict[str, int]
+        self._component_manager = FitObjectManager[Component]()
 
         self._channels = ModelChannels()  # type: ModelChannels
 
@@ -426,11 +424,7 @@ class FitModel:
         else:
             raise ValueError(component_input_error_text)
 
-        if component.name in self._components_mapping:
-            raise RuntimeError(
-                f"A component with the name {component.name} is already registered!\n"
-                f"It has the index {self._components_mapping[component.name]}\n"
-            )
+        self._component_manager.append(component)
 
         if component.required_fraction_parameters == 0:
             if not (fraction_parameters is None or len(fraction_parameters) == 0):
@@ -455,18 +449,12 @@ class FitModel:
                 input_parameter_list_name="fraction_parameters",
             )
 
-        serial_number = len(self._components)
-        component.component_serial_number = serial_number
-
         component.initialize_parameters(fraction_parameters=fraction_params)
 
-        self._components.append(component)
-        self._components_mapping.update({component.name: serial_number})
-
         if creates_new_component:
-            return serial_number, component
+            return component.component_serial_number, component
         else:
-            return serial_number
+            return component.component_serial_number
 
     def add_channel(
         self,
@@ -683,18 +671,14 @@ class FitModel:
                 f"but you provided an object of type {type(template_input)}"
             )
 
-        assert not any(template in comp.sub_templates for comp in self._components), "\n".join(
+        assert not any(template in comp.sub_templates for comp in self._compnent_manager), "\n".join(
             [
                 f"{comp.name}, {comp.name}: {[t.name for t in comp.sub_templates]}"
-                for comp in self._components
+                for comp in self._component_manager
                 if template in comp.sub_templates
             ]
         )
         new_component_name = f"component_from_template_{template.name}"
-        assert new_component_name not in self._components_mapping, (
-            new_component_name,
-            self._components_mapping.keys(),
-        )
         comp_serial_number_component_tuple = self.add_component(
             fraction_parameters=None,
             component=None,
@@ -1277,17 +1261,8 @@ class FitModel:
         self,
         name_or_index: Union[str, int],
     ) -> Component:
-        if isinstance(name_or_index, int):
-            assert name_or_index < len(self._components), (name_or_index, len(self._components))
-            return self._components[name_or_index]
-        elif isinstance(name_or_index, str):
-            assert name_or_index in self._components_mapping, (name_or_index, self._components_mapping.keys())
-            return self._components[self._components_mapping[name_or_index]]
-        else:
-            raise ValueError(
-                f"Expected string or integer for argument 'name_or_index'\n"
-                f"However, {name_or_index} of type {type(name_or_index)} was provided!"
-            )
+
+        return self._component_manager[name_or_index]
 
     def _get_list_of_template_params(
         self,
