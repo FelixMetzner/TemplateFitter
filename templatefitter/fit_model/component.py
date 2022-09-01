@@ -203,6 +203,15 @@ class Component:
         return [t.process_name for t in self.templates]
 
     @property
+    def serial_number(self) -> int:
+        assert self._component_serial_number is not None
+        return self._component_serial_number
+
+    @serial_number.setter
+    def serial_number(self, component_serial_number: int) -> None:
+        self.component_serial_number = component_serial_number
+
+    @property
     def component_serial_number(self) -> int:
         assert self._component_serial_number is not None
         return self._component_serial_number

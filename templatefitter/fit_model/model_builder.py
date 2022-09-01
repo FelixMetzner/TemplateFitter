@@ -11,7 +11,7 @@ import scipy.stats as scipy_stats
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Tuple, Dict, NamedTuple
+from typing import Optional, Union, List, Tuple, Dict, NamedTuple, MutableMapping, TypeVar
 
 from templatefitter.utility import xlogyx, cov2corr
 
@@ -58,6 +58,89 @@ class FractionConversionInfo(NamedTuple):
     conversion_vector: np.ndarray
 
 
+FitObject = TypeVar("FitObject", Template, Component)
+
+
+class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
+    def __init__(self):
+        super().__init__()
+
+        self._fit_object_mapping = {}
+        self._fit_objects = []
+
+    def __getitem__(self, item: Union[str, int]) -> FitObject:
+        if isinstance(item, int):
+            return self._fit_objects[item]
+        elif isinstance(item, str):
+            return self._fit_objects[self._fit_object_mapping[item]]
+        else:
+            raise TypeError(f"Keys of FitObjectManager must be either int or str, not {type(item)}.")
+
+    def __setitem__(self, index: Union[str, int], value: FitObject):
+        raise Exception("FitObjectManager is append-only.")
+
+    def __delitem__(self, item: Union[int, str]):
+        raise Exception("FitObjectManager is append-only.")
+
+    def __repr__(self) -> str:
+        return repr(
+            {
+                (key, index): fit_object
+                for fit_object, (key, index) in zip(self._fit_objects, self._fit_object_mapping.items())
+            }
+        )
+
+    def __iter__(self):
+        return iter(self._fit_objects)
+
+    def get_index_of_fit_objects(self, fit_object: FitObject) -> int:
+        if fit_object in self._fit_objects:
+            return self._fit_object_mapping[fit_object.name]
+        else:
+            raise IndexError(
+                f"The fit object with name {fit_object.name} has not"
+                f" been registered in the FitObjectManager and no index can be returned."
+            )
+
+    def get_fit_objects_by_process_name(self, process_name: str) -> List[FitObject]:
+
+        if hasattr(self._fit_objects[0], "process_name"):
+            obj_list = [o for o in self._fit_objects if o.process_name == process_name]
+
+            if not len(obj_list):
+                available_processes = list(set([o.process_name for o in self._fit_objects]))
+                raise RuntimeError(
+                    f"No templates with process name '{process_name}' could be found.\n"
+                    f"The following process names are registered:\n\t" + "\n\t- ".join(available_processes)
+                )
+        elif hasattr(self._fit_objects[0], "process_names"):
+            obj_list = [o for o in self._fit_objects if process_name in o.process_names]
+            if not len(obj_list):
+                available_processes = list(set([pn for o in self._fit_objects for pn in o.process_names]))
+                raise RuntimeError(
+                    f"No components containing process name '{process_name}' could be found.\n"
+                    f"The following process names are registered:\n\t" + "\n\t- ".join(available_processes)
+                )
+
+        return obj_list
+
+    def append(self, fit_object: FitObject):
+
+        if fit_object.name in self._fit_object_mapping:
+            raise ValueError(
+                f"FitObject with name {fit_object.name} already exists in FitObjectManager with the index "
+                f"{self._fit_object_mapping[fit_object.name]}"
+            )
+
+        fit_object.serial_number = len(self._fit_objects)
+
+        self._fit_object_mapping[fit_object.name] = len(self._fit_objects)
+        self._fit_objects.append(fit_object)
+
+    def __len__(self):
+        return len(self._fit_objects)
+
+
 class FitModel:
     def __init__(
         self,
@@ -73,8 +156,7 @@ class FitModel:
         self._model_parameters = []  # type: List[ModelParameter]
         self._model_parameters_mapping = {}  # type: Dict[str, int]
 
-        self._templates = []  # type: List[Template]
-        self._templates_mapping = {}  # type: Dict[str, int]
+        self._template_manager = FitObjectManager[Template]()
 
         self._components = []  # type: List[Component]
         self._components_mapping = {}  # type: Dict[str, int]
@@ -149,6 +231,26 @@ class FitModel:
         "number_of_fraction_parameters",
     ]
 
+    def __getattr__(self, attr):
+        """
+        Forwarding the attributes to self._channels for backwards compatibility.
+        :param attr: The attribute name
+        :return: A forwarded attribute of ModelChannels
+        """
+
+        if attr in self._attrs:
+            try:
+                return getattr(self._channels, attr)
+            except AttributeError:
+                raise AttributeError(f"{self.__class__.__name__} object has no attribute {attr}")
+        elif attr in dir(self._channels):
+            raise AttributeError(
+                f"Attribute {attr} exists for {self._channels.__class__.__name__} but is not forwarded"
+                f"to {self.__class__.__name__}."
+            )
+        else:
+            raise AttributeError(f"{self.__class__.__name__} object has no attribute {attr}.")
+
     # region add templates, parameters, components, channels, data
 
     def add_model_parameter(
@@ -194,11 +296,7 @@ class FitModel:
         self._check_is_not_finalized()
         self._check_has_data(adding="template")
 
-        if template.name in self._templates_mapping:
-            raise RuntimeError(
-                f"The template with the name {template.name} is already registered!\n"
-                f"It has the index {self._templates_mapping[template.name]}\n"
-            )
+        self._template_manager.append(template)
 
         if isinstance(yield_parameter, str):
             yield_model_parameter = self.get_model_parameter(name_or_index=yield_parameter)
@@ -227,10 +325,7 @@ class FitModel:
             param_id=yield_model_parameter.param_id,
         )
 
-        serial_number = len(self._templates)
-        template.serial_number = serial_number
-
-        yield_model_parameter.used_by(template_parameter=yield_param, template_serial_number=serial_number)
+        yield_model_parameter.used_by(template_parameter=yield_param, template_serial_number=template.serial_number)
 
         bin_nuisance_paras = self._create_bin_nuisance_parameters(template=template)
         assert len(bin_nuisance_paras) == template.num_bins_total, (len(bin_nuisance_paras), template.num_bins_total)
@@ -242,53 +337,7 @@ class FitModel:
 
         template.use_other_systematics = use_other_systematics
 
-        self._templates.append(template)
-        self._templates_mapping.update({template.name: serial_number})
-
-        return serial_number
-
-    def _create_bin_nuisance_parameters(
-        self,
-        template: Template,
-    ) -> List[TemplateParameter]:
-        bin_nuisance_model_params = []  # type: List[Union[ModelParameter, str]]
-        bin_nuisance_model_param_indices = []  # type: List[int]
-
-        # TODO now: Implement creation of nuisance parameters as required for option 1a!
-        #           -> Think about how nuisance parameter must be handled in general to make all options possible!!!
-        # TODO: General implementation of creation of nuisance parameters for different options of uncertainty handling!
-
-        nuisance_sigma = 1.0  # type: float
-        initial_nuisance_value = 0.0  # type: float
-
-        for counter in range(template.num_bins_total):
-            model_param_index, model_parameter = self.add_model_parameter(
-                name=f"bin_nuisance_param_{counter}_for_temp_{template.name}",
-                parameter_type=ParameterHandler.bin_nuisance_parameter_type,
-                floating=True,
-                initial_value=initial_nuisance_value,
-                constrain_to_value=initial_nuisance_value,
-                constraint_sigma=nuisance_sigma,
-            )
-            bin_nuisance_model_params.append(model_parameter)
-            bin_nuisance_model_param_indices.append(model_param_index)
-
-        bin_nuisance_template_paras = self._get_list_of_template_params(
-            input_params=bin_nuisance_model_params,
-            serial_numbers=template.serial_number,
-            container_name=template.name,
-            parameter_type=ParameterHandler.bin_nuisance_parameter_type,
-            input_parameter_list_name="bin_nuisance_parameters",
-        )
-
-        logging.info(
-            f"Created {len(bin_nuisance_model_params)} bin nuisance ModelParameters "
-            f"for template '{template.name}' (serial no: {template.serial_number}) with "
-            f"{template.num_bins_total} bins and shape {template.shape}.\n"
-            f"Bin nuisance parameter indices = {bin_nuisance_model_param_indices}"
-        )
-
-        return bin_nuisance_template_paras
+        return template.serial_number
 
     def add_component(
         self,
@@ -524,61 +573,6 @@ class FitModel:
         else:
             return channel_serial_number
 
-    def _create_single_template_component_from_template(self, template_input: Union[str, Template]) -> Component:
-        if isinstance(template_input, Template):
-            template = template_input
-            source_info_text = "directly as template"
-            assert template in self._templates, (
-                template.name,
-                template.serial_number,
-                [(t.name, t.serial_number) for t in self._templates],
-            )
-        elif isinstance(template_input, str):
-            assert not template_input.startswith("temp_"), template_input
-            if template_input.isdigit():
-                template_identifier = int(template_input)  # type: Union[str, int]  # identifier is template serial_number
-                source_info_text = f"via the template serial number as 'temp_{template_input}'"
-            else:
-                template_identifier = template_input  # identifier is template name
-                source_info_text = f"via the template name {template_input} as 'temp_{template_input}'"
-            template = self.get_template(name_or_index=template_identifier)
-        else:
-            raise ValueError(
-                f"The parameter 'template_input' must be either of type Template or str, "
-                f"but you provided an object of type {type(template_input)}"
-            )
-
-        assert not any(template in comp.sub_templates for comp in self._components), "\n".join(
-            [
-                f"{comp.name}, {comp.name}: {[t.name for t in comp.sub_templates]}"
-                for comp in self._components
-                if template in comp.sub_templates
-            ]
-        )
-        new_component_name = f"component_from_template_{template.name}"
-        assert new_component_name not in self._components_mapping, (
-            new_component_name,
-            self._components_mapping.keys(),
-        )
-        comp_serial_number_component_tuple = self.add_component(
-            fraction_parameters=None,
-            component=None,
-            name=new_component_name,
-            templates=[template],
-            shared_yield=False,
-        )
-
-        assert isinstance(comp_serial_number_component_tuple, tuple), type(comp_serial_number_component_tuple).__name__
-        comp_serial_number, component = comp_serial_number_component_tuple  # type: int, Component
-
-        logging.info(
-            f"New component with name {new_component_name} and serial_number {comp_serial_number} was created and "
-            f"added directly from single template (serial_number: {template.serial_number}, name: {template.name}, "
-            f"provided {source_info_text})."
-        )
-
-        return component
-
     def add_constraint(
         self,
         name: str,
@@ -664,6 +658,104 @@ class FitModel:
                 channel_weights=None if channel_weights is None else channel_weights[channel_name],
             )
         self._has_data = True
+
+    def _create_single_template_component_from_template(self, template_input: Union[str, Template]) -> Component:
+        if isinstance(template_input, Template):
+            template = template_input
+            source_info_text = "directly as template"
+            assert template in self._template_manager, (
+                template.name,
+                template.serial_number,
+                self._template_manager,
+            )
+        elif isinstance(template_input, str):
+            assert not template_input.startswith("temp_"), template_input
+            if template_input.isdigit():
+                template_identifier = int(template_input)  # type: Union[str, int]  # identifier is template serial_number
+                source_info_text = f"via the template serial number as 'temp_{template_input}'"
+            else:
+                template_identifier = template_input  # identifier is template name
+                source_info_text = f"via the template name {template_input} as 'temp_{template_input}'"
+            template = self.get_template(name_or_index=template_identifier)
+        else:
+            raise ValueError(
+                f"The parameter 'template_input' must be either of type Template or str, "
+                f"but you provided an object of type {type(template_input)}"
+            )
+
+        assert not any(template in comp.sub_templates for comp in self._components), "\n".join(
+            [
+                f"{comp.name}, {comp.name}: {[t.name for t in comp.sub_templates]}"
+                for comp in self._components
+                if template in comp.sub_templates
+            ]
+        )
+        new_component_name = f"component_from_template_{template.name}"
+        assert new_component_name not in self._components_mapping, (
+            new_component_name,
+            self._components_mapping.keys(),
+        )
+        comp_serial_number_component_tuple = self.add_component(
+            fraction_parameters=None,
+            component=None,
+            name=new_component_name,
+            templates=[template],
+            shared_yield=False,
+        )
+
+        assert isinstance(comp_serial_number_component_tuple, tuple), type(comp_serial_number_component_tuple).__name__
+        comp_serial_number, component = comp_serial_number_component_tuple  # type: int, Component
+
+        logging.info(
+            f"New component with name {new_component_name} and serial_number {comp_serial_number} was created and "
+            f"added directly from single template (serial_number: {template.serial_number}, name: {template.name}, "
+            f"provided {source_info_text})."
+        )
+
+        return component
+
+    def _create_bin_nuisance_parameters(
+        self,
+        template: Template,
+    ) -> List[TemplateParameter]:
+        bin_nuisance_model_params = []  # type: List[Union[ModelParameter, str]]
+        bin_nuisance_model_param_indices = []  # type: List[int]
+
+        # TODO now: Implement creation of nuisance parameters as required for option 1a!
+        #           -> Think about how nuisance parameter must be handled in general to make all options possible!!!
+        # TODO: General implementation of creation of nuisance parameters for different options of uncertainty handling!
+
+        nuisance_sigma = 1.0  # type: float
+        initial_nuisance_value = 0.0  # type: float
+
+        for counter in range(template.num_bins_total):
+            model_param_index, model_parameter = self.add_model_parameter(
+                name=f"bin_nuisance_param_{counter}_for_temp_{template.name}",
+                parameter_type=ParameterHandler.bin_nuisance_parameter_type,
+                floating=True,
+                initial_value=initial_nuisance_value,
+                constrain_to_value=initial_nuisance_value,
+                constraint_sigma=nuisance_sigma,
+            )
+            bin_nuisance_model_params.append(model_parameter)
+            bin_nuisance_model_param_indices.append(model_param_index)
+
+        bin_nuisance_template_paras = self._get_list_of_template_params(
+            input_params=bin_nuisance_model_params,
+            serial_numbers=template.serial_number,
+            container_name=template.name,
+            parameter_type=ParameterHandler.bin_nuisance_parameter_type,
+            input_parameter_list_name="bin_nuisance_parameters",
+        )
+
+        logging.info(
+            f"Created {len(bin_nuisance_model_params)} bin nuisance ModelParameters "
+            f"for template '{template.name}' (serial no: {template.serial_number}) with "
+            f"{template.num_bins_total} bins and shape {template.shape}.\n"
+            f"Bin nuisance parameter indices = {bin_nuisance_model_param_indices}"
+        )
+
+        return bin_nuisance_template_paras
 
     def add_asimov_data_from_templates(
         self,
@@ -903,26 +995,6 @@ class FitModel:
     # endregion
 
     # region Properties
-
-    def __getattr__(self, attr):
-        """
-        Forwarding the attributes to self._channels for backwards compatibility.
-        :param attr: The attribute name
-        :return: A forwarded attribute of ModelChannels
-        """
-
-        if attr in self._attrs:
-            try:
-                return getattr(self._channels, attr)
-            except AttributeError:
-                raise AttributeError(f"{self.__class__.__name__} object has no attribute {attr}")
-        elif attr in dir(self._channels):
-            raise AttributeError(
-                f"Attribute {attr} exists for {self._channels.__class__.__name__} but is not forwarded"
-                f"to {self.__class__.__name__}."
-            )
-        else:
-            raise AttributeError(f"{self.__class__.__name__} object has no attribute {attr}.")
 
     @property
     def number_of_channels(self) -> int:
@@ -1191,34 +1263,15 @@ class FitModel:
         self,
         name_or_index: Union[str, int],
     ) -> Template:
-        if isinstance(name_or_index, int):
-            assert name_or_index < len(self._templates), (name_or_index, len(self._templates))
-            return self._templates[name_or_index]
-        elif isinstance(name_or_index, str):
-            assert name_or_index in self._templates_mapping, (name_or_index, self._templates_mapping.keys())
-            return self._templates[self._templates_mapping[name_or_index]]
-        else:
-            raise ValueError(
-                f"Expected string or integer for argument 'name_or_index'\n"
-                f"However, {name_or_index} of type {type(name_or_index)} was provided!"
-            )
+
+        return self._template_manager[name_or_index]
 
     def get_templates_by_process_name(
         self,
         process_name: str,
     ) -> List[Template]:
-        temp_list = []
-        for template in self._templates:
-            if template.process_name == process_name:
-                temp_list.append(template)
 
-        if len(temp_list) == 0:
-            available_processes = list(set([t.process_name for t in self._templates]))
-            raise RuntimeError(
-                f"No templates with process name '{process_name}' could be found.\n"
-                f"The following process names are registered:\n\t" + "\n\t- ".join(available_processes)
-            )
-        return temp_list
+        return self._template_manager.get_fit_objects_by_process_name(process_name)
 
     def get_component(
         self,
@@ -2229,7 +2282,7 @@ class FitModel:
 
     def set_yield(self, process_name: str, new_initial_value: float) -> None:
         parameter_name = self.get_yield_parameter_name_from_process(process_name=process_name)
-        self._params.set_parameter_initial_value(parameter_name=parameter_name, new_initial_value=new_initial_value)
+        self.set_initial_parameter_value(parameter_name=parameter_name, new_initial_value=new_initial_value)
 
     def reset_initial_parameter_value(
         self,
