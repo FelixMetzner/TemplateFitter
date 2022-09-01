@@ -17,7 +17,7 @@ from templatefitter.utility import xlogyx, cov2corr
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
-from templatefitter.fit_model.utility import pad_sequences, check_bin_count_shape
+from templatefitter.fit_model.utility import pad_sequences, check_bin_count_shape, immutable_cached_property
 from templatefitter.fit_model.data_channel import ModelDataChannels
 from templatefitter.fit_model.channel import ModelChannels, Channel
 from templatefitter.binned_distributions.weights import WeightsInputType
@@ -186,9 +186,7 @@ class FitModel:
         self._efficiency_padding_required = True  # type: bool
         self._efficiencies_checked = False  # type: bool
 
-        self._bin_nuisance_param_indices = None  # type: Optional[List[int]]
         self._bin_nuisance_params_checked = False  # type: bool
-        self._nuisance_matrix_shape = None  # type: Optional[Tuple[int, ...]]
 
         self._constraint_indices = None  # type: Optional[List[int]]
         self._constraint_values = None  # type: Optional[List[float]]
@@ -196,19 +194,12 @@ class FitModel:
         self._has_constrained_parameters = False  # type: bool
 
         self._template_shapes_checked = False  # type: bool
-        self._template_bin_errors_sq_per_ch_and_temp = None  # type: Optional[List[List[np.ndarray]]]
-        self._template_stat_error_sq_matrix_per_channel = None  # type: Optional[List[np.ndarray]]
-        self._template_stat_error_sq_matrix_per_ch_and_temp = None  # type: Optional[List[List[np.ndarray]]]
         self._template_shape = None  # type: Optional[np.ndarray]
-
-        self._relative_shape_uncertainties = None  # type: Optional[np.ndarray]
 
         self._gauss_term_checked = False  # type: bool
         self._constraint_term_checked = False  # type: bool
         self._chi2_calculation_checked = False  # type: bool
         self._nll_calculation_checked = False  # type: bool
-
-        self._floating_nuisance_parameter_indices = None  # type: Optional[List[int]]
 
         # endregion
 
@@ -915,9 +906,9 @@ class FitModel:
 
         # Getting template_statistics_sys and sum over template axis to get right shape:
         # TODO: Whether the sum is needed depends on option 1a, 1b or 2)! -> Currently it is Option 1b!
-        template_statistics_sys_per_ch = self.get_template_stat_error_sq_matrix_per_ch_and_temp()
+        template_statistics_sys_per_ch = self.template_stat_error_sq_matrix_per_ch_and_temp
         # Option 1a:
-        # template_statistics_sys_per_ch = [m.sum(axis=0) for m in self.get_template_stat_error_sq_matrix_per_channel()]
+        # template_statistics_sys_per_ch = [m.sum(axis=0) for m in self.template_stat_error_sq_matrix_per_channel
 
         # TODO: The following combination is only valid for Option 1b!
         other_sys_cov_matrix_per_ch_and_temp = [
@@ -1018,18 +1009,15 @@ class FitModel:
     def is_finalized(self) -> bool:
         return self._is_initialized
 
-    @property
+    @immutable_cached_property
     def floating_nuisance_parameter_indices(self) -> List[int]:
-        if self._floating_nuisance_parameter_indices is not None:
-            return self._floating_nuisance_parameter_indices
-        all_bin_nuisance_parameter_indices = self.get_bin_nuisance_parameter_indices()
+        all_bin_nuisance_parameter_indices = self.bin_nuisance_parameter_indices
         floating_nuisance_parameter_indices = []
         for all_index in all_bin_nuisance_parameter_indices:
             if self._params.floating_parameter_mask[all_index]:
                 param_id = sum(self._params.floating_parameter_mask[: all_index + 1]) - 1  # type: int
                 floating_nuisance_parameter_indices.append(param_id)
 
-        self._floating_nuisance_parameter_indices = floating_nuisance_parameter_indices
         return floating_nuisance_parameter_indices
 
     @property
@@ -1056,9 +1044,8 @@ class FitModel:
 
     # region Get channels, templates, parameters, components, efficiencies
 
-    def get_relative_shape_uncertainties(self) -> np.ndarray:
-        if self._relative_shape_uncertainties is not None:
-            return self._relative_shape_uncertainties
+    @immutable_cached_property
+    def relative_shape_uncertainties(self) -> np.ndarray:
 
         cov_matrices_per_ch_and_temp = self.systematics_covariance_matrices_per_channel
         # TODO: Maybe add some more checks...
@@ -1095,11 +1082,10 @@ class FitModel:
             where=self.template_bin_counts != 0.0,
         )
 
-        self._relative_shape_uncertainties = relative_shape_uncertainties
         return relative_shape_uncertainties
 
     def _get_yield_parameter_indices(self) -> List[int]:
-        channel_with_max, max_number_of_templates = self._get_channel_with_max_number_of_templates()
+        channel_with_max, max_number_of_templates = self._channel_with_max_number_of_templates
         _channel_with_max = self._channels[channel_with_max]  # type: Optional[Channel]
         assert _channel_with_max is not None
         _yield_params = [
@@ -1110,9 +1096,8 @@ class FitModel:
         assert len(_yield_param_ids) == len(_channel_with_max.templates), "Undefined yield parameter ids encountered!"
         return _yield_param_ids
 
-    def get_bin_nuisance_parameter_indices(self) -> List[int]:
-        if self._bin_nuisance_param_indices is not None:
-            return self._bin_nuisance_param_indices
+    @immutable_cached_property
+    def bin_nuisance_parameter_indices(self) -> List[int]:
 
         bin_nuisance_param_indices = self._params.get_parameter_indices_for_type(
             parameter_type=ParameterHandler.bin_nuisance_parameter_type,
@@ -1121,25 +1106,15 @@ class FitModel:
         if not self._bin_nuisance_params_checked:
             self._check_bin_nuisance_parameters()
 
-        self._bin_nuisance_param_indices = bin_nuisance_param_indices
         return bin_nuisance_param_indices
 
-    def _get_nuisance_matrix_shape(self) -> Tuple[int, ...]:
-        if self._nuisance_matrix_shape is not None:
-            return self._nuisance_matrix_shape
+    @immutable_cached_property
+    def _nuisance_matrix_shape(self) -> Tuple[int, ...]:
 
-        nuisance_matrix_shape = (
-            self.number_of_channels,
-            max(self.number_of_templates),
-            self.max_number_of_bins_flattened,
-        )
+        return (self.number_of_channels, max(self.number_of_templates), self.max_number_of_bins_flattened)
 
-        self._nuisance_matrix_shape = nuisance_matrix_shape
-        return nuisance_matrix_shape
-
-    def get_template_bin_errors_sq_per_ch_and_temp(self) -> List[List[np.ndarray]]:
-        if self._template_bin_errors_sq_per_ch_and_temp is not None:
-            return self._template_bin_errors_sq_per_ch_and_temp
+    @immutable_cached_property
+    def template_bin_errors_sq_per_ch_and_temp(self) -> List[List[np.ndarray]]:
 
         b_errs2_per_ch_and_temp = [[tmp.bin_errors_sq.flatten() for tmp in ch.templates] for ch in self._channels]
 
@@ -1151,14 +1126,12 @@ class FitModel:
         b_errs2_per_channel = [np.stack(temps_in_ch) for temps_in_ch in b_errs2_per_ch_and_temp]
         self._check_template_bin_errors_shapes(bin_errors_per_ch=b_errs2_per_channel)
 
-        self._template_bin_errors_sq_per_ch_and_temp = b_errs2_per_ch_and_temp
-        return self._template_bin_errors_sq_per_ch_and_temp
+        return b_errs2_per_ch_and_temp
 
-    def get_template_stat_error_sq_matrix_per_channel(self) -> List[np.ndarray]:
-        if self._template_stat_error_sq_matrix_per_channel is not None:
-            return self._template_stat_error_sq_matrix_per_channel
+    @immutable_cached_property
+    def template_stat_error_sq_matrix_per_channel(self) -> List[np.ndarray]:
 
-        bin_errors_sq_per_ch_and_temp = self.get_template_bin_errors_sq_per_ch_and_temp()
+        bin_errors_sq_per_ch_and_temp = self.template_bin_errors_sq_per_ch_and_temp
         bin_errors_sq_per_ch = [np.stack(temps_in_ch) for temps_in_ch in bin_errors_sq_per_ch_and_temp]
         stat_err_sq_matrix_per_ch = [
             np.apply_along_axis(func1d=np.diag, axis=1, arr=stat_err_array) for stat_err_array in bin_errors_sq_per_ch
@@ -1180,14 +1153,12 @@ class FitModel:
             m.shape for m in stat_err_sq_matrix_per_ch
         ]
 
-        self._template_stat_error_sq_matrix_per_channel = stat_err_sq_matrix_per_ch
-        return self._template_stat_error_sq_matrix_per_channel
+        return stat_err_sq_matrix_per_ch
 
-    def get_template_stat_error_sq_matrix_per_ch_and_temp(self) -> List[List[np.ndarray]]:
-        if self._template_stat_error_sq_matrix_per_ch_and_temp is not None:
-            return self._template_stat_error_sq_matrix_per_ch_and_temp
+    @immutable_cached_property
+    def template_stat_error_sq_matrix_per_ch_and_temp(self) -> List[List[np.ndarray]]:
 
-        bin_errors_sq_per_ch_and_temp = self.get_template_bin_errors_sq_per_ch_and_temp()
+        bin_errors_sq_per_ch_and_temp = self.template_bin_errors_sq_per_ch_and_temp
         stat_err_sq_matrix_per_ch_and_temp = [
             [np.diag(temp_array) for temp_array in stat_err_arrays_per_temp]
             for stat_err_arrays_per_temp in bin_errors_sq_per_ch_and_temp
@@ -1220,10 +1191,10 @@ class FitModel:
             m.shape for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps
         ]
 
-        self._template_stat_error_sq_matrix_per_ch_and_temp = stat_err_sq_matrix_per_ch_and_temp
-        return self._template_stat_error_sq_matrix_per_ch_and_temp
+        return stat_err_sq_matrix_per_ch_and_temp
 
-    def _get_channel_with_max_number_of_templates(self) -> Tuple[int, int]:
+    @property
+    def _channel_with_max_number_of_templates(self) -> Tuple[int, int]:
         channel_with_max, max_number_of_templates = max(enumerate(self.number_of_templates), key=operator.itemgetter(1))
         return channel_with_max, max_number_of_templates
 
@@ -1470,7 +1441,7 @@ class FitModel:
                 + "\n\n".join([i.as_string() for i in self._params.get_parameter_infos_by_index(indices=indices)])
             )
 
-        channel_with_max, max_number_of_templates = self._get_channel_with_max_number_of_templates()
+        channel_with_max, max_number_of_templates = self._channel_with_max_number_of_templates
         assert len(yield_parameter_indices) == max_number_of_templates, (
             len(yield_parameter_indices),
             max_number_of_templates,
@@ -1865,9 +1836,8 @@ class FitModel:
 
         if nuisance_parameters is not None:
             # Apply shape uncertainties:
-            relative_shape_uncertainties = self.get_relative_shape_uncertainties()
             templates_with_shape_uncertainties = self.template_bin_counts * (
-                1.0 + nuisance_parameters * relative_shape_uncertainties
+                1.0 + nuisance_parameters * self.relative_shape_uncertainties
             )
         else:
             templates_with_shape_uncertainties = self.template_bin_counts
@@ -1962,10 +1932,10 @@ class FitModel:
         parameter_vector: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
         nuisance_parameter_vector = self._params.get_combined_parameters_by_index(
-            parameter_vector=parameter_vector, indices=self.get_bin_nuisance_parameter_indices()
+            parameter_vector=parameter_vector, indices=self.bin_nuisance_parameter_indices
         )
 
-        new_nuisance_matrix_shape = self._get_nuisance_matrix_shape()
+        new_nuisance_matrix_shape = self._nuisance_matrix_shape()
         complex_reshaping_required = not all(
             n_bins == self.number_of_bins_flattened_per_channel[0] for n_bins in self.number_of_bins_flattened_per_channel
         )

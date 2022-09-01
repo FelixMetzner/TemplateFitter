@@ -3,6 +3,7 @@ Utility functions
 """
 
 import numpy as np
+from functools import cached_property
 
 __all__ = ["pad_sequences", "check_bin_count_shape"]
 
@@ -106,3 +107,11 @@ def check_bin_count_shape(bin_count: np.ndarray, number_of_channels: int, max_nu
         bin_count.shape[1],
         max_number_of_bins,
     )
+
+
+class immutable_cached_property(cached_property):
+    def __set__(self, instance, value):
+        raise AttributeError(f"{self.func.__name__} is a read-only attribute")
+
+    def __delete__(self, instance):
+        raise AttributeError(f"{self.func.__name__} is a read-only attribute")
