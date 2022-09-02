@@ -204,7 +204,7 @@ class FitModel:
         # Setting a random seed for the toy data set generation with scypi
         np.random.seed(seed=7694747)
 
-    _attrs = [
+    _channel_attrs = [
         "template_bin_counts" "binning",
         "max_number_of_bins_flattened",
         "number_of_bins_flattened_per_channel",
@@ -220,12 +220,12 @@ class FitModel:
 
     def __getattr__(self, attr):
         """
-        Forwarding the attributes to self._channels for backwards compatibility.
+        Forwarding some attributes to self._channels for backwards compatibility.
         :param attr: The attribute name
         :return: A forwarded attribute of ModelChannels
         """
 
-        if attr in self._attrs:
+        if attr in self._channel_attrs:
             try:
                 return getattr(self._channels, attr)
             except AttributeError:
@@ -1304,10 +1304,7 @@ class FitModel:
             template_param = TemplateParameter(
                 name=f"{container_name}_{model_parameter.name}",
                 parameter_handler=self._params,
-                parameter_type=model_parameter.parameter_type,
-                floating=model_parameter.floating,
-                initial_value=model_parameter.initial_value,
-                param_id=model_parameter.param_id,
+                model_parameter=model_parameter,
             )
 
             template_params.append(template_param)

@@ -850,13 +850,36 @@ class TemplateParameter(Parameter):
         self,
         name: str,
         parameter_handler: ParameterHandler,
-        parameter_type: str,
-        floating: bool,
-        initial_value: float,
-        param_id: Optional[int],
+        parameter_type: Optional[str] = None,
+        floating: Optional[bool] = None,
+        initial_value: Optional[float] = None,
+        param_id: Optional[int] = None,
+        model_parameter: Optional["ModelParameter"] = None,
         constrain_to_value: Optional[float] = None,
         constraint_sigma: Optional[float] = None,
     ) -> None:
+
+        if model_parameter is not None:
+            if not all(p is None for p in (parameter_type, floating, initial_value, param_id)):
+                raise ValueError(
+                    "If the argument model_parameter is given the arguments 'parameter_type',"
+                    " 'floating', 'initial_value' and 'param_id' must be None."
+                )
+
+            parameter_type = model_parameter.parameter_type
+            floating = model_parameter.floating
+            initial_value = model_parameter.initial_value
+            param_id = model_parameter.param_id
+            self.base_model_parameter = model_parameter
+
+        else:
+            if parameter_type is None or floating is None or initial_value is None:
+                raise ValueError(
+                    "If the argument 'model_parameter' is not given the arguments 'parameter_type', 'floating', "
+                    "and 'initial_value' must not be None."
+                )
+            self._base_model_parameter = None  # type: Optional[ModelParameter]
+
         super().__init__(
             name=name,
             parameter_handler=parameter_handler,
@@ -866,7 +889,6 @@ class TemplateParameter(Parameter):
             constrain_to_value=constrain_to_value,
             constraint_sigma=constraint_sigma,
         )
-        self._base_model_parameter = None  # type: Optional[ModelParameter]
 
         if param_id is not None:
             self.param_id = param_id
@@ -935,7 +957,8 @@ class ModelParameter(Parameter):
         template_parameter: TemplateParameter,
         template_serial_number: int,
     ) -> None:
-        template_parameter.base_model_parameter = self
+        if template_parameter.base_model_parameter is not self:
+            template_parameter.base_model_parameter = self
         info_tuple = (template_parameter, template_serial_number)
         assert not any(info_tuple == entry for entry in self._usage_list), info_tuple
         self._usage_list.append(info_tuple)
