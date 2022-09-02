@@ -43,6 +43,9 @@ class ParameterInfo(NamedTuple):
         info_list = self.info_as_string_list()
         return f"Parameter {info_list[0]}:\n" + "\n\t".join(info_list)
 
+    def __repr__(self) -> str:
+        return self.as_string()
+
     def get_with_constraint(
         self,
         value: float,
@@ -814,6 +817,9 @@ class Parameter(ABC):
         if _additional_info is not None:
             output += _additional_info
         return output
+
+    def __repr__(self) -> str:
+        return self.as_string()
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Parameter):
