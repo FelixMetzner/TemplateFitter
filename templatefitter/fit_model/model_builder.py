@@ -422,8 +422,8 @@ class FitModel:
                 name=name,
                 shared_yield=shared_yield,
             )
-        else:
-            assert component is not None  # Make MyPy happy
+
+        assert component is not None  # Make MyPy happy
 
         if component.required_fraction_parameters == 0:
             if fraction_parameters:
@@ -452,10 +452,10 @@ class FitModel:
 
         self._component_manager.append(component)
 
-        if component:
-            return component.component_serial_number
-        else:
+        if templates:
             return component.component_serial_number, component
+        else:
+            return component.component_serial_number
 
     def _validate_add_channel_arguments(
         self,
@@ -548,9 +548,7 @@ class FitModel:
                 plot_order=plot_order,
             )
 
-        else:
-            assert channel is not None  # Make MyPy happy
-
+        assert channel is not None  # Make MyPy happy
         if len(efficiency_parameters) != channel.required_efficiency_parameters:
             raise ValueError(
                 f"The channel requires {channel.required_efficiency_parameters} efficiency parameters, "
@@ -568,10 +566,10 @@ class FitModel:
         channel.initialize_parameters(efficiency_parameters=efficiency_params)
         channel_serial_number = self._channels.add_channel(channel=channel)
 
-        if channel:
-            return channel_serial_number
-        else:
+        if components:
             return channel_serial_number, channel
+        else:
+            return channel_serial_number
 
     def add_constraint(
         self,
@@ -596,9 +594,8 @@ class FitModel:
                 f"and thus your constraint (cv = {value}, cs = {sigma}) cannot be applied!"
             )
 
-        param_id = model_parameter.param_id
-        assert param_id is not None
-        parameter_infos = self._params.get_parameter_infos_by_index(indices=param_id)[0]
+        assert model_parameter.param_id is not None
+        parameter_infos = self._params.get_parameter_infos_by_index(indices=model_parameter.param_id)[0]
         assert parameter_infos.constraint_value == model_parameter.constraint_value, (
             parameter_infos.constraint_value,
             model_parameter.constraint_value,
@@ -608,20 +605,14 @@ class FitModel:
             model_parameter.constraint_sigma,
         )
 
-        self._params.add_constraint_to_parameter(param_id=param_id, constraint_value=value, constraint_sigma=sigma)
+        self._params.add_constraint_to_parameter(
+            param_id=model_parameter.param_id, constraint_value=value, constraint_sigma=sigma
+        )
 
-    def add_data(
-        self,
-        channels: Dict[str, DataInputType],
-        channel_weights: Optional[Dict[str, WeightsInputType]] = None,
+    def _validate_add_data_arguments(
+        self, channels: Dict[str, DataInputType], channel_weights: Optional[Dict[str, WeightsInputType]]
     ) -> None:
-        self._check_is_not_finalized()
-        assert self._data_channels.is_empty
-        if self._has_data is True:
-            raise RuntimeError(
-                "Data has already been added to this model!\nThe following channels are registered:\n\t-"
-                + "\n\t-".join(self._data_channels.data_channel_names)
-            )
+
         if not len(channels) == self.number_of_channels:
             raise ValueError(
                 f"You provided data for {len(channels)} channels, "
@@ -646,6 +637,21 @@ class FitModel:
                     f"'channel_weights' do not match!\nKeys of channels dictionary: {channels.keys()}\n"
                     f"Keys of channel_weights dictionary: {channel_weights.keys()}"
                 )
+
+    def add_data(
+        self,
+        channels: Dict[str, DataInputType],
+        channel_weights: Optional[Dict[str, WeightsInputType]] = None,
+    ) -> None:
+        self._check_is_not_finalized()
+        assert self._data_channels.is_empty
+        if self._has_data is True:
+            raise RuntimeError(
+                "Data has already been added to this model!\nThe following channels are registered:\n\t-"
+                + "\n\t-".join(self._data_channels.data_channel_names)
+            )
+
+        self._validate_add_data_arguments(channels, channel_weights)
 
         for channel_name, channel_data in channels.items():
             mc_channel = self._channels.get_channel_by_name(name=channel_name)
