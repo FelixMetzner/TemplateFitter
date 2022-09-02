@@ -77,7 +77,7 @@ class Channel(Sequence):
                     f"and\n\tthis channel: {self.data_column_names}"
                 )
 
-        component_index = self.__len__()
+        component_index = len(self)
         self._channel_components.append(component)
         component.component_index = component_index
 
@@ -117,9 +117,9 @@ class Channel(Sequence):
         if not all(c.params is self._params for c in components):
             raise RuntimeError("The used ParameterHandler instances are not the same!")
 
-        first_index = self.__len__()
+        first_index = len(self)
         self._channel_components.extend(components)
-        last_index_plus_one = self.__len__()
+        last_index_plus_one = len(self)
 
         component_indices = list(range(first_index, last_index_plus_one))
         for component, component_index in zip(components, component_indices):
@@ -231,7 +231,7 @@ class Channel(Sequence):
 
     @property
     def number_of_components(self) -> int:
-        return self.__len__()
+        return len(self)
 
     @property
     def templates(self) -> Tuple[Template, ...]:
@@ -363,13 +363,13 @@ class ChannelContainer(Sequence):
         if not isinstance(channel, Channel):
             raise ValueError("You can only add instances of 'Channel' to this container.")
 
-        if self.__len__() > 0:
+        if len(self):
             if self._channels[0].params is not channel.params:
                 raise RuntimeError("The used ParameterHandler instances are not the same!")
             self._check_channel_names(channels=[channel])
             self._check_channel_components(channels=[channel])
 
-        channel_index = self.__len__()
+        channel_index = len(self)
         self._channels.append(channel)
         self._channels_mapping.update({channel.name: channel_index})
         assert len(self._channels_mapping) == len(self._channels), (len(self._channels_mapping), len(self._channels))
@@ -384,9 +384,9 @@ class ChannelContainer(Sequence):
     ) -> List[int]:
         self._check_channels_input(channels=channels)
 
-        first_index = self.__len__()
+        first_index = len(self)
         self._channels.extend(channels)
-        last_index_plus_one = self.__len__()
+        last_index_plus_one = len(self)
 
         channel_indices = list(range(first_index, last_index_plus_one))
         for channel, channel_index in zip(channels, channel_indices):
@@ -440,7 +440,7 @@ class ChannelContainer(Sequence):
         channels: List[Channel],
     ) -> None:
         assert isinstance(channels, list), type(channels)
-        if self.__len__() > 0:
+        if len(self):
             base_req_fractions = self._channels[0].required_fraction_parameters
             base_fractions_mask = self._channels[0].fractions_mask
         else:
@@ -454,7 +454,7 @@ class ChannelContainer(Sequence):
                 + (
                     f"The current channels have required_fraction_parameters = \n\t"
                     f"{self._channels[0].required_fraction_parameters}\n"
-                    if self.__len__() > 0
+                    if len(self) > 0
                     else "\n"
                 )
                 + "The new channel(s) you are trying to add have required_fraction_parameters = \n\t"
@@ -465,7 +465,7 @@ class ChannelContainer(Sequence):
                 "You are trying to add channels with different fraction masks given by their components.\n"
                 + (
                     f"The current channels have the fraction mask = \n\t" f"{self._channels[0].fractions_mask}\n"
-                    if self.__len__() > 0
+                    if len(self) > 0
                     else "\n"
                 )
                 + "The new channel(s) you are trying to add have the fraction masks = \n\t"
@@ -485,7 +485,7 @@ class ChannelContainer(Sequence):
                     + "\n\t-".join([f"{c.name}: {c.total_number_of_templates}" for c in new_channels])
                 )
 
-        if self.__len__() > 0:
+        if len(self):
             new_total_number_of_templates = new_channels[0].total_number_of_templates
             if not all(c.total_number_of_templates == new_total_number_of_templates for c in self._channels):
                 raise ValueError(

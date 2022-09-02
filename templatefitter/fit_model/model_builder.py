@@ -326,16 +326,14 @@ class FitModel:
 
         return template.serial_number
 
-    def add_component(
+    def _validate_add_component_arguments(
         self,
-        fraction_parameters: Optional[List[Union[ModelParameter, str]]] = None,
         component: Optional[Component] = None,
         name: Optional[str] = None,
         templates: Optional[List[Union[int, str, Template]]] = None,
         shared_yield: Optional[bool] = None,
-    ) -> Union[int, Tuple[int, Component]]:
-        self._check_is_not_finalized()
-        creates_new_component = False
+    ) -> None:
+
         component_input_error_text = (
             "You can either add an already prepared component or create a new one.\n"
             "For the first option, the argument 'component' must be used;\n"
@@ -345,9 +343,7 @@ class FitModel:
             "serial_number es defined for this model."
         )
 
-        self._check_has_data(adding="component")
-
-        if (component is None and templates is None) or (component is not None and templates is not None):
+        if (component is None) == (templates is None):
             raise ValueError(component_input_error_text)
         elif component is not None:
             if not isinstance(component, Component):
@@ -365,6 +361,7 @@ class FitModel:
                     f"You set the argument 'shared_yield' to {shared_yield} despite the provided"
                     f" component already having shared_yield set to {component.shared_yield}."
                 )
+
         elif templates is not None:
             if not (
                 isinstance(templates, list)
@@ -390,6 +387,22 @@ class FitModel:
                     "If you want to directly create and add component, you have to specify its name "
                     "via the argument 'name'!"
                 )
+
+    def add_component(
+        self,
+        fraction_parameters: Optional[List[Union[ModelParameter, str]]] = None,
+        component: Optional[Component] = None,
+        name: Optional[str] = None,
+        templates: Optional[List[Union[int, str, Template]]] = None,
+        shared_yield: Optional[bool] = None,
+    ) -> Union[int, Tuple[int, Component]]:
+
+        self._check_is_not_finalized()
+        self._check_has_data(adding="component")
+
+        self._validate_add_component_arguments(component, name, templates, shared_yield)
+
+        if templates is not None:
             template_list = []
             for template in templates:
                 if isinstance(template, Template):
@@ -402,8 +415,7 @@ class FitModel:
                         f"to allow for the creation of a new component.\n"
                         f"You provided a list containing the types {[type(t) for t in templates]}."
                     )
-
-            creates_new_component = True
+            assert name is not None and shared_yield is not None  # Make MyPy happy
             component = Component(
                 templates=template_list,
                 params=self._params,
@@ -411,16 +423,15 @@ class FitModel:
                 shared_yield=shared_yield,
             )
         else:
-            raise ValueError(component_input_error_text)
-
-        self._component_manager.append(component)
+            assert component is not None  # Make MyPy happy
 
         if component.required_fraction_parameters == 0:
-            if not (fraction_parameters is None or len(fraction_parameters) == 0):
+            if fraction_parameters:
                 raise ValueError(
-                    f"The component requires no fraction parameters, " f"but you provided {len(fraction_parameters)}!"
+                    f"The component requires no fraction parameters, but you provided {len(fraction_parameters)}!"
                 )
-            fraction_params = None
+            component.initialize_parameters(fraction_parameters=None)
+
         else:
             assert fraction_parameters is not None
             if not all(isinstance(p, ModelParameter) or isinstance(p, str) for p in fraction_parameters):
@@ -437,25 +448,22 @@ class FitModel:
                 parameter_type=ParameterHandler.fraction_parameter_type,
                 input_parameter_list_name="fraction_parameters",
             )
+            component.initialize_parameters(fraction_parameters=fraction_params)
 
-        component.initialize_parameters(fraction_parameters=fraction_params)
+        self._component_manager.append(component)
 
-        if creates_new_component:
-            return component.component_serial_number, component
-        else:
+        if component:
             return component.component_serial_number
+        else:
+            return component.component_serial_number, component
 
-    def add_channel(
+    def _validate_add_channel_arguments(
         self,
-        efficiency_parameters: List[Union[ModelParameter, str]],
         channel: Optional[Channel] = None,
         name: Optional[str] = None,
         components: Optional[List[Union[int, str, Component]]] = None,
-        latex_label: Optional[str] = None,
-        plot_order: Optional[Tuple[str, ...]] = None,
-    ) -> Union[int, Tuple[int, Channel]]:
-        self._check_is_not_finalized()
-        creates_new_channel = False
+    ) -> None:
+
         input_error_text = (
             "A channel can either be added by providing\n"
             "\t- an already prepared channel via the argument 'channel'\nor\n"
@@ -464,8 +472,6 @@ class FitModel:
             "\t    'temp_', from which a single template component will be generated)"
             "\t  and a name for the channel, using the arguments 'components' and 'name', respectively."
         )
-
-        self._check_has_data(adding="channel")
 
         if channel is not None and components is not None:
             raise ValueError(input_error_text)
@@ -497,6 +503,22 @@ class FitModel:
             if name is None:
                 raise ValueError("When directly creating and adding a channel, you have to set the argument 'name'!")
 
+    def add_channel(
+        self,
+        efficiency_parameters: List[Union[ModelParameter, str]],
+        channel: Optional[Channel] = None,
+        name: Optional[str] = None,
+        components: Optional[List[Union[int, str, Component]]] = None,
+        latex_label: Optional[str] = None,
+        plot_order: Optional[Tuple[str, ...]] = None,
+    ) -> Union[int, Tuple[int, Channel]]:
+
+        self._check_is_not_finalized()
+
+        self._validate_add_channel_arguments(channel, name, components)
+        self._check_has_data(adding="channel")
+
+        if components is not None:
             component_list = []  # type: List[Component]
             for component in components:
                 if isinstance(component, Component):
@@ -517,7 +539,7 @@ class FitModel:
                 else:
                     raise ValueError(f"Unexpected type {type(component)} for element of provided list of components.")
 
-            creates_new_channel = True
+            assert name is not None  # Make MyPy happy
             channel = Channel(
                 params=self._params,
                 name=name,
@@ -525,10 +547,11 @@ class FitModel:
                 latex_label=latex_label,
                 plot_order=plot_order,
             )
-        else:
-            raise ValueError(input_error_text)
 
-        if not len(efficiency_parameters) == channel.required_efficiency_parameters:
+        else:
+            assert channel is not None  # Make MyPy happy
+
+        if len(efficiency_parameters) != channel.required_efficiency_parameters:
             raise ValueError(
                 f"The channel requires {channel.required_efficiency_parameters} efficiency parameters, "
                 f"but you provided {len(efficiency_parameters)}!"
@@ -545,10 +568,10 @@ class FitModel:
         channel.initialize_parameters(efficiency_parameters=efficiency_params)
         channel_serial_number = self._channels.add_channel(channel=channel)
 
-        if creates_new_channel:
-            return channel_serial_number, channel
-        else:
+        if channel:
             return channel_serial_number
+        else:
+            return channel_serial_number, channel
 
     def add_constraint(
         self,
@@ -561,7 +584,7 @@ class FitModel:
         if name not in self._model_parameters_mapping:
             raise ValueError(
                 f"A ModelParameter with the name '{name}' was not added, yet, "
-                f"and hus a constrained cannot be applied to it!"
+                f"and thus a constraint cannot be applied to it!"
             )
 
         model_parameter = self._model_parameters[self._model_parameters_mapping[name]]
@@ -570,7 +593,7 @@ class FitModel:
                 f"The ModelParameter '{name}' already is constrained with the settings"
                 f"\n\tconstraint_value = {model_parameter.constraint_value}"
                 f"\n\tconstraint_sigma = {model_parameter.constraint_sigma}\n"
-                f"and thus your constrained (cv = {value}, cs = {sigma}) cannot be applied!"
+                f"and thus your constraint (cv = {value}, cs = {sigma}) cannot be applied!"
             )
 
         param_id = model_parameter.param_id

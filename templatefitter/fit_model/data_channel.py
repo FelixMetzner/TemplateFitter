@@ -275,7 +275,7 @@ class DataChannelContainer(Sequence):
                 f"{self._channels_mapping[channel_name]}th channel in the DataChannelContainer."
             )
 
-        channel_index = self.__len__()
+        channel_index = len(self)
 
         if from_data:
             channel_distribution = DataChannelFromData(
