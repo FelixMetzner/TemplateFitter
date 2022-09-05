@@ -125,38 +125,45 @@ class FitModel:
     # region Basic Properties
     # Attributes forwarded to self._channels via __getattr__()
     _channel_attrs = [
-        "template_bin_counts" "binning",
+        "binning",
         "max_number_of_bins_flattened",
+        "min_number_of_independent_yields",
         "number_of_bins_flattened_per_channel",
         "number_of_components",
-        "number_of_templates",
-        "total_number_of_templates",
-        "number_of_independent_templates",
         "number_of_dependent_templates",
         "number_of_expected_independent_yields",
-        "min_number_of_independent_yields",
         "number_of_fraction_parameters",
+        "number_of_independent_templates",
+        "number_of_templates",
+        "template_bin_counts",
+        "total_number_of_templates",
     ]
 
-    def __getattr__(self, attr):
+    def __getattribute__(self, attr):
         """
         Forwarding some attributes to self._channels for backwards compatibility.
         :param attr: The attribute name
         :return: A forwarded attribute of ModelChannels
         """
 
-        if attr in self._channel_attrs:
-            try:
-                return getattr(self._channels, attr)
-            except AttributeError:
-                raise AttributeError(f"{self.__class__.__name__} object has no attribute {attr}")
-        elif attr in dir(self._channels):
-            raise AttributeError(
-                f"Attribute {attr} exists for {self._channels.__class__.__name__} but is not forwarded"
-                f"to {self.__class__.__name__}."
-            )
-        else:
-            raise AttributeError(f"{self.__class__.__name__} object has no attribute {attr}.")
+        try:
+            return super().__getattribute__(attr)
+        except AttributeError:
+            if attr in self._channel_attrs:
+                try:
+                    return getattr(self._channels, attr)
+                except AttributeError:
+                    raise AttributeError(
+                        f"Forwarded attribute access from {self.__class__.__name__} to"
+                        f" {self._channels.__class__.__name__} which also has no attribute {attr}."
+                    )
+            elif attr in dir(self._channels):
+                raise AttributeError(
+                    f"Attribute {attr} exists for {self._channels.__class__.__name__} but is not forwarded "
+                    f"to {self.__class__.__name__}."
+                )
+            else:
+                raise
 
     @property
     def number_of_channels(self) -> int:
@@ -624,7 +631,7 @@ class FitModel:
                 f"but you provided an object of type {type(template_input)}"
             )
 
-        assert not any(template in comp.sub_templates for comp in self._compnent_manager), "\n".join(
+        assert not any(template in comp.sub_templates for comp in self._component_manager), "\n".join(
             [
                 f"{comp.name}, {comp.name}: {[t.name for t in comp.sub_templates]}"
                 for comp in self._component_manager
@@ -1622,7 +1629,7 @@ class FitModel:
             parameter_vector=parameter_vector, indices=self.bin_nuisance_parameter_indices
         )
 
-        new_nuisance_matrix_shape = self._nuisance_matrix_shape()
+        new_nuisance_matrix_shape = self._nuisance_matrix_shape
         complex_reshaping_required = not all(
             n_bins == self.number_of_bins_flattened_per_channel[0] for n_bins in self.number_of_bins_flattened_per_channel
         )
@@ -1999,9 +2006,7 @@ class FitModel:
             )
 
         self._check_model_setup()
-
-        self._fraction_conversion_manager.convert_fractions()
-
+        self._fraction_manager.convert_fractions()
         self._collect_parameter_constraints()
 
         self._initialize_template_uncertainties()

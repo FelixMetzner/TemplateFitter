@@ -63,9 +63,14 @@ class ConstraintContainer(MutableSequence[Constraint]):
     def __iter__(self):
         if not len(self._constraints):
             raise RuntimeError("ConstraintContainer is empty and must be filled before iteration.")
-        return iter(dict(sorted(self._constraints.items())))
+        return iter(dict(sorted(self._constraints.items())).values())
+
+    def __repr__(self):
+        return f"ConstraintContainer({', '.join(str(c) for c in self._constraints.values())})"
 
     def append(self, value: Constraint):
+        if value.constraint_index in self._constraints:
+            raise KeyError(f"Constraint with index {value.constraint_index} already exists in ConstraintContainer.")
         self._constraints[value.constraint_index] = value
 
     def insert(self, index: int, item: Constraint) -> None:

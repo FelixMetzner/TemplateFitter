@@ -325,6 +325,9 @@ class Channel(Sequence):
     def __len__(self) -> int:
         return len(self._channel_components)
 
+    def __repr__(self):
+        return f"Channel({str(self._channel_components)})"
+
     @staticmethod
     def _check_components_input(
         components: List[Component],
@@ -526,6 +529,9 @@ class ChannelContainer(Sequence):
 
     def __len__(self) -> int:
         return len(self._channels)
+
+    def __repr__(self):
+        return f"ChannelContainer({str(self._channels)})"
 
 
 class ModelChannels(ChannelContainer):

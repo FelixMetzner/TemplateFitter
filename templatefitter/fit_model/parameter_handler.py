@@ -859,6 +859,8 @@ class TemplateParameter(Parameter):
         constraint_sigma: Optional[float] = None,
     ) -> None:
 
+        self._base_model_parameter = None  # type: Optional[ModelParameter]
+
         if model_parameter is not None:
             if not all(p is None for p in (parameter_type, floating, initial_value, param_id)):
                 raise ValueError(
@@ -878,7 +880,6 @@ class TemplateParameter(Parameter):
                     "If the argument 'model_parameter' is not given the arguments 'parameter_type', 'floating', "
                     "and 'initial_value' must not be None."
                 )
-            self._base_model_parameter = None  # type: Optional[ModelParameter]
 
         super().__init__(
             name=name,
@@ -905,6 +906,9 @@ class TemplateParameter(Parameter):
     ) -> None:
         assert self._base_model_parameter is None
         self._base_model_parameter = base_model_parameter
+
+    def base_model_parameter_is(self, base_model_parameter: "ModelParameter") -> bool:
+        return base_model_parameter is self._base_model_parameter
 
     def _additional_info(self) -> Optional[str]:
         return f"\n\tbase model parameter index: {self.base_model_parameter.model_index}"
@@ -957,7 +961,7 @@ class ModelParameter(Parameter):
         template_parameter: TemplateParameter,
         template_serial_number: int,
     ) -> None:
-        if template_parameter.base_model_parameter is not self:
+        if not template_parameter.base_model_parameter_is(self):
             template_parameter.base_model_parameter = self
         info_tuple = (template_parameter, template_serial_number)
         assert not any(info_tuple == entry for entry in self._usage_list), info_tuple
