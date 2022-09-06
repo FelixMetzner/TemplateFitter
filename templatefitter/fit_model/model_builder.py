@@ -11,7 +11,7 @@ import scipy.stats as scipy_stats
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Tuple, Dict, Sequence
+from typing import Optional, Union, List, Tuple, Dict, Callable, Iterable, Sequence
 
 from templatefitter.utility import xlogyx, cov2corr
 
@@ -107,7 +107,8 @@ class FitModel:
 
         self._bin_nuisance_params_checked = False  # type: bool
 
-        self._constraint_container = ConstraintContainer()
+        self._simple_constraint_container = ConstraintContainer()
+        self._complex_constraint_container = ConstraintContainer()
 
         self._template_shapes_checked = False  # type: bool
         self._template_shape = None  # type: Optional[np.ndarray]
@@ -513,43 +514,72 @@ class FitModel:
         else:
             return channel_serial_number
 
-    def add_constraint(
+    def _validate_add_constraint_arguments(
         self,
-        name: str,
+        names: Union[str, Iterable[str]],
         value: float,
         sigma: float,
+        func: Optional[Callable] = None,
+    ) -> None:
+        if isinstance(names, Iterable) and not isinstance(names, str):
+            if func is None:
+                raise RuntimeError(
+                    "If multiple parameters are passed as a constraint, a function that uses them is required."
+                )
+        if isinstance(names, str):
+            names = [names]
+        else:
+            raise TypeError(f"Please pass a string or an iterable of strings to add_constraints(), not {type(names)}")
+
+        for name in names:
+            if name not in self._model_parameters_mapping:
+                raise ValueError(
+                    f"A ModelParameter with the name '{name}' was not added, yet, "
+                    f"and thus a constraint cannot be applied to it!"
+                )
+
+            model_parameter = self._model_parameters[self._model_parameters_mapping[name]]
+            if model_parameter.constraint_value is not None:
+                raise RuntimeError(
+                    f"The ModelParameter '{name}' already is constrained with the settings"
+                    f"\n\tconstraint_value = {model_parameter.constraint_value}"
+                    f"\n\tconstraint_sigma = {model_parameter.constraint_sigma}\n"
+                    f"and thus your constraint (cv = {value}, cs = {sigma}) cannot be applied!"
+                )
+
+            assert model_parameter.param_id is not None
+            parameter_infos = self._params.get_parameter_infos_by_index(indices=model_parameter.param_id)[0]
+            assert parameter_infos.constraint_value == model_parameter.constraint_value, (
+                parameter_infos.constraint_value,
+                model_parameter.constraint_value,
+            )
+            assert parameter_infos.constraint_sigma == model_parameter.constraint_sigma, (
+                parameter_infos.constraint_sigma,
+                model_parameter.constraint_sigma,
+            )
+
+    def add_constraint(
+        self,
+        names: Union[str, Iterable[str]],
+        value: float,
+        sigma: float,
+        func: Optional[Callable] = None,
     ) -> None:
         self._check_is_not_finalized()
+        self._validate_add_constraint_arguments(names, value, sigma, func)
 
-        if name not in self._model_parameters_mapping:
-            raise ValueError(
-                f"A ModelParameter with the name '{name}' was not added, yet, "
-                f"and thus a constraint cannot be applied to it!"
+        if isinstance(names, str):
+            model_parameter = self._model_parameters[self._model_parameters_mapping[names]]
+            assert model_parameter.param_id is not None  # Make MyPy happy
+            self._params.add_constraint_to_parameter(
+                param_id=model_parameter.param_id, constraint_value=value, constraint_sigma=sigma
             )
-
-        model_parameter = self._model_parameters[self._model_parameters_mapping[name]]
-        if model_parameter.constraint_value is not None:
-            raise RuntimeError(
-                f"The ModelParameter '{name}' already is constrained with the settings"
-                f"\n\tconstraint_value = {model_parameter.constraint_value}"
-                f"\n\tconstraint_sigma = {model_parameter.constraint_sigma}\n"
-                f"and thus your constraint (cv = {value}, cs = {sigma}) cannot be applied!"
+        else:
+            param_ids = [self._model_parameters[self._model_parameters_mapping[name]].param_id for name in names]
+            assert func is not None  # Make MyPy happy
+            self._params.add_complex_constraint_to_parameters(
+                func=func, parameter_indices=param_ids, constraint_value=value, constraint_sigma=sigma
             )
-
-        assert model_parameter.param_id is not None
-        parameter_infos = self._params.get_parameter_infos_by_index(indices=model_parameter.param_id)[0]
-        assert parameter_infos.constraint_value == model_parameter.constraint_value, (
-            parameter_infos.constraint_value,
-            model_parameter.constraint_value,
-        )
-        assert parameter_infos.constraint_sigma == model_parameter.constraint_sigma, (
-            parameter_infos.constraint_sigma,
-            model_parameter.constraint_sigma,
-        )
-
-        self._params.add_constraint_to_parameter(
-            param_id=model_parameter.param_id, constraint_value=value, constraint_sigma=sigma
-        )
 
     def _validate_add_data_arguments(
         self, channels: Dict[str, DataInputType], channel_weights: Optional[Dict[str, WeightsInputType]]
@@ -1127,19 +1157,21 @@ class FitModel:
 
     @property
     def constraint_indices(self) -> List[int]:
-        return [c.constraint_index for c in self._constraint_container]
+        return [c.constraint_index for c in self._simple_constraint_container]
 
     @property
     def constraint_values(self) -> List[float]:
-        return [c.central_value for c in self._constraint_container]
+        return [c.central_value for c in self._simple_constraint_container]
 
     @property
     def constraint_sigmas(self) -> List[float]:
-        return [c.uncertainty for c in self._constraint_container]
+        return [c.uncertainty for c in self._simple_constraint_container]
 
     def _collect_parameter_constraints(self) -> None:
         indices, cvs, css = self._params.get_constraint_information()
-        self._constraint_container.extend(Constraint(idx, cv, cs) for idx, cv, cs in zip(indices, cvs, css))
+        self._simple_constraint_container.extend(Constraint(idx, cv, cs) for idx, cv, cs in zip(indices, cvs, css))
+
+        self._complex_constraint_container = self._params.complex_constraints
 
     # endregion
 
@@ -1853,21 +1885,27 @@ class FitModel:
         self,
         parameter_vector: np.ndarray,
     ) -> float:
-        if not self._constraint_container:
+        if not self._simple_constraint_container:
             return 0.0
 
-        constraint_pars = self._params.get_combined_parameters_by_index(
+        simple_constraint_pars = self._params.get_combined_parameters_by_index(
             parameter_vector=parameter_vector,
             indices=self.constraint_indices,
         )
 
-        constraint_term = np.sum(((self.constraint_values - constraint_pars) / self.constraint_sigmas) ** 2)
+        simple_constraint_term = np.sum(((self.constraint_values - simple_constraint_pars) / self.constraint_sigmas) ** 2)
+
+        complex_constraint_term = 0
+        if self._complex_constraint_container:
+            for cc in self._complex_constraint_container:
+                complex_constraint_term += ((cc.central_value - cc(parameter_vector)) / cc.uncertainty) ** 2
 
         if not self._constraint_term_checked:
-            assert isinstance(constraint_term, float), (constraint_term, type(constraint_term))
+            assert isinstance(simple_constraint_term, float), (simple_constraint_term, type(simple_constraint_term))
+            assert isinstance(complex_constraint_term, float), (complex_constraint_term, type(complex_constraint_term))
             self._constraint_term_checked = True
 
-        return constraint_term
+        return simple_constraint_term + complex_constraint_term
 
     def get_masked_data_bin_count(self, mc_bin_count: np.ndarray) -> np.ndarray:
         if not self._ignore_empty_mc_bins:

@@ -6,7 +6,8 @@ import logging
 import numpy as np
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Tuple, Dict, NamedTuple
+from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Callable
+from templatefitter.fit_model.constraint import ComplexConstraint, ConstraintContainer
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -87,6 +88,8 @@ class ParameterHandler:
         self._floating_conversion_matrix = None  # type: Optional[np.ndarray]
         self._floating_parameter_indices = None  # type: Optional[np.ndarray]
         self._initial_values_of_floating_parameters = None  # type: Optional[np.ndarray]
+
+        self._complex_constraints = ConstraintContainer()
 
         self._is_finalized = False  # type: bool
 
@@ -205,8 +208,13 @@ class ParameterHandler:
         constraint_value: float,
         constraint_sigma: float,
     ) -> None:
+
+        if param_id not in self._parameter_infos:
+            raise KeyError(f"Parameter with ID {param_id} doesn't exist yet so no constraint can be applied.")
+
         self._check_constraint_input(constraint_value=constraint_value, constraint_sigma=constraint_sigma)
         assert param_id not in self.get_constraint_information()[0]
+        assert param_id not in self._complex_constraints
         assert self._parameter_infos[param_id].constraint_value is None, self._parameter_infos[param_id].constraint_value
         assert self._parameter_infos[param_id].constraint_sigma is None, self._parameter_infos[param_id].constraint_sigma
 
@@ -218,6 +226,47 @@ class ParameterHandler:
         )
 
         assert param_id in self.get_constraint_information()[0]
+
+    def add_complex_constraint_to_parameters(
+        self, func: Callable, parameter_indices: List[int], constraint_value: float, constraint_sigma: float
+    ):
+
+        self._check_constraint_input(constraint_value=constraint_value, constraint_sigma=constraint_sigma)
+        existing_parameter_indices = set((pi.param_id for pi in self._parameter_infos))
+        if not set(parameter_indices) <= existing_parameter_indices:
+            raise KeyError(
+                f"Parameters with ID {set(parameter_indices) - existing_parameter_indices}"
+                f" don't exist yet so no constraint can be applied."
+            )
+
+        existing_constraints = self.get_constraint_information()[0]
+        if not set(parameter_indices).isdisjoint(existing_constraints):
+            raise RuntimeError(
+                f"There are already constraints defined for the parameters"
+                f" with ID {set(parameter_indices) & set(existing_constraints)}"
+            )
+        for param_id in parameter_indices:
+            assert self._parameter_infos[param_id].constraint_value is None, self._parameter_infos[
+                param_id
+            ].constraint_value
+            assert self._parameter_infos[param_id].constraint_sigma is None, self._parameter_infos[
+                param_id
+            ].constraint_sigma
+
+        assert constraint_value is not None
+        assert constraint_sigma is not None
+
+        model_parameter_mapping = {pi.name: pi.param_id for pi in self.get_parameter_infos_by_index(parameter_indices)}
+
+        constraint = ComplexConstraint(
+            constraint_indices=parameter_indices,
+            central_value=constraint_value,
+            uncertainty=constraint_sigma,
+            function=func,
+            model_parameter_mapping=model_parameter_mapping,
+        )
+
+        self._complex_constraints.append(constraint)
 
     def finalize(self) -> None:
         assert not self._is_finalized
@@ -600,6 +649,10 @@ class ParameterHandler:
 
         return constraint_param_indices, constraint_values, constraint_sigmas
 
+    @property
+    def complex_constraints(self):
+        return self._complex_constraints
+
     @staticmethod
     def _check_parameters_input(
         names: List[str],
@@ -954,7 +1007,7 @@ class ModelParameter(Parameter):
             constraint_value=self.constraint_value,
             constraint_sigma=self.constraint_sigma,
         )
-        self.param_id = param_id
+        self.param_id = param_id  # type: int
 
     def used_by(
         self,
