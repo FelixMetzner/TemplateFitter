@@ -11,7 +11,7 @@ import scipy.stats as scipy_stats
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Tuple, Dict
+from typing import Optional, Union, List, Tuple, Dict, Sequence
 
 from templatefitter.utility import xlogyx, cov2corr
 
@@ -394,7 +394,7 @@ class FitModel:
 
         self._component_manager.append(component)
 
-        if templates:
+        if templates is not None:
             return component.component_serial_number, component
         else:
             return component.component_serial_number
@@ -403,7 +403,7 @@ class FitModel:
         self,
         channel: Optional[Channel] = None,
         name: Optional[str] = None,
-        components: Optional[List[Union[int, str, Component]]] = None,
+        components: Optional[Sequence[Union[int, str, Component, Template]]] = None,
     ) -> None:
 
         input_error_text = (
@@ -450,7 +450,7 @@ class FitModel:
         efficiency_parameters: List[Union[ModelParameter, str]],
         channel: Optional[Channel] = None,
         name: Optional[str] = None,
-        components: Optional[List[Union[int, str, Component]]] = None,
+        components: Optional[Sequence[Union[int, str, Component, Template]]] = None,
         latex_label: Optional[str] = None,
         plot_order: Optional[Tuple[str, ...]] = None,
     ) -> Union[int, Tuple[int, Channel]]:
@@ -508,7 +508,7 @@ class FitModel:
         channel.initialize_parameters(efficiency_parameters=efficiency_params)
         channel_serial_number = self._channels.add_channel(channel=channel)
 
-        if components:
+        if components is not None:
             return channel_serial_number, channel
         else:
             return channel_serial_number
