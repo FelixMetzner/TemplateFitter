@@ -259,6 +259,13 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
     def __delitem__(self, item: Union[int, str]):
         raise Exception("FitObjectManager is append-only.")
 
+    def __contains__(self, item: object) -> bool:
+
+        if isinstance(item, Template):
+            return item in self._fit_objects
+        else:
+            return super().__contains__(item)
+
     def __repr__(self) -> str:
         return repr(
             {
