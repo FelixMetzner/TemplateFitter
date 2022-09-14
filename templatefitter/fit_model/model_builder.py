@@ -17,7 +17,7 @@ from templatefitter.utility import xlogyx, cov2corr
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
-from templatefitter.fit_model.constraint import Constraint, ConstraintContainer
+from templatefitter.fit_model.constraint import Constraint, SimpleConstraintContainer, ComplexConstraintContainer
 from templatefitter.fit_model.utility import pad_sequences, check_bin_count_shape, immutable_cached_property
 from templatefitter.fit_model.data_channel import ModelDataChannels
 from templatefitter.fit_model.channel import ModelChannels, Channel
@@ -107,8 +107,8 @@ class FitModel:
 
         self._bin_nuisance_params_checked = False  # type: bool
 
-        self._simple_constraint_container = ConstraintContainer()
-        self._complex_constraint_container = ConstraintContainer()
+        self._simple_constraint_container = SimpleConstraintContainer()
+        self._complex_constraint_container = ComplexConstraintContainer()
 
         self._template_shapes_checked = False  # type: bool
         self._template_shape = None  # type: Optional[np.ndarray]
@@ -526,7 +526,16 @@ class FitModel:
                 raise RuntimeError(
                     "If multiple parameters are passed as a constraint, a function that uses them is required."
                 )
-        if isinstance(names, str):
+            else:
+                try:
+                    func({n: 0 for n in names})
+                except KeyError as e:
+                    raise KeyError(
+                        "The function you have passed as a constraint uses parameter names not specified "
+                        "in the 'names' argument of the add_constraint() method."
+                    ) from e
+
+        elif isinstance(names, str):
             names = [names]
         else:
             raise TypeError(f"Please pass a string or an iterable of strings to add_constraints(), not {type(names)}")
@@ -536,6 +545,7 @@ class FitModel:
                 raise ValueError(
                     f"A ModelParameter with the name '{name}' was not added, yet, "
                     f"and thus a constraint cannot be applied to it!"
+                    "Existing parameter names are:" + "\n".join(self._model_parameters_mapping.keys())
                 )
 
             model_parameter = self._model_parameters[self._model_parameters_mapping[name]]
@@ -1892,10 +1902,9 @@ class FitModel:
             parameter_vector=parameter_vector,
             indices=self.constraint_indices,
         )
-
         simple_constraint_term = np.sum(((self.constraint_values - simple_constraint_pars) / self.constraint_sigmas) ** 2)
 
-        complex_constraint_term = 0
+        complex_constraint_term = 0.0
         if self._complex_constraint_container:
             for cc in self._complex_constraint_container:
                 complex_constraint_term += ((cc.central_value - cc(parameter_vector)) / cc.uncertainty) ** 2

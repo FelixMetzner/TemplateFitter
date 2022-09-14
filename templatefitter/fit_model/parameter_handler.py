@@ -7,7 +7,7 @@ import numpy as np
 
 from abc import ABC, abstractmethod
 from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Callable
-from templatefitter.fit_model.constraint import ComplexConstraint, ConstraintContainer
+from templatefitter.fit_model.constraint import ComplexConstraint, ComplexConstraintContainer
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -89,7 +89,7 @@ class ParameterHandler:
         self._floating_parameter_indices = None  # type: Optional[np.ndarray]
         self._initial_values_of_floating_parameters = None  # type: Optional[np.ndarray]
 
-        self._complex_constraints = ConstraintContainer()
+        self._complex_constraints = ComplexConstraintContainer()
 
         self._is_finalized = False  # type: bool
 
@@ -209,12 +209,11 @@ class ParameterHandler:
         constraint_sigma: float,
     ) -> None:
 
-        if param_id not in self._parameter_infos:
+        if param_id not in self._pars_dict.values():
             raise KeyError(f"Parameter with ID {param_id} doesn't exist yet so no constraint can be applied.")
 
         self._check_constraint_input(constraint_value=constraint_value, constraint_sigma=constraint_sigma)
         assert param_id not in self.get_constraint_information()[0]
-        assert param_id not in self._complex_constraints
         assert self._parameter_infos[param_id].constraint_value is None, self._parameter_infos[param_id].constraint_value
         assert self._parameter_infos[param_id].constraint_sigma is None, self._parameter_infos[param_id].constraint_sigma
 
@@ -256,17 +255,25 @@ class ParameterHandler:
         assert constraint_value is not None
         assert constraint_sigma is not None
 
-        model_parameter_mapping = {pi.name: pi.param_id for pi in self.get_parameter_infos_by_index(parameter_indices)}
-
         constraint = ComplexConstraint(
             constraint_indices=parameter_indices,
             central_value=constraint_value,
             uncertainty=constraint_sigma,
             function=func,
-            model_parameter_mapping=model_parameter_mapping,
         )
 
         self._complex_constraints.append(constraint)
+
+    def _finalize_complex_constraints(self):
+        assert not self._is_finalized
+
+        if self._complex_constraints:
+            for constr in self._complex_constraints:
+                float_indices = range(sum(self.floating_parameter_mask))
+                constr_indices = list(np.flatnonzero(self.floating_parameter_mask))
+                mapper = dict(zip(constr_indices, float_indices))
+                model_parameter_mapping = {self.get_name(pi): mapper[pi] for pi in constr.constraint_indices}
+                constr.finalize(model_parameter_mapping)
 
     def finalize(self) -> None:
         assert not self._is_finalized
@@ -282,6 +289,8 @@ class ParameterHandler:
 
         self._create_floating_parameter_indices_info()
         self._create_floating_parameter_initial_value_info()
+
+        self._finalize_complex_constraints()
 
         self._is_finalized = True
 
