@@ -19,8 +19,12 @@ which will also install the requirements.
 
 ## Documentation
 
-A first, but not yet completed documentation can be found
-[here](https://templatefitter.readthedocs.io/en/latest/index.html)
+~~A first, but not yet completed documentation can be found
+[here](https://templatefitter.readthedocs.io/en/latest/index.html)~~
+
+## Example
+
+An example can be found in [the `examples` directory](examples).
 
 ## Development
 
