@@ -16,9 +16,9 @@ class Constraint(NamedTuple):
 
 
 class ConstraintContainer(MutableSequence[Constraint]):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self._constraints = {}  # type: Dict
+        self._constraints = {}  # type: Dict[Union[int, slice], Constraint]
 
     @overload
     def __getitem__(self, i: int) -> Constraint:
@@ -68,7 +68,7 @@ class ConstraintContainer(MutableSequence[Constraint]):
     def __repr__(self):
         return f"ConstraintContainer({', '.join(str(c) for c in self._constraints.values())})"
 
-    def append(self, value: Constraint):
+    def append(self, value: Constraint) -> None:
         if value.constraint_index in self._constraints:
             raise KeyError(f"Constraint with index {value.constraint_index} already exists in ConstraintContainer.")
         self._constraints[value.constraint_index] = value
