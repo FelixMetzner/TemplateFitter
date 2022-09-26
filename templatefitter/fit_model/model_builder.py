@@ -11,7 +11,7 @@ import scipy.stats as scipy_stats
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Tuple, Dict, NamedTuple
+from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Sequence
 
 from templatefitter.utility import xlogyx, cov2corr
 
@@ -424,7 +424,7 @@ class FitModel:
         efficiency_parameters: List[Union[ModelParameter, str]],
         channel: Optional[Channel] = None,
         name: Optional[str] = None,
-        components: Optional[List[Union[int, str, Component]]] = None,
+        components: Optional[Sequence[Union[int, str, Component, Template]]] = None,
         latex_label: Optional[str] = None,
         plot_order: Optional[Tuple[str, ...]] = None,
     ) -> Union[int, Tuple[int, Channel]]:

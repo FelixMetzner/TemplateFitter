@@ -1,109 +1,166 @@
-import pathlib
+#!/usr/bin/env python
+# coding: utf-8
+
+"""
+This is a basic example of a template fit with two templates in a single fit dimension and channel.
+"""
+
+import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
-import templatefitter as tf
+from pathlib import Path
+from typing import Tuple, Dict
 
-# TODO: Update these examples!
+from templatefitter.fit_model.template import Template
+from templatefitter.fit_model.model_builder import FitModel
+from templatefitter.fit_model.parameter_handler import ParameterHandler
 
-plt.switch_backend(newbackend="agg")
+from templatefitter.fitter import TemplateFitter
+from templatefitter.minimizer import MinimizeResult
 
-path = pathlib.Path(__file__).resolve().parent.parent / "datasets/b_to_pizlnu"
-signal = pd.read_csv(path / "signal.csv")
-remaining = pd.read_csv(path / "remaining.csv")
-xulnu = pd.read_csv(path / "xulnu.csv")
-data = pd.read_csv(path / "data.csv")
+from templatefitter.plotter.plot_style import KITColors
+from templatefitter.plotter.histogram_variable import HistVariable
+from templatefitter.plotter.fit_result_plots import FitResultPlotter
 
-data.head()
 
-# ## Prepare Templates
-num_bins = 25
-limits = (-1, 3)
+def gen_sig(size: int, voi: str, voi_limits: Tuple[float, float]) -> pd.DataFrame:
+    variable_values = np.random.normal((voi_limits[1] + voi_limits[0]) / 2, 1, int(size))
+    df = pd.DataFrame({voi: variable_values, "weight": np.ones_like(variable_values)})
+    df.name = "signal"
+    return df
 
-# ### $e$ channel
-e_sig = signal.query("SignalChannel==1.")
-e_remaining = remaining.query("SignalChannel==1.")
-e_xulnu = xulnu.query("SignalChannel==1.")
-e_data = data.query("SignalChannel==1.")
 
-e_sig_eff = sum(e_sig.weight) / sum(signal.weight)
-e_remaining_eff = sum(e_remaining.weight) / sum(remaining.weight)
-e_xulnu_eff = sum(e_xulnu.weight) / sum(xulnu.weight)
+def gen_bkg(size: int, voi: str, voi_limits: Tuple[float, float]) -> pd.DataFrame:
+    variable_values = voi_limits[0] + (voi_limits[1] - voi_limits[0]) * np.random.random_sample(int(size))
+    df = pd.DataFrame({voi: variable_values, "weight": np.ones_like(variable_values)})
+    df.name = "background"
+    return df
 
-print(e_sig_eff, e_remaining_eff, e_xulnu_eff)
 
-e_hsig = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=e_sig.missingMass, weights=e_sig.weight)
-e_hremaining = tf.histograms.Hist1d(
-    bins=num_bins, hist_range=limits, data=e_remaining.missingMass, weights=e_remaining.weight
-)
-e_hxulnu = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=e_xulnu.missingMass, weights=e_xulnu.weight)
+def run_basic_example() -> Tuple[MinimizeResult, Dict[str, float]]:
 
-e_tsig = tf.max_templates.Template1d("Signal", "missingMass", e_hsig, color="cornflowerblue")
-e_tremaining = tf.max_templates.Template1d("Remaining", "missingMass", e_hremaining, color="indianred")
-e_txulnu = tf.max_templates.Template1d("Xulnu", "missingMass", e_hxulnu, color="khaki")
+    # Defining a variable and range for which we will generate data
+    voi = "variableOfInterest"  # type: str
+    voi_physics_limits = (0, 20)  # type: Tuple[float, float]
 
-for template in [e_tsig, e_tremaining, e_txulnu]:
-    _, axis = plt.subplots(1, 1)
-    template.plot_on(axis)
+    # Defining a HistVariable object for the fit to use.
+    # Note: The scope / fit range used here can be (and is) smaller than the one used for generating the dataset.
+    # This is done for illustration here but can sometimes be beneficial.
+    # The fitter will later correct the yields, so they apply to the entire dataset.
+    fit_var = HistVariable(df_label=voi, n_bins=10, scope=(5, 10), var_name="Variable of Interest")
 
-# ### $\mu$ channel
-mu_sig = signal.query("SignalChannel==2.")
-mu_remaining = remaining.query("SignalChannel==2.")
-mu_xulnu = xulnu.query("SignalChannel==2.")
-mu_data = data.query("SignalChannel==2.")
+    # Defining a decay channel and two components from which templates will be generated
+    channel_name = "XtoYDecay"
+    components = [gen_sig(1000, voi, voi_physics_limits), gen_bkg(3000, voi, voi_physics_limits)]
+    component_colors = {"signal": KITColors.kit_red, "background": KITColors.light_grey}
 
-mu_sig_eff = sum(mu_sig.weight) / sum(signal.weight)
-mu_remaining_eff = sum(mu_remaining.weight) / sum(remaining.weight)
-mu_xulnu_eff = sum(mu_xulnu.weight) / sum(xulnu.weight)
+    # How much simulated data is there in each component?
+    initial_yield_dict = {component.name: component.loc[:, "weight"].sum() for component in components}
 
-print(mu_sig_eff, mu_remaining_eff, mu_xulnu_eff)
+    # Which fraction is within our fit window?
+    # This value is later used to extrapolate the fit yield to the entire variable range.
+    initial_eff_dict = {
+        component.name: component.loc[component[fit_var.df_label].between(*fit_var.scope), "weight"].sum()
+        / initial_yield_dict[component.name]
+        for component in components
+    }
 
-mu_hsig = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=mu_sig.missingMass, weights=mu_sig.weight)
-mu_hremaining = tf.histograms.Hist1d(
-    bins=num_bins, hist_range=limits, data=mu_remaining.missingMass, weights=mu_remaining.weight
-)
-mu_hxulnu = tf.histograms.Hist1d(bins=num_bins, hist_range=limits, data=mu_xulnu.missingMass, weights=mu_xulnu.weight)
+    # Defining a ParameterHandler which holds all model parameters
+    # and a FitModel object which describes the rest of the fit
+    param_handler = ParameterHandler()
+    model = FitModel(parameter_handler=param_handler)
 
-mu_tsig = tf.max_templates.Template1d("Signal", "missingMass", mu_hsig, color="cornflowerblue")
-mu_tremaining = tf.max_templates.Template1d("Remaining", "missingMass", mu_hremaining, color="indianred")
-mu_txulnu = tf.max_templates.Template1d("Xulnu", "missingMass", mu_hxulnu, color="khaki")
+    # Giving the fit model some yield and efficiency parameters. We'll not fit the efficiency parameter in this example,
+    # to do this we would need additional channels
+    for component in components:
+        model.add_model_parameter(
+            name=f"yield_{component.name}",
+            parameter_type=ParameterHandler.yield_parameter_type,
+            floating=True,
+            initial_value=initial_yield_dict[component.name],
+        )
 
-for template in [mu_tsig, mu_tremaining, mu_txulnu]:
-    _, axis = plt.subplots(1, 1)
-    template.plot_on(axis)
+        model.add_model_parameter(
+            name=f"eff_{channel_name}_{component.name}",
+            parameter_type=ParameterHandler.efficiency_parameter_type,
+            floating=False,
+            initial_value=initial_eff_dict[component.name],
+        )
 
-# ## MultiChannelTemplate
+    # First creating some templates, then adding them to the template
+    templates = []
+    for component_number, component in enumerate(components):
+        template = Template(
+            name=f"{channel_name}_{component.name}",
+            latex_label=component.name,
+            process_name=component.name,
+            color=component_colors[component.name],
+            dimensions=1,
+            bins=fit_var.n_bins,
+            scope=fit_var.scope,
+            params=param_handler,
+            data_column_names=fit_var.df_label,
+            data=component,
+            weights="weight",
+        )
 
-mct = tf.max_templates.MultiChannelTemplate()
+        templates.append(template)
 
-mct.define_channel("e", num_bins, limits)
-mct.define_channel("mu", num_bins, limits)
-mct.define_process("signal")
-mct.define_process("remaining")
-mct.define_process("xulnu")
+        model.add_template(template=template, yield_parameter=f"yield_{component.name}")
 
-mct.add_rate_uncertainty("signal", 0.5)
-mct.add_rate_uncertainty("remaining", 0.5)
-mct.add_rate_uncertainty("xulnu", 1.5)
+    # Now we have to tell the fit model how to relate templates and efficiency parameters (together as a channel)
+    model.add_channel(
+        efficiency_parameters=[f"eff_{channel_name}_{component.name}" for component in components],
+        name=channel_name,
+        components=templates,
+    )
 
-mct.add_template("e", "xulnu", e_txulnu, e_xulnu_eff)
-mct.add_template("e", "remaining", e_tremaining, e_remaining_eff)
-mct.add_template("e", "signal", e_tsig, e_sig_eff)
+    # Instead of real data we'll add some Asimov data to the fitter. This is equivalent to the sum of all templates.
+    model.add_asimov_data_from_templates()
 
-mct.add_template("mu", "xulnu", mu_txulnu, mu_xulnu_eff)
-mct.add_template("mu", "remaining", mu_tremaining, mu_remaining_eff)
-mct.add_template("mu", "signal", mu_tsig, mu_sig_eff)
+    # Lastly we'll finalize the model. This finalized model could now be saved with Python's pickle serializer.
+    model.finalize_model()
 
-mct.add_data(e=tf.histograms.Hist1d(num_bins, limits, data=e_data.missingMass))
-mct.add_data(mu=tf.histograms.Hist1d(num_bins, limits, data=mu_data.missingMass))
+    # Now that we're done creating the model, we can see how data and MC agreed before the fit.
+    # Agreement should be perfect in a fit to Asimov data.
+    # To do this, we first have to set up a FitResultPlotter.
 
-print(e_tsig.yield_param)
+    output_folder = Path("./plots")
+    output_folder.mkdir(exist_ok=True)
+    fit_result_plotter_m2 = FitResultPlotter(reference_dimension=0, variables_by_channel=(fit_var,), fit_model=model)
 
-for channel in mct.channels.values():
-    _, axis = plt.subplots(1, 1, figsize=(8, 8))
-    channel.plot_stacked_on(axis)
+    # This also returns the path of the plot files that are created
+    fit_result_plotter_m2.plot_fit_result(use_initial_values=True, output_dir_path=output_folder, output_name_tag="")
 
-fitter = tf.TemplateFitter(mct, "iminuit")
+    # Here we'll now set up a TemplateFitter object and perform the fit itself.
+    # We'll use nuisance parameter for each bin and each template in the model.
+    fitter = TemplateFitter(fit_model=model, minimizer_id="iminuit")
+    result = fitter.do_fit(update_templates=True, get_hesse=True, verbose=False, fix_nui_params=False)
 
-fitter.do_fit(update_templates=True)
-print(mct.rate_uncertainties_nui_params)
+    # Now let's plot the fit results
+    fit_result_plotter_m2.plot_fit_result(output_dir_path=output_folder, output_name_tag="")
+
+    # Lastly, we can have a look at the significance of the signal + background hypothesis
+    # vs. the background only hypothesis.
+    # Note: You might get a warning from numpy which you can safely ignore here.
+    significance_dict = {}
+    for yield_parameter in param_handler.get_parameter_names_for_type(ParameterHandler.yield_parameter_type):
+        significance_dict[yield_parameter] = fitter.get_significance(
+            yield_parameter=yield_parameter,
+            fix_nui_params=False,
+            verbose=False,
+            catch_exception=True,
+        )
+
+    return result, significance_dict
+
+
+if __name__ == "__main__":
+    fit_result, sign_dict = run_basic_example()
+
+    print(f"The result of the fit is: \n {str(fit_result.params)} \n")
+
+    print(
+        f"The significance of the signal + background hypothesis vs. only background "
+        f"is {sign_dict['yield_signal']:.1f} sigma."
+    )
