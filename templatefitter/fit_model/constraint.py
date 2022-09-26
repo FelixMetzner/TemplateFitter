@@ -4,7 +4,7 @@ This package provides
     - A ConstraintContainer class, which holds all (one or multiple) Constraints to be used in the fit model.
 """
 
-from typing import NamedTuple, Dict, MutableSequence, Union, Iterable, overload
+from typing import NamedTuple, Dict, MutableSequence, Union, Iterable, Iterator, overload
 
 
 class Constraint(NamedTuple):
@@ -60,12 +60,12 @@ class ConstraintContainer(MutableSequence[Constraint]):
     def __len__(self) -> int:
         return len(self._constraints)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Constraint]:
         if not len(self._constraints):
             raise RuntimeError("ConstraintContainer is empty and must be filled before iteration.")
         return iter(dict(sorted(self._constraints.items())).values())
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"ConstraintContainer({', '.join(str(c) for c in self._constraints.values())})"
 
     def append(self, value: Constraint) -> None:

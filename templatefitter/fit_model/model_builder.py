@@ -783,7 +783,7 @@ class FitModel:
                 pad_sequences(
                     [np.sqrt(np.diag(cov_for_temp)) for cov_for_temp in temps_in_ch],
                     padding="post",
-                    maxlen=self.max_number_of_bins_flattened,
+                    max_len=self.max_number_of_bins_flattened,
                     value=0.0,
                     dtype="float64",
                 )
