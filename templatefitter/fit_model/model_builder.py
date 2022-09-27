@@ -11,7 +11,8 @@ import scipy.stats as scipy_stats
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Tuple, Dict, Sequence
+from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Sequence
+
 
 from templatefitter.utility import xlogyx, cov2corr
 
@@ -405,7 +406,7 @@ class FitModel:
         name: Optional[str] = None,
         components: Optional[Sequence[Union[int, str, Component, Template]]] = None,
     ) -> None:
-
+    
         input_error_text = (
             "A channel can either be added by providing\n"
             "\t- an already prepared channel via the argument 'channel'\nor\n"
