@@ -119,8 +119,8 @@ class FitModel:
 
         # endregion
 
-        # Setting a random seed for the toy data set generation with scypi
-        np.random.seed(seed=7694747)
+        # Setting a random seed for the toy data set generation with SciPy
+        self._random_state = np.random.RandomState(seed=7694747)  # type: np.random.RandomState
 
     # region Basic Properties
     # Attributes forwarded to self._channels via __getattr__()
@@ -713,7 +713,7 @@ class FitModel:
             if round_bin_counts:
                 channel_data = np.ceil(channel_data)
 
-            toy_data = scipy_stats.poisson.rvs(channel_data)
+            toy_data = scipy_stats.poisson.rvs(channel_data, random_state=self._random_state)
 
             self._data_channels.add_channel(
                 channel_name=channel.name,
