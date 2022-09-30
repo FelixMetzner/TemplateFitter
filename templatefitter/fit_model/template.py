@@ -127,7 +127,7 @@ class Template(BinnedDistributionFromData):
 
     @property
     def name(self) -> str:
-        assert self._name is not None  # Make MyPy happy
+        assert self._name is not None
         return self._name
 
     @property

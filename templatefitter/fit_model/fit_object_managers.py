@@ -4,16 +4,26 @@ This package provides
     - A generic FitObjectManager Class to manage Templates and Components.
 """
 import logging
-
-from templatefitter.fit_model.channel import ModelChannels, Channel
-from typing import Optional, Union, List, NamedTuple, MutableMapping, TypeVar
-from templatefitter.fit_model.template import Template
-from templatefitter.fit_model.component import Component
-from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter
-from scipy.linalg import block_diag
 import numpy as np
 
+from scipy.linalg import block_diag
+from typing import Optional, Union, Tuple, List, Dict, NamedTuple, MutableMapping, Iterator, TypeVar, Type
+
+from templatefitter.fit_model.template import Template
+from templatefitter.fit_model.component import Component
+from templatefitter.fit_model.channel import ModelChannels, Channel
+from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter
+
+
 logging.getLogger(__name__).addHandler(logging.NullHandler())
+
+
+__all__ = [
+    "FractionManager",
+    "FractionConversionInfo",
+    "FitObject",
+    "FitObjectManager",
+]
 
 
 class FractionConversionInfo(NamedTuple):
@@ -209,7 +219,7 @@ class FractionManager:
                     assert temp_serial_num == template.serial_number, (temp_serial_num, template.serial_number)
                     temp_param = fraction_model_parameters[par_i].usage_template_parameter_list[channel.channel_index]
                     assert template.fraction_parameter == temp_param, (
-                        template.fraction_parameter.as_string(),
+                        template.fraction_parameter.as_string() if template.fraction_parameter else None,
                         temp_param.as_string(),
                     )
 
@@ -239,11 +249,15 @@ FitObject = TypeVar("FitObject", Template, Component)
 
 
 class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
-    def __init__(self):
+    _allowed_types: Tuple[Type, ...] = (Template, Component)
+
+    def __init__(self) -> None:
         super().__init__()
 
-        self._fit_object_mapping = {}
-        self._fit_objects = []
+        self._fit_object_type: Optional[Type] = None
+
+        self._fit_objects: List[FitObject] = []
+        self._fit_object_mapping: Dict[Union[str, int], int] = {}  # Maps object name to object index in _fit_objects
 
     def __getitem__(self, item: Union[str, int]) -> FitObject:
         if isinstance(item, int):
@@ -253,10 +267,10 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
         else:
             raise TypeError(f"Keys of FitObjectManager must be either int or str, not {type(item)}.")
 
-    def __setitem__(self, index: Union[str, int], value: FitObject):
+    def __setitem__(self, index: Union[str, int], value: FitObject) -> None:
         raise Exception("FitObjectManager is append-only.")
 
-    def __delitem__(self, item: Union[int, str]):
+    def __delitem__(self, item: Union[int, str]) -> None:
         raise Exception("FitObjectManager is append-only.")
 
     def __contains__(self, item: object) -> bool:
@@ -274,8 +288,14 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
             }
         )
 
-    def __iter__(self):
-        return iter(self._fit_objects)
+    def __iter__(self) -> Iterator[Union[str, int]]:
+        return iter(self._fit_object_mapping)
+
+    @property
+    def fit_object_type(self) -> Optional[Type]:
+        if self._fit_object_type is None and len(self):
+            self._fit_object_type = type(self._fit_objects[0])
+        return self._fit_object_type
 
     def get_index_of_fit_objects(self, fit_object: FitObject) -> int:
         if fit_object in self._fit_objects:
@@ -287,8 +307,7 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
             )
 
     def get_fit_objects_by_process_name(self, process_name: str) -> List[FitObject]:
-
-        if hasattr(self._fit_objects[0], "process_name"):
+        if isinstance(self.fit_object_type, Template):
             obj_list = [o for o in self._fit_objects if o.process_name == process_name]
 
             if not len(obj_list):
@@ -297,7 +316,7 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
                     f"No templates with process name '{process_name}' could be found.\n"
                     f"The following process names are registered:\n\t" + "\n\t- ".join(available_processes)
                 )
-        elif hasattr(self._fit_objects[0], "process_names"):
+        elif isinstance(self.fit_object_type, Component):
             obj_list = [o for o in self._fit_objects if process_name in o.process_names]
             if not len(obj_list):
                 available_processes = list(set([pn for o in self._fit_objects for pn in o.process_names]))
@@ -305,10 +324,26 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
                     f"No components containing process name '{process_name}' could be found.\n"
                     f"The following process names are registered:\n\t" + "\n\t- ".join(available_processes)
                 )
+        else:
+            raise ValueError(f"Do not know what to do for FitObject of type {type(self._fit_objects[0])}.")
 
         return obj_list
 
-    def append(self, fit_object: FitObject):
+    def append(self, fit_object: FitObject) -> None:
+        if not isinstance(fit_object, self._allowed_types):
+            raise TypeError(
+                "The FitObjectManager can store objects of type:"
+                + "\n - ".join([t.__name__ for t in self._allowed_types])
+                + f"\nbut an object of type {type(fit_object).__name__} was provided."
+            )
+
+        if len(self):
+            assert self.fit_object_type is not None
+            if not isinstance(type(fit_object), self.fit_object_type):
+                raise TypeError(
+                    f"You are trying to add a FitObject of type {type(fit_object).__name__}"
+                    f"to a FitObjectManager storing FitObjects of type {self.fit_object_type.__name__}"
+                )
 
         if fit_object.name in self._fit_object_mapping:
             raise ValueError(
@@ -321,5 +356,5 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
         self._fit_object_mapping[fit_object.name] = len(self._fit_objects)
         self._fit_objects.append(fit_object)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._fit_objects)

@@ -2,7 +2,7 @@
 This package provides
     - The DataChannel classes, which hold the data to which the model shall be fitted to.
     - A DataChannelContainer class, which holds all (one or multiple) DataChannels to be used in the fit model.
-    - A ModelDataChannels sub-class which needs some information about the fit model to be used
+    - A ModelDataChannels subclass which needs some information about the fit model to be used
 """
 
 import logging
@@ -26,6 +26,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "DataChannelContainer",
+    "ModelDataChannels",
 ]
 
 

@@ -20,6 +20,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     "Channel",
     "ChannelContainer",
+    "ModelChannels",
 ]
 
 
@@ -325,7 +326,7 @@ class Channel(Sequence):
     def __len__(self) -> int:
         return len(self._channel_components)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Channel({str(self._channel_components)})"
 
     @staticmethod
@@ -530,7 +531,7 @@ class ChannelContainer(Sequence):
     def __len__(self) -> int:
         return len(self._channels)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"ChannelContainer({str(self._channels)})"
 
 

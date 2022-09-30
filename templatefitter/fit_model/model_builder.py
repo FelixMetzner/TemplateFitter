@@ -15,15 +15,16 @@ from typing import Optional, Union, List, Tuple, Dict, Sequence
 
 from templatefitter.utility import xlogyx, cov2corr
 
-from templatefitter.fit_model.template import Template
-from templatefitter.fit_model.component import Component
-from templatefitter.fit_model.constraint import Constraint, ConstraintContainer
-from templatefitter.fit_model.utility import pad_sequences, check_bin_count_shape, immutable_cached_property
-from templatefitter.fit_model.data_channel import ModelDataChannels
-from templatefitter.fit_model.channel import ModelChannels, Channel
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType
+
+from templatefitter.fit_model.template import Template
+from templatefitter.fit_model.component import Component
+from templatefitter.fit_model.data_channel import ModelDataChannels
+from templatefitter.fit_model.channel import ModelChannels, Channel
+from templatefitter.fit_model.constraint import Constraint, ConstraintContainer
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
+from templatefitter.fit_model.utility import pad_sequences, check_bin_count_shape, immutable_cached_property
 from templatefitter.fit_model.fit_object_managers import (
     FractionConversionInfo,
     FractionManager,
@@ -73,8 +74,8 @@ class FitModel:
         self._model_parameters = []  # type: List[ModelParameter]
         self._model_parameters_mapping = {}  # type: Dict[str, int]
 
-        self._template_manager = FitObjectManager[Template]()
-        self._component_manager = FitObjectManager[Component]()
+        self._template_manager: FitObjectManager[Template] = FitObjectManager()
+        self._component_manager: FitObjectManager[Component] = FitObjectManager()
 
         self._channels = ModelChannels()  # type: ModelChannels
 
@@ -84,7 +85,8 @@ class FitModel:
         self._masked_data_bin_counts = None  # type: Optional[np.ndarray]
 
         self._fraction_manager = FractionManager(
-            param_handler=self._params, channels=self._channels
+            param_handler=self._params,
+            channels=self._channels,
         )  # type: FractionManager
 
         self._inverse_template_bin_correlation_matrix = None  # type: Optional[np.ndarray]
@@ -107,7 +109,7 @@ class FitModel:
 
         self._bin_nuisance_params_checked = False  # type: bool
 
-        self._constraint_container = ConstraintContainer()
+        self._constraint_container = ConstraintContainer()  # type: ConstraintContainer
 
         self._template_shapes_checked = False  # type: bool
         self._template_shape = None  # type: Optional[np.ndarray]
@@ -357,7 +359,7 @@ class FitModel:
                         f"to allow for the creation of a new component.\n"
                         f"You provided a list containing the types {[type(t) for t in templates]}."
                     )
-            assert name is not None and shared_yield is not None  # Make MyPy happy
+            assert name is not None and shared_yield is not None
             component = Component(
                 templates=template_list,
                 params=self._params,
@@ -365,7 +367,7 @@ class FitModel:
                 shared_yield=shared_yield,
             )
 
-        assert component is not None  # Make MyPy happy
+        assert component is not None
 
         if component.required_fraction_parameters == 0:
             if fraction_parameters:
@@ -481,7 +483,7 @@ class FitModel:
                 else:
                     raise ValueError(f"Unexpected type {type(component)} for element of provided list of components.")
 
-            assert name is not None  # Make MyPy happy
+            assert name is not None
             channel = Channel(
                 params=self._params,
                 name=name,
@@ -490,7 +492,7 @@ class FitModel:
                 plot_order=plot_order,
             )
 
-        assert channel is not None  # Make MyPy happy
+        assert channel is not None
         if len(efficiency_parameters) != channel.required_efficiency_parameters:
             raise ValueError(
                 f"The channel requires {channel.required_efficiency_parameters} efficiency parameters, "
@@ -611,7 +613,7 @@ class FitModel:
         if isinstance(template_input, Template):
             template = template_input
             source_info_text = "directly as template"
-            assert template in self._template_manager, (
+            assert template in self._template_manager.values(), (
                 template.name,
                 template.serial_number,
                 self._template_manager,
@@ -619,7 +621,7 @@ class FitModel:
         elif isinstance(template_input, str):
             assert not template_input.startswith("temp_"), template_input
             if template_input.isdigit():
-                template_identifier = int(template_input)  # type: Union[str, int]  # identifier is template serial_number
+                template_identifier = int(template_input)  # type: Union[str, int]  # identifier is serial_number
                 source_info_text = f"via the template serial number as 'temp_{template_input}'"
             else:
                 template_identifier = template_input  # identifier is template name
@@ -631,10 +633,10 @@ class FitModel:
                 f"but you provided an object of type {type(template_input)}"
             )
 
-        assert not any(template in comp.sub_templates for comp in self._component_manager), "\n".join(
+        assert not any(template in comp.sub_templates for comp in self._component_manager.values()), "\n".join(
             [
                 f"{comp.name}, {comp.name}: {[t.name for t in comp.sub_templates]}"
-                for comp in self._component_manager
+                for comp in self._component_manager.values()
                 if template in comp.sub_templates
             ]
         )
@@ -733,7 +735,6 @@ class FitModel:
     # endregion
 
     # region Uncertainty handling
-
     @property
     def systematics_covariance_matrices_per_channel(self) -> List[np.ndarray]:
         assert self._systematics_covariance_matrices_per_channel is not None
@@ -757,7 +758,6 @@ class FitModel:
 
     @immutable_cached_property
     def bin_nuisance_parameter_indices(self) -> List[int]:
-
         bin_nuisance_param_indices = self._params.get_parameter_indices_for_type(
             parameter_type=ParameterHandler.bin_nuisance_parameter_type,
         )
@@ -769,7 +769,6 @@ class FitModel:
 
     @immutable_cached_property
     def relative_shape_uncertainties(self) -> np.ndarray:
-
         cov_matrices_per_ch_and_temp = self.systematics_covariance_matrices_per_channel
         # TODO: Maybe add some more checks...
         assert cov_matrices_per_ch_and_temp is not None
@@ -809,8 +808,7 @@ class FitModel:
 
     @immutable_cached_property
     def _nuisance_matrix_shape(self) -> Tuple[int, ...]:
-
-        return (self.number_of_channels, max(self.number_of_templates), self.max_number_of_bins_flattened)
+        return self.number_of_channels, max(self.number_of_templates), self.max_number_of_bins_flattened
 
     @immutable_cached_property
     def template_bin_errors_sq_per_ch_and_temp(self) -> List[List[np.ndarray]]:
@@ -2037,7 +2035,7 @@ class FitModel:
 
         return output_string
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self._model_setup_as_string()
 
     # endregion
