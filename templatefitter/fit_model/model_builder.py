@@ -11,7 +11,7 @@ import scipy.stats as scipy_stats
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Sequence
+from typing import Optional, Union, List, Tuple, Dict, Sequence
 
 
 from templatefitter.utility import xlogyx, cov2corr
@@ -271,8 +271,8 @@ class FitModel:
 
         return template.serial_number
 
+    @staticmethod
     def _validate_add_component_arguments(
-        self,
         component: Optional[Component] = None,
         name: Optional[str] = None,
         templates: Optional[List[Union[int, str, Template]]] = None,
@@ -402,13 +402,13 @@ class FitModel:
         else:
             return component.component_serial_number
 
+    @staticmethod
     def _validate_add_channel_arguments(
-        self,
         channel: Optional[Channel] = None,
         name: Optional[str] = None,
         components: Optional[Sequence[Union[int, str, Component, Template]]] = None,
     ) -> None:
-    
+
         input_error_text = (
             "A channel can either be added by providing\n"
             "\t- an already prepared channel via the argument 'channel'\nor\n"
