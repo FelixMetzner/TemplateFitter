@@ -84,6 +84,7 @@ class FitModel:
         self._original_data_channels = None  # type: Optional[ModelDataChannels]
 
         self._masked_data_bin_counts = None  # type: Optional[np.ndarray]
+        self._data_stat_errors_sq = None  # type: Optional[np.ndarray]
 
         self._fraction_manager = FractionManager(
             param_handler=self._params,
