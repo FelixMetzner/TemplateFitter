@@ -8,8 +8,6 @@ from typing import NamedTuple, Dict, MutableSequence, Union, Iterable, Iterator,
 
 
 class Constraint(NamedTuple):
-    """Class to keep track of simple constraints."""
-
     constraint_index: int
     central_value: float
     uncertainty: float

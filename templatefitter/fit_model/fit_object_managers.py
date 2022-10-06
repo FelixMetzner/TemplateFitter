@@ -7,7 +7,7 @@ import logging
 import numpy as np
 
 from scipy.linalg import block_diag
-from typing import Optional, Union, Tuple, List, Dict, NamedTuple, MutableMapping, Iterator, TypeVar, Type
+from typing import Optional, Union, List, Dict, NamedTuple, MutableMapping, Iterator, TypeVar, Type
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
@@ -249,8 +249,6 @@ FitObject = TypeVar("FitObject", Template, Component)
 
 
 class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
-    _allowed_types: Tuple[Type, ...] = (Template, Component)
-
     def __init__(self) -> None:
         super().__init__()
 
@@ -274,7 +272,6 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
         raise Exception("FitObjectManager is append-only.")
 
     def __contains__(self, item: object) -> bool:
-
         if isinstance(item, Template):
             return item in self._fit_objects
         else:
@@ -330,13 +327,6 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
         return obj_list
 
     def append(self, fit_object: FitObject) -> None:
-        if not isinstance(fit_object, self._allowed_types):
-            raise TypeError(
-                "The FitObjectManager can store objects of type:"
-                + "\n - ".join([t.__name__ for t in self._allowed_types])
-                + f"\nbut an object of type {type(fit_object).__name__} was provided."
-            )
-
         if len(self):
             assert self.fit_object_type is not None
             if not isinstance(type(fit_object), self.fit_object_type):
