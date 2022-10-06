@@ -4,8 +4,7 @@ Utility functions
 
 import numpy as np
 
-from typing import Tuple
-from functools import cached_property
+from typing import Tuple, Callable
 
 
 __all__ = [
@@ -120,9 +119,14 @@ def check_bin_count_shape(
     )
 
 
-class immutable_cached_property(cached_property):
-    def __set__(self, instance, value):
-        raise AttributeError(f"{self.func.__name__} is a read-only attribute")
+class immutable_cached_property:
+    def __init__(self, function: Callable) -> None:
+        self._function: Callable = function
 
-    def __delete__(self, instance):
-        raise AttributeError(f"{self.func.__name__} is a read-only attribute")
+    def __get__(self, obj, _=None):
+        if obj is None:
+            return self
+        value = self._function(obj)
+        print(self._function.__name__)
+        setattr(obj, self._function.__name__, value)
+        return value
