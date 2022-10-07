@@ -4,7 +4,7 @@ This package provides
     - A ConstraintContainer class, which holds all (one or multiple) Constraints to be used in the fit model.
 """
 
-from typing import Dict, MutableSequence, Union, Iterable, overload, Callable, TypeVar, List
+from typing import Dict, MutableSequence, Union, Iterable, overload, Callable, TypeVar, List, Iterator
 from abc import abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
@@ -17,8 +17,6 @@ from numba.experimental import jitclass
 
 @dataclass
 class Constraint:
-    """Class to keep track of simple constraints."""
-
     constraint_index: int
     central_value: float
     uncertainty: float
@@ -164,8 +162,8 @@ class ConstraintContainer(MutableSequence[_ConstraintT]):
     def __len__(self) -> int:
         return len(self._constraints)
 
-    def __iter__(self):
-        if not len(self):
+    def __iter__(self) -> Iterator[_ConstraintT]:
+        if not len(self._constraints):
             raise RuntimeError("ConstraintContainer is empty and must be filled before iteration.")
         return iter(self._constraints)
 

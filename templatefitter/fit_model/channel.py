@@ -20,6 +20,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     "Channel",
     "ChannelContainer",
+    "ModelChannels",
 ]
 
 
@@ -325,7 +326,7 @@ class Channel(Sequence):
     def __len__(self) -> int:
         return len(self._channel_components)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Channel({str(self._channel_components)})"
 
     @staticmethod
@@ -530,7 +531,7 @@ class ChannelContainer(Sequence):
     def __len__(self) -> int:
         return len(self._channels)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"ChannelContainer({str(self._channels)})"
 
 
@@ -599,7 +600,7 @@ class ModelChannels(ChannelContainer):
             return self._template_bin_counts
 
         bin_counts_per_channel = [np.stack([tmp.bin_counts.flatten() for tmp in ch.templates]) for ch in self]
-        padded_bin_counts_per_channel = self._apply_padding_to_templates(bin_counts_per_channel=bin_counts_per_channel)
+        padded_bin_counts_per_channel = self._calc_padding_for_templates(bin_counts_per_channel=bin_counts_per_channel)
         template_bin_counts = np.stack(padded_bin_counts_per_channel)
 
         if not self._template_shapes_checked:
@@ -608,7 +609,7 @@ class ModelChannels(ChannelContainer):
         self._template_bin_counts = template_bin_counts
         return self._template_bin_counts
 
-    def _apply_padding_to_templates(
+    def _calc_padding_for_templates(
         self,
         bin_counts_per_channel: List[np.ndarray],
     ) -> List[np.ndarray]:

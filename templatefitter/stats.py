@@ -238,13 +238,14 @@ def mc_chi_squared_from_toys(
         assert isinstance(_obs_chi_squared, float), (type(_obs_chi_squared), _obs_chi_squared)
         obs_chi_squared = _obs_chi_squared
 
-    np.random.seed(seed=seed)
+    random_state = np.random.RandomState(seed=seed)  # type: np.random.RandomState
+
     if has_valid_cov and not use_text_book_approach:
-        toys = np.random.multivariate_normal(mean=_exp, cov=_mc_cov, size=toys_size)  # type: np.ndarray
+        toys = random_state.multivariate_normal(mean=_exp, cov=_mc_cov, size=toys_size)  # type: np.ndarray
         toys[toys < 0.0] = 0.0
     else:
         # Use poisson approach for textbook approach or if no valid covariance matrix is provided.
-        toys = np.random.poisson(_exp, size=(toys_size, len(_exp)))
+        toys = random_state.poisson(_exp, size=(toys_size, len(_exp)))
 
     if use_text_book_approach:
         toy_chi_squared = calc_chi_squared_with_cov(obs=toys, exp=_exp, exp_cov=_mc_cov)  # type: np.ndarray
