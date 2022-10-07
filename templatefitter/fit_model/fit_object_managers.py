@@ -304,7 +304,8 @@ class FitObjectManager(MutableMapping[Union[str, int], _FitObjectT]):
             )
 
     def get_fit_objects_by_process_name(self, process_name: str) -> List[_FitObjectT]:
-        if isinstance(self.fit_object_type, Template):
+        if self.fit_object_type == Template:
+            assert isinstance(self._fit_objects[0], Template)
             obj_list = [o for o in self._fit_objects if o.process_name == process_name]
 
             if not len(obj_list):
@@ -313,7 +314,8 @@ class FitObjectManager(MutableMapping[Union[str, int], _FitObjectT]):
                     f"No templates with process name '{process_name}' could be found.\n"
                     f"The following process names are registered:\n\t" + "\n\t- ".join(available_processes)
                 )
-        elif isinstance(self.fit_object_type, Component):
+        elif self.fit_object_type == Component:
+            assert isinstance(self._fit_objects[0], Component)
             obj_list = [o for o in self._fit_objects if process_name in o.process_names]
             if not len(obj_list):
                 available_processes = list(set([pn for o in self._fit_objects for pn in o.process_names]))
@@ -329,7 +331,7 @@ class FitObjectManager(MutableMapping[Union[str, int], _FitObjectT]):
     def append(self, fit_object: _FitObjectT) -> None:
         if len(self):
             assert self.fit_object_type is not None
-            if not isinstance(type(fit_object), self.fit_object_type):
+            if not isinstance(fit_object, self.fit_object_type):
                 raise TypeError(
                     f"You are trying to add a FitObject of type {type(fit_object).__name__}"
                     f"to a FitObjectManager storing FitObjects of type {self.fit_object_type.__name__}"
