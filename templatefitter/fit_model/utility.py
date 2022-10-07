@@ -127,6 +127,5 @@ class immutable_cached_property:
         if obj is None:
             return self
         value = self._function(obj)
-        print(self._function.__name__)
         setattr(obj, self._function.__name__, value)
         return value
