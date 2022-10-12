@@ -21,7 +21,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     "FractionManager",
     "FractionConversionInfo",
-    "FitObject",
+    "_FitObjectT",
     "FitObjectManager",
 ]
 
@@ -245,19 +245,19 @@ class FractionManager:
         return True
 
 
-FitObject = TypeVar("FitObject", Template, Component)
+_FitObjectT = TypeVar("_FitObjectT", Template, Component)
 
 
-class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
+class FitObjectManager(MutableMapping[Union[str, int], _FitObjectT]):
     def __init__(self) -> None:
         super().__init__()
 
         self._fit_object_type: Optional[Type] = None
 
-        self._fit_objects: List[FitObject] = []
+        self._fit_objects: List[_FitObjectT] = []
         self._fit_object_mapping: Dict[Union[str, int], int] = {}  # Maps object name to object index in _fit_objects
 
-    def __getitem__(self, item: Union[str, int]) -> FitObject:
+    def __getitem__(self, item: Union[str, int]) -> _FitObjectT:
         if isinstance(item, int):
             return self._fit_objects[item]
         elif isinstance(item, str):
@@ -265,7 +265,7 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
         else:
             raise TypeError(f"Keys of FitObjectManager must be either int or str, not {type(item)}.")
 
-    def __setitem__(self, index: Union[str, int], value: FitObject) -> None:
+    def __setitem__(self, index: Union[str, int], value: _FitObjectT) -> None:
         raise Exception("FitObjectManager is append-only.")
 
     def __delitem__(self, item: Union[int, str]) -> None:
@@ -294,7 +294,7 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
             self._fit_object_type = type(self._fit_objects[0])
         return self._fit_object_type
 
-    def get_index_of_fit_objects(self, fit_object: FitObject) -> int:
+    def get_index_of_fit_objects(self, fit_object: _FitObjectT) -> int:
         if fit_object in self._fit_objects:
             return self._fit_object_mapping[fit_object.name]
         else:
@@ -303,8 +303,9 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
                 f" been registered in the FitObjectManager and no index can be returned."
             )
 
-    def get_fit_objects_by_process_name(self, process_name: str) -> List[FitObject]:
-        if isinstance(self.fit_object_type, Template):
+    def get_fit_objects_by_process_name(self, process_name: str) -> List[_FitObjectT]:
+        if self.fit_object_type == Template:
+            assert isinstance(self._fit_objects[0], Template)
             obj_list = [o for o in self._fit_objects if o.process_name == process_name]
 
             if not len(obj_list):
@@ -313,7 +314,8 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
                     f"No templates with process name '{process_name}' could be found.\n"
                     f"The following process names are registered:\n\t" + "\n\t- ".join(available_processes)
                 )
-        elif isinstance(self.fit_object_type, Component):
+        elif self.fit_object_type == Component:
+            assert isinstance(self._fit_objects[0], Component)
             obj_list = [o for o in self._fit_objects if process_name in o.process_names]
             if not len(obj_list):
                 available_processes = list(set([pn for o in self._fit_objects for pn in o.process_names]))
@@ -326,10 +328,10 @@ class FitObjectManager(MutableMapping[Union[str, int], FitObject]):
 
         return obj_list
 
-    def append(self, fit_object: FitObject) -> None:
+    def append(self, fit_object: _FitObjectT) -> None:
         if len(self):
             assert self.fit_object_type is not None
-            if not isinstance(type(fit_object), self.fit_object_type):
+            if not isinstance(fit_object, self.fit_object_type):
                 raise TypeError(
                     f"You are trying to add a FitObject of type {type(fit_object).__name__}"
                     f"to a FitObjectManager storing FitObjects of type {self.fit_object_type.__name__}"
