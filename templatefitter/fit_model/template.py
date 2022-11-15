@@ -126,7 +126,8 @@ class Template(BinnedDistributionFromData):
         self._bin_nuisance_parameters = bin_nuisance_parameters
 
     @property
-    def name(self) -> str:  # This causes an error in the mypy check, which I would ignore for now...
+    def name(self) -> str:
+        assert self._name is not None
         return self._name
 
     @property
@@ -203,6 +204,8 @@ class Template(BinnedDistributionFromData):
 
     @property
     def is_irrelevant(self) -> bool:
+        if self.efficiency_parameter is None:
+            raise RuntimeError("Can't tell yet if this template is irrelevant, no efficiency parameter given.")
         return self.efficiency_parameter.value == 0.0 and not self.efficiency_parameter.floating
 
     @property

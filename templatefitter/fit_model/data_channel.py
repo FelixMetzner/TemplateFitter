@@ -2,6 +2,7 @@
 This package provides
     - The DataChannel classes, which hold the data to which the model shall be fitted to.
     - A DataChannelContainer class, which holds all (one or multiple) DataChannels to be used in the fit model.
+    - A ModelDataChannels subclass which needs some information about the fit model to be used
 """
 
 import logging
@@ -10,6 +11,7 @@ import numpy as np
 from abc import ABC
 from typing import Optional, Union, List, Dict, Tuple, Sequence, overload
 
+from templatefitter.fit_model.utility import check_bin_count_shape
 from templatefitter.binned_distributions.weights import Weights, WeightsInputType
 from templatefitter.binned_distributions.binning import Binning, LogScaleInputType, BinsInputType, ScopeInputType
 from templatefitter.binned_distributions.binned_distribution import (
@@ -24,6 +26,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "DataChannelContainer",
+    "ModelDataChannels",
 ]
 
 
@@ -273,7 +276,7 @@ class DataChannelContainer(Sequence):
                 f"{self._channels_mapping[channel_name]}th channel in the DataChannelContainer."
             )
 
-        channel_index = self.__len__()
+        channel_index = len(self)
 
         if from_data:
             channel_distribution = DataChannelFromData(
@@ -364,3 +367,112 @@ class DataChannelContainer(Sequence):
 
     def __len__(self) -> int:
         return len(self._channel_distributions)
+
+
+class ModelDataChannels(DataChannelContainer):
+    def __init__(
+        self,
+        data_channel_names: Optional[List[str]] = None,
+        channel_data: Optional[List[DataInputType]] = None,
+        data_binning: Optional[List[Binning]] = None,
+        column_names: Optional[Tuple[DataColumnNamesInput]] = None,
+        from_data: Optional[bool] = None,
+        model_channel_names: Optional[List[str]] = None,
+        model_binning: Optional[List[Binning]] = None,
+    ) -> None:
+
+        self._model_channel_names = model_channel_names  # type: Optional[List[str]]
+        self._model_binning = model_binning  # type: Optional[List[Binning]]
+
+        if (self._model_channel_names is None) ^ (self._model_binning is None):
+            raise ValueError("Either both self.model_channel_names and self._model_binning must be given or neither.")
+
+        self._data_bin_counts = None  # type: Optional[np.ndarray]
+        self._data_bin_count_checked = False  # type: bool
+        self._data_stat_errors_sq = None  # type: Optional[np.ndarray]
+        self._data_stat_errors_checked = False  # type: bool
+        super().__init__(data_channel_names, channel_data, data_binning, column_names, from_data)
+
+    def get_data_bin_count_matrix(self) -> np.array:
+
+        flat_data_bin_counts = [data_channel.bin_counts.flatten() for data_channel in self]
+        if self._model_binning is not None:
+            flat_data_bin_counts = self._apply_padding_to_data_bin_count(bin_counts_per_channel=flat_data_bin_counts)
+
+        self._data_bin_counts = np.stack(flat_data_bin_counts)
+        return self._data_bin_counts
+
+    def get_squared_data_stat_errors(self) -> np.ndarray:
+        if self._data_stat_errors_sq is not None:
+            return self._data_stat_errors_sq
+
+        flat_data_stat_errors_sq = [data_channel.bin_errors_sq.flatten() for data_channel in self]
+        if self._model_binning is not None:
+            flat_data_stat_errors_sq = self._apply_padding_to_data_bin_count(
+                bin_counts_per_channel=flat_data_stat_errors_sq,
+            )
+        data_stat_errors_sq = np.stack(flat_data_stat_errors_sq)
+
+        if not self._data_stat_errors_checked:
+            assert data_stat_errors_sq.shape == self.get_data_bin_count_matrix().shape, (
+                data_stat_errors_sq.shape,
+                self.get_data_bin_count_matrix().shape,
+            )
+            self._data_stat_errors_checked = True
+
+        self._data_stat_errors_sq = data_stat_errors_sq
+        return data_stat_errors_sq
+
+    def _apply_padding_to_data_bin_count(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
+        if self._model_binning is None or self._model_channel_names is None:
+            raise RuntimeError(
+                "Padding only makes sense if a separate model binning and model channel names are"
+                " specified via the corresponding parameters."
+            )
+
+        if not self._data_bin_count_checked:
+            assert all(len(bc.shape) == 1 for bc in bin_counts_per_channel), [bc.shape for bc in bin_counts_per_channel]
+            assert all(
+                len(bc) == b.num_bins_total for bc, b in zip(bin_counts_per_channel, self._model_binning)
+            ), "\n".join(
+                [
+                    f"{chname}: data_bins = {len(bc)} --- template_bins = {b.num_bins_total}"
+                    for chname, bc, b in zip(self._model_channel_names, bin_counts_per_channel, self._model_binning)
+                ]
+            )
+
+        max_n_bins = max([len(bc) for bc in bin_counts_per_channel])
+        max_number_of_model_bins_flattened = max(ch_binning.num_bins_total for ch_binning in self._model_binning)
+
+        if not self._data_bin_count_checked:
+            assert max_n_bins == max_number_of_model_bins_flattened, (max_n_bins, max_number_of_model_bins_flattened)
+
+        if all(len(bc) == max_n_bins for bc in bin_counts_per_channel):
+            return bin_counts_per_channel
+        else:
+            pad_widths = [(0, max_n_bins - chbin.num_bins_total) for chbin in self._model_binning]
+            return [
+                np.pad(bc, pad_width=pad_width, mode="constant", constant_values=0)
+                for bc, pad_width in zip(bin_counts_per_channel, pad_widths)
+            ]
+
+    def get_flattened_data_bin_counts(self, number_of_channels: int, max_number_of_model_bins: int) -> np.array:
+        if self._data_bin_counts is not None:
+            return self._data_bin_counts
+
+        flat_data_bin_counts = [data_channel.bin_counts.flatten() for data_channel in self]
+        if self._model_binning is not None:
+            flat_data_bin_counts = self._apply_padding_to_data_bin_count(bin_counts_per_channel=flat_data_bin_counts)
+        data_bin_count_matrix = np.stack(flat_data_bin_counts)
+
+        if not self._data_bin_count_checked:
+            check_bin_count_shape(
+                bin_count=data_bin_count_matrix,
+                number_of_channels=number_of_channels,
+                max_number_of_bins=max_number_of_model_bins,
+                where="get_flattened_data_bin_counts",
+            )
+            self._data_bin_count_checked = True
+
+        self._data_bin_counts = data_bin_count_matrix
+        return data_bin_count_matrix

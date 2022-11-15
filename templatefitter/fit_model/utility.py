@@ -4,21 +4,26 @@ Utility functions
 
 import numpy as np
 
+from typing import Tuple, Callable
+
+
 __all__ = [
     "pad_sequences",
+    "check_bin_count_shape",
+    "immutable_cached_property",
 ]
 
 
 def pad_sequences(
     sequences,
-    maxlen=None,
-    dtype="int32",
-    padding="pre",
-    truncating="pre",
-    value=0.0,
+    max_len: int = None,
+    dtype: str = "int32",
+    padding: str = "pre",
+    truncating: str = "pre",
+    value: float = 0.0,
 ):
     """
-    Taken as is from from keras.preprocessing.sequence, because we do not need keras for anything else:
+    Taken as is from keras.preprocessing.sequence, because we do not need keras for anything else:
 
     Pads each sequence to the same length (length of the longest sequence).
 
@@ -50,38 +55,37 @@ def pad_sequences(
     lengths = []
     for x in sequences:
         if not hasattr(x, "__len__"):
-            raise ValueError("`sequences` must be a list of iterables. " "Found non-iterable: " + str(x))
+            raise ValueError(f"`sequences` must be a list of iterables.\nFound non-iterable: {str(x)}")
         lengths.append(len(x))
 
     num_samples = len(sequences)
-    if maxlen is None:
-        maxlen = np.max(lengths)
+    if max_len is None:
+        max_len = np.max(lengths)
 
-    # take the sample shape from the first non empty sequence
+    # take the sample shape from the first non-empty sequence
     # checking for consistency in the main loop below.
-    sample_shape = tuple()
+    sample_shape = tuple()  # type: Tuple[int, ...]
     for s in sequences:
         if len(s) > 0:
             sample_shape = np.asarray(s).shape[1:]
             break
 
-    x = (np.ones((num_samples, maxlen) + sample_shape) * value).astype(dtype)
+    x = (np.ones((num_samples, max_len) + sample_shape) * value).astype(dtype)
     for idx, s in enumerate(sequences):
         if not len(s):
             continue  # empty list/array was found
         if truncating == "pre":
-            trunc = s[-maxlen:]
+            trunc = s[-max_len:]
         elif truncating == "post":
-            trunc = s[:maxlen]
+            trunc = s[:max_len]
         else:
-            raise ValueError('Truncating type "%s" not understood' % truncating)
+            raise ValueError(f"Truncating type {truncating} not understood")
 
         # check `trunc` has expected shape
         trunc = np.asarray(trunc, dtype=dtype)
         if trunc.shape[1:] != sample_shape:
             raise ValueError(
-                "Shape of sample %s of sequence at position %s is different from expected shape %s"
-                % (trunc.shape[1:], idx, sample_shape)
+                f"Shape of sample {trunc.shape[1:]} of sequence at position {idx} is different from expected shape {sample_shape}"
             )
 
         if padding == "post":
@@ -89,5 +93,39 @@ def pad_sequences(
         elif padding == "pre":
             x[idx, -len(trunc) :] = trunc
         else:
-            raise ValueError('Padding type "%s" not understood' % padding)
+            raise ValueError(f"Padding type {padding} not understood")
     return x
+
+
+def check_bin_count_shape(
+    bin_count: np.ndarray,
+    number_of_channels: int,
+    max_number_of_bins: int,
+    where: str,
+) -> None:
+    assert bin_count is not None, where
+    assert len(bin_count.shape) == 2, (where, bin_count.shape, len(bin_count.shape))
+    assert bin_count.shape[0] == number_of_channels, (
+        where,
+        bin_count.shape,
+        bin_count.shape[0],
+        number_of_channels,
+    )
+    assert bin_count.shape[1] == max_number_of_bins, (
+        where,
+        bin_count.shape,
+        bin_count.shape[1],
+        max_number_of_bins,
+    )
+
+
+class immutable_cached_property:
+    def __init__(self, function: Callable) -> None:
+        self._function: Callable = function
+
+    def __get__(self, obj, _=None):
+        if obj is None:
+            return self
+        value = self._function(obj)
+        setattr(obj, self._function.__name__, value)
+        return value

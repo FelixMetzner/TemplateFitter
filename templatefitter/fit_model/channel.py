@@ -6,6 +6,7 @@ This package provides
 
 import logging
 
+import numpy as np
 from collections import Counter
 from typing import Union, Optional, List, Dict, Tuple, Sequence, Any, overload
 
@@ -19,6 +20,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     "Channel",
     "ChannelContainer",
+    "ModelChannels",
 ]
 
 
@@ -76,7 +78,7 @@ class Channel(Sequence):
                     f"and\n\tthis channel: {self.data_column_names}"
                 )
 
-        component_index = self.__len__()
+        component_index = len(self)
         self._channel_components.append(component)
         component.component_index = component_index
 
@@ -116,9 +118,9 @@ class Channel(Sequence):
         if not all(c.params is self._params for c in components):
             raise RuntimeError("The used ParameterHandler instances are not the same!")
 
-        first_index = self.__len__()
+        first_index = len(self)
         self._channel_components.extend(components)
-        last_index_plus_one = self.__len__()
+        last_index_plus_one = len(self)
 
         component_indices = list(range(first_index, last_index_plus_one))
         for component, component_index in zip(components, component_indices):
@@ -230,7 +232,7 @@ class Channel(Sequence):
 
     @property
     def number_of_components(self) -> int:
-        return self.__len__()
+        return len(self)
 
     @property
     def templates(self) -> Tuple[Template, ...]:
@@ -324,6 +326,9 @@ class Channel(Sequence):
     def __len__(self) -> int:
         return len(self._channel_components)
 
+    def __repr__(self) -> str:
+        return f"Channel({str(self._channel_components)})"
+
     @staticmethod
     def _check_components_input(
         components: List[Component],
@@ -362,13 +367,13 @@ class ChannelContainer(Sequence):
         if not isinstance(channel, Channel):
             raise ValueError("You can only add instances of 'Channel' to this container.")
 
-        if self.__len__() > 0:
+        if len(self):
             if self._channels[0].params is not channel.params:
                 raise RuntimeError("The used ParameterHandler instances are not the same!")
             self._check_channel_names(channels=[channel])
             self._check_channel_components(channels=[channel])
 
-        channel_index = self.__len__()
+        channel_index = len(self)
         self._channels.append(channel)
         self._channels_mapping.update({channel.name: channel_index})
         assert len(self._channels_mapping) == len(self._channels), (len(self._channels_mapping), len(self._channels))
@@ -383,9 +388,9 @@ class ChannelContainer(Sequence):
     ) -> List[int]:
         self._check_channels_input(channels=channels)
 
-        first_index = self.__len__()
+        first_index = len(self)
         self._channels.extend(channels)
-        last_index_plus_one = self.__len__()
+        last_index_plus_one = len(self)
 
         channel_indices = list(range(first_index, last_index_plus_one))
         for channel, channel_index in zip(channels, channel_indices):
@@ -439,7 +444,7 @@ class ChannelContainer(Sequence):
         channels: List[Channel],
     ) -> None:
         assert isinstance(channels, list), type(channels)
-        if self.__len__() > 0:
+        if len(self):
             base_req_fractions = self._channels[0].required_fraction_parameters
             base_fractions_mask = self._channels[0].fractions_mask
         else:
@@ -453,7 +458,7 @@ class ChannelContainer(Sequence):
                 + (
                     f"The current channels have required_fraction_parameters = \n\t"
                     f"{self._channels[0].required_fraction_parameters}\n"
-                    if self.__len__() > 0
+                    if len(self) > 0
                     else "\n"
                 )
                 + "The new channel(s) you are trying to add have required_fraction_parameters = \n\t"
@@ -464,7 +469,7 @@ class ChannelContainer(Sequence):
                 "You are trying to add channels with different fraction masks given by their components.\n"
                 + (
                     f"The current channels have the fraction mask = \n\t" f"{self._channels[0].fractions_mask}\n"
-                    if self.__len__() > 0
+                    if len(self) > 0
                     else "\n"
                 )
                 + "The new channel(s) you are trying to add have the fraction masks = \n\t"
@@ -484,7 +489,7 @@ class ChannelContainer(Sequence):
                     + "\n\t-".join([f"{c.name}: {c.total_number_of_templates}" for c in new_channels])
                 )
 
-        if self.__len__() > 0:
+        if len(self):
             new_total_number_of_templates = new_channels[0].total_number_of_templates
             if not all(c.total_number_of_templates == new_total_number_of_templates for c in self._channels):
                 raise ValueError(
@@ -525,3 +530,138 @@ class ChannelContainer(Sequence):
 
     def __len__(self) -> int:
         return len(self._channels)
+
+    def __repr__(self) -> str:
+        return f"ChannelContainer({str(self._channels)})"
+
+
+class ModelChannels(ChannelContainer):
+    def __init__(
+        self,
+        channels: Optional[List[Channel]] = None,
+    ) -> None:
+
+        self._is_checked = False
+        self._template_shapes_checked = False
+        self._template_bin_counts = None  # type: Optional[np.ndarray]
+
+        super().__init__(channels)
+
+    @property
+    def binning(self) -> Tuple[Binning, ...]:
+        return tuple(channel.binning for channel in self)
+
+    @property
+    def max_number_of_bins_flattened(self) -> int:
+        return max(ch_binning.num_bins_total for ch_binning in self.binning)
+
+    @property
+    def number_of_bins_flattened_per_channel(self) -> List[int]:
+        return [ch_binning.num_bins_total for ch_binning in self.binning]
+
+    @property
+    def number_of_components(self) -> Tuple[int, ...]:
+        return tuple(len(channel) for channel in self)
+
+    @property
+    def total_number_of_templates(self) -> int:
+        return sum([c.total_number_of_templates for c in self])
+
+    @property
+    # Number of templates per channel
+    def number_of_templates(self) -> Tuple[int, ...]:
+        return tuple(sum([comp.number_of_subcomponents for comp in ch.components]) for ch in self)
+
+    @property
+    def number_of_independent_templates(self) -> Tuple[int, ...]:
+        return tuple(
+            sum([1 if comp.shared_yield else comp.number_of_subcomponents for comp in ch.components]) for ch in self
+        )
+
+    @property
+    def number_of_dependent_templates(self) -> Tuple[int, ...]:
+        return tuple([t - it for t, it in zip(self.number_of_templates, self.number_of_independent_templates)])
+
+    @property
+    def number_of_expected_independent_yields(self) -> int:
+        return max(self.number_of_independent_templates)
+
+    @property
+    def min_number_of_independent_yields(self) -> int:
+        return min(self.number_of_independent_templates)
+
+    @property
+    def number_of_fraction_parameters(self) -> Tuple[int, ...]:
+        return tuple(sum([comp.required_fraction_parameters for comp in ch.components]) for ch in self)
+
+    @property
+    def template_bin_counts(self) -> np.ndarray:
+        if self._template_bin_counts is not None:
+            return self._template_bin_counts
+
+        bin_counts_per_channel = [np.stack([tmp.bin_counts.flatten() for tmp in ch.templates]) for ch in self]
+        padded_bin_counts_per_channel = self._calc_padding_for_templates(bin_counts_per_channel=bin_counts_per_channel)
+        template_bin_counts = np.stack(padded_bin_counts_per_channel)
+
+        if not self._template_shapes_checked:
+            self._check_template_shapes(template_bin_counts=template_bin_counts)
+
+        self._template_bin_counts = template_bin_counts
+        return self._template_bin_counts
+
+    def _calc_padding_for_templates(
+        self,
+        bin_counts_per_channel: List[np.ndarray],
+    ) -> List[np.ndarray]:
+        if not self._template_shapes_checked:
+            assert all(
+                [bc.shape[1] == ch.binning.num_bins_total for bc, ch in zip(bin_counts_per_channel, self)]
+            ), "\t" + "\n\t".join(
+                [f"{bc.shape[1]} : {ch.binning.num_bins_total}" for bc, ch in zip(bin_counts_per_channel, self)]
+            )
+
+        max_n_bins = max([bc.shape[1] for bc in bin_counts_per_channel])
+
+        if all(bc.shape[1] == max_n_bins for bc in bin_counts_per_channel):
+            return bin_counts_per_channel
+        else:
+            pad_widths = self._pad_widths_per_channel()
+            return [
+                np.pad(bc, pad_width=pad_width, mode="constant", constant_values=0)
+                for bc, pad_width in zip(bin_counts_per_channel, pad_widths)
+            ]
+
+    def _pad_widths_per_channel(self) -> List[List[Tuple[int, int]]]:
+        max_n_bins = max([ch.binning.num_bins_total for ch in self])
+        if not self._is_checked:
+            assert max_n_bins == self.max_number_of_bins_flattened, (max_n_bins, self.max_number_of_bins_flattened)
+        return [[(0, 0), (0, max_n_bins - ch.binning.num_bins_total)] for ch in self]
+
+    def _check_template_shapes(
+        self,
+        template_bin_counts: np.ndarray,
+    ) -> None:
+        # Check order of processes in channels:
+        _first_channel = self._channels[0]
+        assert isinstance(_first_channel, Channel), type(_first_channel).__name__
+        assert all(ch.process_names == _first_channel.process_names for ch in self), [ch.process_names for ch in self]
+
+        # Check shape of template_bin_counts
+        assert len(template_bin_counts.shape) == 3, (len(template_bin_counts.shape), template_bin_counts.shape)
+        assert template_bin_counts.shape[0] == len(self), (
+            template_bin_counts.shape,
+            template_bin_counts.shape[0],
+            len(self),
+        )
+        assert all(template_bin_counts.shape[1] == ts_in_ch for ts_in_ch in self.number_of_templates), (
+            template_bin_counts.shape,
+            template_bin_counts.shape[1],
+            [t_ch for t_ch in self.number_of_templates],
+        )
+        assert template_bin_counts.shape[2] == self.max_number_of_bins_flattened, (
+            template_bin_counts.shape,
+            template_bin_counts.shape[2],
+            self.max_number_of_bins_flattened,
+        )
+
+        self._template_shapes_checked = True

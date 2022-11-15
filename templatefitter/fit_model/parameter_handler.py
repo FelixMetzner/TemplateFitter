@@ -43,6 +43,9 @@ class ParameterInfo(NamedTuple):
         info_list = self.info_as_string_list()
         return f"Parameter {info_list[0]}:\n" + "\n\t".join(info_list)
 
+    def __repr__(self) -> str:
+        return self.as_string()
+
     def get_with_constraint(
         self,
         value: float,
@@ -280,7 +283,7 @@ class ParameterHandler:
             (
                 (iv == p.initial_value)
                 or (reset_parameter_name is not None and p.name == reset_parameter_name)
-                or (p.name in self._redefined_params_dict.keys())
+                or (p.name in self._redefined_params_dict)
             )
             for iv, p in zip(self._initial_values_of_floating_parameters, floating_pis)
         ), "\n\t - ".join(
@@ -290,7 +293,7 @@ class ParameterHandler:
                 if not (
                     (iv == pi.initial_value)
                     or (pi.name == reset_parameter_name)
-                    or pi.name in self._redefined_params_dict.keys()
+                    or pi.name in self._redefined_params_dict
                 )
             ]
         )
@@ -381,9 +384,9 @@ class ParameterHandler:
     ) -> str:
         if self._inverted_pars_dict is None:
             _inverted_dict = {v: k for k, v in self._pars_dict.items()}  # type: Dict[int, str]
-            assert len(_inverted_dict.keys()) == len(self._pars_dict.keys()), (
-                len(_inverted_dict.keys()),
-                len(self._pars_dict.keys()),
+            assert len(_inverted_dict) == len(self._pars_dict), (
+                len(_inverted_dict),
+                len(self._pars_dict),
             )
             self._inverted_pars_dict = _inverted_dict
         return self._inverted_pars_dict[param_id]
@@ -571,7 +574,7 @@ class ParameterHandler:
             self._create_floating_parameter_initial_value_info()
 
     def reset_all_parameter_initial_values(self) -> None:
-        names_of_changed_parameter = [pri for pri in self._redefined_params_dict.keys()]
+        names_of_changed_parameter = [pri for pri in self._redefined_params_dict]
         for parameter_name in names_of_changed_parameter:
             self.reset_parameter_initial_value(parameter_name=parameter_name)
         assert len(self._redefined_params_dict) == 0, len(self._redefined_params_dict)
@@ -815,6 +818,9 @@ class Parameter(ABC):
             output += _additional_info
         return output
 
+    def __repr__(self) -> str:
+        return self.as_string()
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Parameter):
             raise TypeError(
@@ -844,13 +850,37 @@ class TemplateParameter(Parameter):
         self,
         name: str,
         parameter_handler: ParameterHandler,
-        parameter_type: str,
-        floating: bool,
-        initial_value: float,
-        param_id: Optional[int],
+        parameter_type: Optional[str] = None,
+        floating: Optional[bool] = None,
+        initial_value: Optional[float] = None,
+        param_id: Optional[int] = None,
+        model_parameter: Optional["ModelParameter"] = None,
         constrain_to_value: Optional[float] = None,
         constraint_sigma: Optional[float] = None,
     ) -> None:
+
+        self._base_model_parameter = None  # type: Optional[ModelParameter]
+
+        if model_parameter is not None:
+            if not all(p is None for p in (parameter_type, floating, initial_value, param_id)):
+                raise ValueError(
+                    "If the argument model_parameter is given the arguments 'parameter_type',"
+                    " 'floating', 'initial_value' and 'param_id' must be None."
+                )
+
+            parameter_type = model_parameter.parameter_type
+            floating = model_parameter.floating
+            initial_value = model_parameter.initial_value
+            param_id = model_parameter.param_id
+            self.base_model_parameter = model_parameter
+
+        else:
+            if parameter_type is None or floating is None or initial_value is None:
+                raise ValueError(
+                    "If the argument 'model_parameter' is not given the arguments 'parameter_type', 'floating', "
+                    "and 'initial_value' must not be None."
+                )
+
         super().__init__(
             name=name,
             parameter_handler=parameter_handler,
@@ -860,7 +890,6 @@ class TemplateParameter(Parameter):
             constrain_to_value=constrain_to_value,
             constraint_sigma=constraint_sigma,
         )
-        self._base_model_parameter = None  # type: Optional[ModelParameter]
 
         if param_id is not None:
             self.param_id = param_id
@@ -877,6 +906,9 @@ class TemplateParameter(Parameter):
     ) -> None:
         assert self._base_model_parameter is None
         self._base_model_parameter = base_model_parameter
+
+    def base_model_parameter_is(self, base_model_parameter: "ModelParameter") -> bool:
+        return base_model_parameter is self._base_model_parameter
 
     def _additional_info(self) -> Optional[str]:
         return f"\n\tbase model parameter index: {self.base_model_parameter.model_index}"
@@ -929,7 +961,8 @@ class ModelParameter(Parameter):
         template_parameter: TemplateParameter,
         template_serial_number: int,
     ) -> None:
-        template_parameter.base_model_parameter = self
+        if not template_parameter.base_model_parameter_is(self):
+            template_parameter.base_model_parameter = self
         info_tuple = (template_parameter, template_serial_number)
         assert not any(info_tuple == entry for entry in self._usage_list), info_tuple
         self._usage_list.append(info_tuple)

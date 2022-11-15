@@ -11,19 +11,26 @@ import scipy.stats as scipy_stats
 from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Sequence
+from typing import Optional, Union, List, Tuple, Dict, Sequence
+
 
 from templatefitter.utility import xlogyx, cov2corr
 
-from templatefitter.fit_model.template import Template
-from templatefitter.fit_model.component import Component
-from templatefitter.fit_model.utility import pad_sequences
-from templatefitter.binned_distributions.binning import Binning
-from templatefitter.fit_model.data_channel import DataChannelContainer
-from templatefitter.fit_model.channel import ChannelContainer, Channel
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType
+
+from templatefitter.fit_model.template import Template
+from templatefitter.fit_model.component import Component
+from templatefitter.fit_model.data_channel import ModelDataChannels
+from templatefitter.fit_model.channel import ModelChannels, Channel
+from templatefitter.fit_model.constraint import Constraint, ConstraintContainer
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
+from templatefitter.fit_model.utility import pad_sequences, check_bin_count_shape, immutable_cached_property
+from templatefitter.fit_model.fit_object_managers import (
+    FractionConversionInfo,
+    FractionManager,
+    FitObjectManager,
+)
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -53,18 +60,14 @@ __all__ = [
 #            - generalize uncertainty handling!
 
 
-class FractionConversionInfo(NamedTuple):
-    needed: bool
-    conversion_matrix: np.ndarray
-    conversion_vector: np.ndarray
-
-
 class FitModel:
     def __init__(
         self,
         parameter_handler: ParameterHandler,
         ignore_empty_mc_bins: bool = False,
     ):
+
+        # region private attributes
         self._params = parameter_handler  # type: ParameterHandler
 
         self._ignore_empty_mc_bins = ignore_empty_mc_bins  # type: bool
@@ -72,25 +75,23 @@ class FitModel:
         self._model_parameters = []  # type: List[ModelParameter]
         self._model_parameters_mapping = {}  # type: Dict[str, int]
 
-        self._templates = []  # type: List[Template]
-        self._templates_mapping = {}  # type: Dict[str, int]
+        self._template_manager: FitObjectManager[Template] = FitObjectManager()
+        self._component_manager: FitObjectManager[Component] = FitObjectManager()
 
-        self._components = []  # type: List[Component]
-        self._components_mapping = {}  # type: Dict[str, int]
+        self._channels = ModelChannels()  # type: ModelChannels
 
-        self._channels = ChannelContainer()  # type: ChannelContainer
+        self._data_channels = ModelDataChannels()  # type: ModelDataChannels
+        self._original_data_channels = None  # type: Optional[ModelDataChannels]
 
-        self._data_channels = DataChannelContainer()  # type: DataChannelContainer
-        self._original_data_channels = None  # type: Optional[DataChannelContainer]
-        self._data_bin_counts = None  # type: Optional[np.ndarray]
         self._masked_data_bin_counts = None  # type: Optional[np.ndarray]
-        self._data_bin_count_checked = False  # type: bool
         self._data_stat_errors_sq = None  # type: Optional[np.ndarray]
-        self._data_stat_errors_checked = False  # type: bool
 
-        self._fraction_conversion = None  # type: Optional[FractionConversionInfo]
+        self._fraction_manager = FractionManager(
+            param_handler=self._params,
+            channels=self._channels,
+        )  # type: FractionManager
+
         self._inverse_template_bin_correlation_matrix = None  # type: Optional[np.ndarray]
-
         self._systematics_covariance_matrices_per_channel = None  # type: Optional[List[np.ndarray]]
 
         self._has_data = False  # type: bool
@@ -108,33 +109,82 @@ class FitModel:
         self._efficiency_padding_required = True  # type: bool
         self._efficiencies_checked = False  # type: bool
 
-        self._bin_nuisance_param_indices = None  # type: Optional[List[int]]
         self._bin_nuisance_params_checked = False  # type: bool
-        self._nuisance_matrix_shape = None  # type: Optional[Tuple[int, ...]]
 
-        self._constraint_indices = None  # type: Optional[List[int]]
-        self._constraint_values = None  # type: Optional[List[float]]
-        self._constraint_sigmas = None  # type: Optional[List[float]]
-        self._has_constrained_parameters = False  # type: bool
+        self._constraint_container = ConstraintContainer()  # type: ConstraintContainer
 
-        self._template_bin_counts = None  # type: Optional[np.ndarray]
         self._template_shapes_checked = False  # type: bool
-        self._template_bin_errors_sq_per_ch_and_temp = None  # type: Optional[List[List[np.ndarray]]]
-        self._template_stat_error_sq_matrix_per_channel = None  # type: Optional[List[np.ndarray]]
-        self._template_stat_error_sq_matrix_per_ch_and_temp = None  # type: Optional[List[List[np.ndarray]]]
         self._template_shape = None  # type: Optional[np.ndarray]
-
-        self._relative_shape_uncertainties = None  # type: Optional[np.ndarray]
 
         self._gauss_term_checked = False  # type: bool
         self._constraint_term_checked = False  # type: bool
         self._chi2_calculation_checked = False  # type: bool
         self._nll_calculation_checked = False  # type: bool
 
-        self._floating_nuisance_parameter_indices = None  # type: Optional[List[int]]
+        # endregion
 
-        # Setting a random seed for the toy data set generation with scypi
-        np.random.seed(seed=7694747)
+        # Setting a random seed for the toy data set generation with SciPy
+        self._random_state = np.random.RandomState(seed=7694747)  # type: np.random.RandomState
+
+    # region Basic Properties
+    # Attributes forwarded to self._channels via __getattr__()
+    _channel_attrs = [
+        "binning",
+        "max_number_of_bins_flattened",
+        "min_number_of_independent_yields",
+        "number_of_bins_flattened_per_channel",
+        "number_of_components",
+        "number_of_dependent_templates",
+        "number_of_expected_independent_yields",
+        "number_of_fraction_parameters",
+        "number_of_independent_templates",
+        "number_of_templates",
+        "template_bin_counts",
+        "total_number_of_templates",
+    ]
+
+    def __getattribute__(self, attr):
+        """
+        Forwarding some attributes to self._channels for backwards compatibility.
+        :param attr: The attribute name
+        :return: A forwarded attribute of ModelChannels
+        """
+
+        try:
+            return super().__getattribute__(attr)
+        except AttributeError:
+            if attr in self._channel_attrs:
+                try:
+                    return getattr(self._channels, attr)
+                except AttributeError:
+                    raise AttributeError(
+                        f"Forwarded attribute access from {self.__class__.__name__} to"
+                        f" {self._channels.__class__.__name__} which also has no attribute {attr}."
+                    )
+            elif attr in dir(self._channels):
+                raise AttributeError(
+                    f"Attribute {attr} exists for {self._channels.__class__.__name__} but is not forwarded "
+                    f"to {self.__class__.__name__}."
+                )
+            else:
+                raise
+
+    @property
+    def number_of_channels(self) -> int:
+        return len(self._channels)
+
+    @property
+    def fraction_conversion(self) -> FractionConversionInfo:
+        assert self._fraction_manager.fraction_conversion is not None
+        return self._fraction_manager.fraction_conversion
+
+    @property
+    def is_finalized(self) -> bool:
+        return self._is_initialized
+
+    # endregion
+
+    # region Add parameters, templates, components, channels, constraints and data
 
     def add_model_parameter(
         self,
@@ -148,11 +198,11 @@ class FitModel:
         self._check_is_not_finalized()
         self._check_has_data(adding="model parameter")
 
-        if name in self._model_parameters_mapping.keys():
+        if name in self._model_parameters_mapping:
             raise RuntimeError(
                 f"The model parameter with the name {name} already exists!\n"
                 f"It has the following properties:\n"
-                f"{self._model_parameters[self._model_parameters_mapping[name]].as_string()}"
+                f"{self._model_parameters[self._model_parameters_mapping[name]]}"
             )
 
         model_index = len(self._model_parameters)
@@ -170,21 +220,6 @@ class FitModel:
         self._model_parameters_mapping.update({name: model_index})
         return model_index, model_parameter
 
-    def _check_model_parameter_registration(self, model_parameter: ModelParameter) -> None:
-        if model_parameter.parameter_handler is not self._params:
-            raise ValueError(
-                f"The model parameter you are trying to register uses a different ParameterHandler "
-                f"than the model you are trying to register it to!\n"
-                f"\tModel's ParameterHandler: {self._params}\n"
-                f"\tModelParameters's ParameterHandler: {model_parameter.parameter_handler}\n"
-            )
-        if model_parameter.name not in self._model_parameters_mapping.keys():
-            raise RuntimeError(
-                f"The model parameter you provided is not registered to the model you are "
-                f"trying to use it in.\nYour model parameter has the following properties:\n"
-                f"{model_parameter.as_string()}\n"
-            )
-
     def add_template(
         self,
         template: Template,
@@ -194,11 +229,7 @@ class FitModel:
         self._check_is_not_finalized()
         self._check_has_data(adding="template")
 
-        if template.name in self._templates_mapping.keys():
-            raise RuntimeError(
-                f"The template with the name {template.name} is already registered!\n"
-                f"It has the index {self._templates_mapping[template.name]}\n"
-            )
+        self._template_manager.append(template)
 
         if isinstance(yield_parameter, str):
             yield_model_parameter = self.get_model_parameter(name_or_index=yield_parameter)
@@ -227,10 +258,7 @@ class FitModel:
             param_id=yield_model_parameter.param_id,
         )
 
-        serial_number = len(self._templates)
-        template.serial_number = serial_number
-
-        yield_model_parameter.used_by(template_parameter=yield_param, template_serial_number=serial_number)
+        yield_model_parameter.used_by(template_parameter=yield_param, template_serial_number=template.serial_number)
 
         bin_nuisance_paras = self._create_bin_nuisance_parameters(template=template)
         assert len(bin_nuisance_paras) == template.num_bins_total, (len(bin_nuisance_paras), template.num_bins_total)
@@ -242,64 +270,16 @@ class FitModel:
 
         template.use_other_systematics = use_other_systematics
 
-        self._templates.append(template)
-        self._templates_mapping.update({template.name: serial_number})
+        return template.serial_number
 
-        return serial_number
-
-    def _create_bin_nuisance_parameters(
-        self,
-        template: Template,
-    ) -> List[TemplateParameter]:
-        bin_nuisance_model_params = []  # type: List[Union[ModelParameter, str]]
-        bin_nuisance_model_param_indices = []  # type: List[int]
-
-        # TODO now: Implement creation of nuisance parameters as required for option 1a!
-        #           -> Think about how nuisance parameter must be handled in general to make all options possible!!!
-        # TODO: General implementation of creation of nuisance parameters for different options of uncertainty handling!
-
-        nuisance_sigma = 1.0  # type: float
-        initial_nuisance_value = 0.0  # type: float
-
-        for counter in range(template.num_bins_total):
-            model_param_index, model_parameter = self.add_model_parameter(
-                name=f"bin_nuisance_param_{counter}_for_temp_{template.name}",
-                parameter_type=ParameterHandler.bin_nuisance_parameter_type,
-                floating=True,
-                initial_value=initial_nuisance_value,
-                constrain_to_value=initial_nuisance_value,
-                constraint_sigma=nuisance_sigma,
-            )
-            bin_nuisance_model_params.append(model_parameter)
-            bin_nuisance_model_param_indices.append(model_param_index)
-
-        bin_nuisance_template_paras = self._get_list_of_template_params(
-            input_params=bin_nuisance_model_params,
-            serial_numbers=template.serial_number,
-            container_name=template.name,
-            parameter_type=ParameterHandler.bin_nuisance_parameter_type,
-            input_parameter_list_name="bin_nuisance_parameters",
-        )
-
-        logging.info(
-            f"Created {len(bin_nuisance_model_params)} bin nuisance ModelParameters "
-            f"for template '{template.name}' (serial no: {template.serial_number}) with "
-            f"{template.num_bins_total} bins and shape {template.shape}.\n"
-            f"Bin nuisance parameter indices = {bin_nuisance_model_param_indices}"
-        )
-
-        return bin_nuisance_template_paras
-
-    def add_component(
-        self,
-        fraction_parameters: Optional[List[Union[ModelParameter, str]]] = None,
+    @staticmethod
+    def _validate_add_component_arguments(
         component: Optional[Component] = None,
         name: Optional[str] = None,
         templates: Optional[List[Union[int, str, Template]]] = None,
         shared_yield: Optional[bool] = None,
-    ) -> Union[int, Tuple[int, Component]]:
-        self._check_is_not_finalized()
-        creates_new_component = False
+    ) -> None:
+
         component_input_error_text = (
             "You can either add an already prepared component or create a new one.\n"
             "For the first option, the argument 'component' must be used;\n"
@@ -309,9 +289,7 @@ class FitModel:
             "serial_number es defined for this model."
         )
 
-        self._check_has_data(adding="component")
-
-        if (component is None and templates is None) or (component is not None and templates is not None):
+        if (component is None) == (templates is None):
             raise ValueError(component_input_error_text)
         elif component is not None:
             if not isinstance(component, Component):
@@ -329,6 +307,7 @@ class FitModel:
                     f"You set the argument 'shared_yield' to {shared_yield} despite the provided"
                     f" component already having shared_yield set to {component.shared_yield}."
                 )
+
         elif templates is not None:
             if not (
                 isinstance(templates, list)
@@ -354,6 +333,22 @@ class FitModel:
                     "If you want to directly create and add component, you have to specify its name "
                     "via the argument 'name'!"
                 )
+
+    def add_component(
+        self,
+        fraction_parameters: Optional[List[Union[ModelParameter, str]]] = None,
+        component: Optional[Component] = None,
+        name: Optional[str] = None,
+        templates: Optional[List[Union[int, str, Template]]] = None,
+        shared_yield: Optional[bool] = None,
+    ) -> Union[int, Tuple[int, Component]]:
+
+        self._check_is_not_finalized()
+        self._check_has_data(adding="component")
+
+        self._validate_add_component_arguments(component, name, templates, shared_yield)
+
+        if templates is not None:
             template_list = []
             for template in templates:
                 if isinstance(template, Template):
@@ -366,29 +361,23 @@ class FitModel:
                         f"to allow for the creation of a new component.\n"
                         f"You provided a list containing the types {[type(t) for t in templates]}."
                     )
-
-            creates_new_component = True
+            assert name is not None and shared_yield is not None
             component = Component(
                 templates=template_list,
                 params=self._params,
                 name=name,
                 shared_yield=shared_yield,
             )
-        else:
-            raise ValueError(component_input_error_text)
 
-        if component.name in self._components_mapping.keys():
-            raise RuntimeError(
-                f"A component with the name {component.name} is already registered!\n"
-                f"It has the index {self._components_mapping[component.name]}\n"
-            )
+        assert component is not None
 
         if component.required_fraction_parameters == 0:
-            if not (fraction_parameters is None or len(fraction_parameters) == 0):
+            if fraction_parameters:
                 raise ValueError(
-                    f"The component requires no fraction parameters, " f"but you provided {len(fraction_parameters)}!"
+                    f"The component requires no fraction parameters, but you provided {len(fraction_parameters)}!"
                 )
-            fraction_params = None
+            component.initialize_parameters(fraction_parameters=None)
+
         else:
             assert fraction_parameters is not None
             if not all(isinstance(p, ModelParameter) or isinstance(p, str) for p in fraction_parameters):
@@ -405,31 +394,22 @@ class FitModel:
                 parameter_type=ParameterHandler.fraction_parameter_type,
                 input_parameter_list_name="fraction_parameters",
             )
+            component.initialize_parameters(fraction_parameters=fraction_params)
 
-        serial_number = len(self._components)
-        component.component_serial_number = serial_number
+        self._component_manager.append(component)
 
-        component.initialize_parameters(fraction_parameters=fraction_params)
-
-        self._components.append(component)
-        self._components_mapping.update({component.name: serial_number})
-
-        if creates_new_component:
-            return serial_number, component
+        if templates is not None:
+            return component.component_serial_number, component
         else:
-            return serial_number
+            return component.component_serial_number
 
-    def add_channel(
-        self,
-        efficiency_parameters: List[Union[ModelParameter, str]],
+    @staticmethod
+    def _validate_add_channel_arguments(
         channel: Optional[Channel] = None,
         name: Optional[str] = None,
         components: Optional[Sequence[Union[int, str, Component, Template]]] = None,
-        latex_label: Optional[str] = None,
-        plot_order: Optional[Tuple[str, ...]] = None,
-    ) -> Union[int, Tuple[int, Channel]]:
-        self._check_is_not_finalized()
-        creates_new_channel = False
+    ) -> None:
+
         input_error_text = (
             "A channel can either be added by providing\n"
             "\t- an already prepared channel via the argument 'channel'\nor\n"
@@ -438,8 +418,6 @@ class FitModel:
             "\t    'temp_', from which a single template component will be generated)"
             "\t  and a name for the channel, using the arguments 'components' and 'name', respectively."
         )
-
-        self._check_has_data(adding="channel")
 
         if channel is not None and components is not None:
             raise ValueError(input_error_text)
@@ -471,6 +449,22 @@ class FitModel:
             if name is None:
                 raise ValueError("When directly creating and adding a channel, you have to set the argument 'name'!")
 
+    def add_channel(
+        self,
+        efficiency_parameters: List[Union[ModelParameter, str]],
+        channel: Optional[Channel] = None,
+        name: Optional[str] = None,
+        components: Optional[Sequence[Union[int, str, Component, Template]]] = None,
+        latex_label: Optional[str] = None,
+        plot_order: Optional[Tuple[str, ...]] = None,
+    ) -> Union[int, Tuple[int, Channel]]:
+
+        self._check_is_not_finalized()
+
+        self._validate_add_channel_arguments(channel, name, components)
+        self._check_has_data(adding="channel")
+
+        if components is not None:
             component_list = []  # type: List[Component]
             for component in components:
                 if isinstance(component, Component):
@@ -491,7 +485,7 @@ class FitModel:
                 else:
                     raise ValueError(f"Unexpected type {type(component)} for element of provided list of components.")
 
-            creates_new_channel = True
+            assert name is not None
             channel = Channel(
                 params=self._params,
                 name=name,
@@ -499,10 +493,9 @@ class FitModel:
                 latex_label=latex_label,
                 plot_order=plot_order,
             )
-        else:
-            raise ValueError(input_error_text)
 
-        if not len(efficiency_parameters) == channel.required_efficiency_parameters:
+        assert channel is not None
+        if len(efficiency_parameters) != channel.required_efficiency_parameters:
             raise ValueError(
                 f"The channel requires {channel.required_efficiency_parameters} efficiency parameters, "
                 f"but you provided {len(efficiency_parameters)}!"
@@ -519,24 +512,118 @@ class FitModel:
         channel.initialize_parameters(efficiency_parameters=efficiency_params)
         channel_serial_number = self._channels.add_channel(channel=channel)
 
-        if creates_new_channel:
+        if components is not None:
             return channel_serial_number, channel
         else:
             return channel_serial_number
+
+    def add_constraint(
+        self,
+        name: str,
+        value: float,
+        sigma: float,
+    ) -> None:
+        self._check_is_not_finalized()
+
+        if name not in self._model_parameters_mapping:
+            raise ValueError(
+                f"A ModelParameter with the name '{name}' was not added, yet, "
+                f"and thus a constraint cannot be applied to it!"
+            )
+
+        model_parameter = self._model_parameters[self._model_parameters_mapping[name]]
+        if model_parameter.constraint_value is not None:
+            raise RuntimeError(
+                f"The ModelParameter '{name}' already is constrained with the settings"
+                f"\n\tconstraint_value = {model_parameter.constraint_value}"
+                f"\n\tconstraint_sigma = {model_parameter.constraint_sigma}\n"
+                f"and thus your constraint (cv = {value}, cs = {sigma}) cannot be applied!"
+            )
+
+        assert model_parameter.param_id is not None
+        parameter_infos = self._params.get_parameter_infos_by_index(indices=model_parameter.param_id)[0]
+        assert parameter_infos.constraint_value == model_parameter.constraint_value, (
+            parameter_infos.constraint_value,
+            model_parameter.constraint_value,
+        )
+        assert parameter_infos.constraint_sigma == model_parameter.constraint_sigma, (
+            parameter_infos.constraint_sigma,
+            model_parameter.constraint_sigma,
+        )
+
+        self._params.add_constraint_to_parameter(
+            param_id=model_parameter.param_id, constraint_value=value, constraint_sigma=sigma
+        )
+
+    def _validate_add_data_arguments(
+        self, channels: Dict[str, DataInputType], channel_weights: Optional[Dict[str, WeightsInputType]]
+    ) -> None:
+
+        if not len(channels) == self.number_of_channels:
+            raise ValueError(
+                f"You provided data for {len(channels)} channels, "
+                f"but the model has {self.number_of_channels} channels defined!"
+            )
+        if not all(ch.name in channels for ch in self._channels):
+            raise ValueError(
+                "The provided data channels do not match the ones defined in the model:"
+                "Defined channels: \n\t-"
+                + "\n\t-".join([c.name for c in self._channels])
+                + "\nProvided channels: \n\t-"
+                + "\n\t-".join([c for c in channels])
+            )
+        if channel_weights is not None:
+            logging.warning(
+                "You are adding weights to your data! This should only be done for evaluation on MC "
+                "(e.g. for Asimov fits or toy studies) so be sure to check if this is the case!"
+            )
+            if not list(channel_weights.keys()) == list(channels.keys()):
+                raise ValueError(
+                    f"The keys of the dictionaries provided for the parameter 'channels' and "
+                    f"'channel_weights' do not match!\nKeys of channels dictionary: {channels.keys()}\n"
+                    f"Keys of channel_weights dictionary: {channel_weights.keys()}"
+                )
+
+    def add_data(
+        self,
+        channels: Dict[str, DataInputType],
+        channel_weights: Optional[Dict[str, WeightsInputType]] = None,
+    ) -> None:
+        self._check_is_not_finalized()
+        assert self._data_channels.is_empty
+        if self._has_data is True:
+            raise RuntimeError(
+                "Data has already been added to this model!\nThe following channels are registered:\n\t-"
+                + "\n\t-".join(self._data_channels.data_channel_names)
+            )
+
+        self._validate_add_data_arguments(channels, channel_weights)
+
+        for channel_name, channel_data in channels.items():
+            mc_channel = self._channels.get_channel_by_name(name=channel_name)
+            self._data_channels.add_channel(
+                channel_name=channel_name,
+                channel_data=channel_data,
+                from_data=True,
+                binning=mc_channel.binning,
+                column_names=mc_channel.data_column_names,
+                channel_weights=None if channel_weights is None else channel_weights[channel_name],
+            )
+        self._has_data = True
 
     def _create_single_template_component_from_template(self, template_input: Union[str, Template]) -> Component:
         if isinstance(template_input, Template):
             template = template_input
             source_info_text = "directly as template"
-            assert template in self._templates, (
+            assert template in self._template_manager.values(), (
                 template.name,
                 template.serial_number,
-                [(t.name, t.serial_number) for t in self._templates],
+                self._template_manager,
             )
         elif isinstance(template_input, str):
             assert not template_input.startswith("temp_"), template_input
             if template_input.isdigit():
-                template_identifier = int(template_input)  # type: Union[str, int]  # identifier is template serial_number
+                template_identifier = int(template_input)  # type: Union[str, int]  # identifier is serial_number
                 source_info_text = f"via the template serial number as 'temp_{template_input}'"
             else:
                 template_identifier = template_input  # identifier is template name
@@ -548,18 +635,14 @@ class FitModel:
                 f"but you provided an object of type {type(template_input)}"
             )
 
-        assert not any(template in comp.sub_templates for comp in self._components), "\n".join(
+        assert not any(template in comp.sub_templates for comp in self._component_manager.values()), "\n".join(
             [
                 f"{comp.name}, {comp.name}: {[t.name for t in comp.sub_templates]}"
-                for comp in self._components
+                for comp in self._component_manager.values()
                 if template in comp.sub_templates
             ]
         )
         new_component_name = f"component_from_template_{template.name}"
-        assert new_component_name not in self._components_mapping.keys(), (
-            new_component_name,
-            self._components_mapping.keys(),
-        )
         comp_serial_number_component_tuple = self.add_component(
             fraction_parameters=None,
             component=None,
@@ -578,92 +661,6 @@ class FitModel:
         )
 
         return component
-
-    def add_constraint(
-        self,
-        name: str,
-        value: float,
-        sigma: float,
-    ) -> None:
-        self._check_is_not_finalized()
-
-        if name not in self._model_parameters_mapping.keys():
-            raise ValueError(
-                f"A ModelParameter with the name '{name}' was not added, yet, "
-                f"and hus a constrained cannot be applied to it!"
-            )
-
-        model_parameter = self._model_parameters[self._model_parameters_mapping[name]]
-        if model_parameter.constraint_value is not None:
-            raise RuntimeError(
-                f"The ModelParameter '{name}' already is constrained with the settings"
-                f"\n\tconstraint_value = {model_parameter.constraint_value}"
-                f"\n\tconstraint_sigma = {model_parameter.constraint_sigma}\n"
-                f"and thus your constrained (cv = {value}, cs = {sigma}) cannot be applied!"
-            )
-
-        param_id = model_parameter.param_id
-        assert param_id is not None
-        parameter_infos = self._params.get_parameter_infos_by_index(indices=param_id)[0]
-        assert parameter_infos.constraint_value == model_parameter.constraint_value, (
-            parameter_infos.constraint_value,
-            model_parameter.constraint_value,
-        )
-        assert parameter_infos.constraint_sigma == model_parameter.constraint_sigma, (
-            parameter_infos.constraint_sigma,
-            model_parameter.constraint_sigma,
-        )
-
-        self._params.add_constraint_to_parameter(param_id=param_id, constraint_value=value, constraint_sigma=sigma)
-
-    def add_data(
-        self,
-        channels: Dict[str, DataInputType],
-        channel_weights: Optional[Dict[str, WeightsInputType]] = None,
-    ) -> None:
-        self._check_is_not_finalized()
-        assert self._data_channels.is_empty
-        if self._has_data is True:
-            raise RuntimeError(
-                "Data has already been added to this model!\nThe following channels are registered:\n\t-"
-                + "\n\t-".join(self._data_channels.data_channel_names)
-            )
-        if not len(channels) == self.number_of_channels:
-            raise ValueError(
-                f"You provided data for {len(channels)} channels, "
-                f"but the model has {self.number_of_channels} channels defined!"
-            )
-        if not all(ch.name in channels.keys() for ch in self._channels):
-            raise ValueError(
-                "The provided data channels do not match the ones defined in the model:"
-                "Defined channels: \n\t-"
-                + "\n\t-".join([c.name for c in self._channels])
-                + "\nProvided channels: \n\t-"
-                + "\n\t-".join([c for c in channels.keys()])
-            )
-        if channel_weights is not None:
-            logging.warning(
-                "You are adding weights to your data! This should only be done for evaluation on MC "
-                "(e.g. for Asimov fits or toy studies) so be sure to check if this is the case!"
-            )
-            if not list(channel_weights.keys()) == list(channels.keys()):
-                raise ValueError(
-                    f"The keys of the dictionaries provided for the parameter 'channels' and "
-                    f"'channel_weights' do not match!\nKeys of channels dictionary: {channels.keys()}\n"
-                    f"Keys of channel_weights dictionary: {channel_weights.keys()}"
-                )
-
-        for channel_name, channel_data in channels.items():
-            mc_channel = self._channels.get_channel_by_name(name=channel_name)
-            self._data_channels.add_channel(
-                channel_name=channel_name,
-                channel_data=channel_data,
-                from_data=True,
-                binning=mc_channel.binning,
-                column_names=mc_channel.data_column_names,
-                channel_weights=None if channel_weights is None else channel_weights[channel_name],
-            )
-        self._has_data = True
 
     def add_asimov_data_from_templates(
         self,
@@ -703,7 +700,7 @@ class FitModel:
             # Backing up original data_channels
             self._original_data_channels = self._data_channels
 
-        self._data_channels = DataChannelContainer()
+        self._data_channels = ModelDataChannels()
 
         for channel in self._channels:
             channel_data = None  # type: Optional[np.ndarray]
@@ -720,7 +717,7 @@ class FitModel:
             if round_bin_counts:
                 channel_data = np.ceil(channel_data)
 
-            toy_data = scipy_stats.poisson.rvs(channel_data)
+            toy_data = scipy_stats.poisson.rvs(channel_data, random_state=self._random_state)
 
             self._data_channels.add_channel(
                 channel_name=channel.name,
@@ -733,177 +730,167 @@ class FitModel:
 
         # Resetting data bin count and data bin error cache
         self._data_stat_errors_sq = None
-        self._data_bin_counts = None
+        self._data_channels._data_bin_counts = None
 
         self._has_data = True
 
-    def finalize_model(self) -> None:
-        if not self._has_data:
-            raise RuntimeError(
-                "You have not added data, yet, so the model can not be finalized, yet!\n"
-                "Please use the 'add_data' method to add data for all defined channels:\n\t"
-                + "\n\t".join(f"{i}. {c.name}" for i, c in enumerate(self._channels))
-            )
+    # endregion
 
-        self._check_model_setup()
+    # region Uncertainty handling
+    @property
+    def systematics_covariance_matrices_per_channel(self) -> List[np.ndarray]:
+        assert self._systematics_covariance_matrices_per_channel is not None
+        return self._systematics_covariance_matrices_per_channel
 
-        self._initialize_fraction_conversion()
-        self._check_fraction_conversion()
+    @property
+    def inverse_template_bin_correlation_matrix(self) -> np.ndarray:
+        assert self._inverse_template_bin_correlation_matrix is not None
+        return self._inverse_template_bin_correlation_matrix
 
-        self._initialize_parameter_constraints()
-        self._check_parameter_constraints()
+    @immutable_cached_property
+    def floating_nuisance_parameter_indices(self) -> List[int]:
+        all_bin_nuisance_parameter_indices = self.bin_nuisance_parameter_indices
+        floating_nuisance_parameter_indices = []
+        for all_index in all_bin_nuisance_parameter_indices:
+            if self._params.floating_parameter_mask[all_index]:
+                param_id = sum(self._params.floating_parameter_mask[: all_index + 1]) - 1  # type: int
+                floating_nuisance_parameter_indices.append(param_id)
 
-        self._initialize_template_uncertainties()
-        self._check_systematics_uncertainty_matrices()
-        self._check_bin_correlation_matrix()
+        return floating_nuisance_parameter_indices
 
-        self._check_yield_parameters(yield_parameter_indices=None)
-        self._check_fraction_parameters()
-        self._check_efficiency_parameters()
-
-        self._params.finalize()
-
-        self._is_initialized = True
-
-        logging.info(self._model_setup_as_string())
-
-    def _check_model_setup(self) -> None:
-        info_text = (
-            f"For consistency,\n"
-            f"\t- the order of the templates/processes has to be the same in each channel, and\n"
-            f"\t- Composition of all components has to be the same in each channel.\n"
-            f"{self._model_setup_as_string()}"
+    @immutable_cached_property
+    def bin_nuisance_parameter_indices(self) -> List[int]:
+        bin_nuisance_param_indices = self._params.get_parameter_indices_for_type(
+            parameter_type=ParameterHandler.bin_nuisance_parameter_type,
         )
 
-        _first_channel = self._channels[0]
-        assert isinstance(_first_channel, Channel), type(_first_channel).__name__
-        if not all(ch.process_names == _first_channel.process_names for ch in self._channels):
-            raise RuntimeError(
-                "The order of processes per channel, which make up the model is inconsistent!\n" + info_text
+        if not self._bin_nuisance_params_checked:
+            self._check_bin_nuisance_parameters()
+
+        return bin_nuisance_param_indices
+
+    @immutable_cached_property
+    def relative_shape_uncertainties(self) -> np.ndarray:
+        cov_matrices_per_ch_and_temp = self.systematics_covariance_matrices_per_channel
+        # TODO: Maybe add some more checks...
+        assert cov_matrices_per_ch_and_temp is not None
+
+        assert self.template_bin_counts is not None
+
+        # TODO: The following combination is only valid for Option 1b!
+
+        padded_shape_uncertainties_per_ch = [
+            np.stack(
+                pad_sequences(
+                    [np.sqrt(np.diag(cov_for_temp)) for cov_for_temp in temps_in_ch],
+                    padding="post",
+                    max_len=self.max_number_of_bins_flattened,
+                    value=0.0,
+                    dtype="float64",
+                )
             )
+            for temps_in_ch in cov_matrices_per_ch_and_temp
+        ]
 
-        if not all(ch.process_names_per_component == _first_channel.process_names_per_component for ch in self._channels):
-            raise RuntimeError("The order of channel components, which make up the model is inconsistent!\n" + info_text)
+        shape_uncertainties = np.stack(padded_shape_uncertainties_per_ch)
 
-    def _model_setup_as_string(self) -> str:
-        output_string = ""
-        for channel in self._channels:
-            output_string += f"Channel {channel.channel_index}: '{channel.name}'\n"
-            for component in channel:
-                output_string += f"\tComponent {component.component_index}: '{component.name}'\n"
-                for template in component.sub_templates:
-                    output_string += (
-                        f"\t\tTemplate {template.template_index}: '{template.name}' "
-                        f"(Process: '{template.process_name})'\n"
-                    )
-
-        return output_string
-
-    def _initialize_fraction_conversion(self) -> None:
-        # Fraction conversion matrix and vector should be equal in all channels.
-        # The matrices and vectors are generated for each channel, tested for equality and then stored once.
-        assert self._fraction_conversion is None
-        conversion_matrices = []  # type: List[np.ndarray]
-        conversion_vectors = []  # type: List[np.ndarray]
-        for channel in self._channels:
-            matrices_for_channel = []  # type: List[np.ndarray]
-            vectors_for_channel = []  # type: List[np.ndarray]
-            for component in channel:
-                n_sub = component.number_of_subcomponents
-                if component.has_fractions:
-                    matrix_part1 = np.diag(np.ones(n_sub - 1))
-                    matrix_part2 = -1 * np.ones(n_sub - 1)
-                    matrix = np.vstack([matrix_part1, matrix_part2])
-                    matrices_for_channel.append(matrix)
-                    vector = np.zeros((n_sub, 1))
-                    vector[-1][0] = 1.0
-                    vectors_for_channel.append(vector)
-                else:
-                    matrices_for_channel.append(np.zeros((n_sub, n_sub)))
-                    vectors_for_channel.append(np.ones((n_sub, 1)))
-
-            conversion_matrices.append(block_diag(*matrices_for_channel))
-            conversion_vectors.append(np.vstack(vectors_for_channel))
-
-        assert all(m.shape[0] == v.shape[0] for m, v in zip(conversion_matrices, conversion_vectors))
-        assert all(m.shape[0] == n_f for m, n_f in zip(conversion_matrices, self.number_of_independent_templates))
-        assert all(np.array_equal(m, conversion_matrices[0]) for m in conversion_matrices)
-        assert all(np.array_equal(v, conversion_vectors[0]) for v in conversion_vectors)
-
-        self._fraction_conversion = FractionConversionInfo(
-            needed=(not all(conversion_vectors[0] == 1)),
-            conversion_matrix=conversion_matrices[0],
-            conversion_vector=conversion_vectors[0],
+        assert self.template_bin_counts.shape == shape_uncertainties.shape, (
+            self.template_bin_counts.shape,
+            shape_uncertainties.shape,
         )
 
-    def _check_fraction_conversion(self) -> None:
-        if self._check_if_fractions_are_needed():
-            assert self.fraction_conversion.needed is True
-            assert np.any(self.fraction_conversion.conversion_vector != 1), self.fraction_conversion.conversion_vector
-            assert np.any(self.fraction_conversion.conversion_matrix != 0), self.fraction_conversion.conversion_matrix
-            assert (
-                len(self.fraction_conversion.conversion_vector.shape) == 1
-            ), self.fraction_conversion.conversion_vector.shape
-            assert self.fraction_conversion.conversion_vector.shape[0] == max(self.number_of_templates), (
-                self.fraction_conversion.conversion_vector.shape[0],
-                max(self.number_of_templates),
-                self.number_of_templates,
-            )
-            assert (
-                len(self.fraction_conversion.conversion_matrix.shape) == 2
-            ), self.fraction_conversion.conversion_matrix.shape
-            assert self.fraction_conversion.conversion_matrix.shape[0] == max(self.number_of_templates), (
-                self.fraction_conversion.conversion_matrix.shape[0],
-                max(self.number_of_templates),
-                self.number_of_templates,
-            )
-            _first_channel = self._channels[0]
-            assert isinstance(_first_channel, Channel), type(_first_channel).__name__
-            assert self.fraction_conversion.conversion_matrix.shape[1] == len(_first_channel.fractions_mask), (
-                self.fraction_conversion.conversion_matrix.shape[1],
-                len(_first_channel.fractions_mask),
-                _first_channel.fractions_mask,
-            )
-        else:
-            logging.info(
-                "Fraction parameters are not used, as no templates of the same channel share a common yield parameter."
-            )
-            assert self.fraction_conversion.needed is False
-            assert np.all(self.fraction_conversion.conversion_vector == 1), self.fraction_conversion.conversion_vector
-            assert np.all(self.fraction_conversion.conversion_matrix == 0), self.fraction_conversion.conversion_matrix
-
-            assert all(sum(c.required_fraction_parameters) == 0 for c in self._channels), "\n".join(
-                [f"{c.name}: {c.required_fraction_parameters}" for c in self._channels]
-            )
-            yields_i = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.yield_parameter_type)
-            assert all(
-                len(yields_i) >= c.total_number_of_templates for c in self._channels
-            ), f"{len(yields_i)}\n" + "\n".join([f"{c.name}: {c.total_number_of_templates}" for c in self._channels])
-
-    def _initialize_parameter_constraints(self) -> None:
-        indices, cvs, css = self._params.get_constraint_information()
-        self._constraint_indices = indices
-        self._constraint_values = cvs
-        self._constraint_sigmas = css
-        if len(indices) > 0:
-            self._has_constrained_parameters = True
-
-    def _check_parameter_constraints(self) -> None:
-        if self._has_constrained_parameters:
-            assert len(self.constraint_indices) > 0, (self._has_constrained_parameters, self.constraint_indices)
-        else:
-            assert len(self.constraint_indices) == 0, (self._has_constrained_parameters, self.constraint_indices)
-
-        assert len(self.constraint_indices) == len(self.constraint_values), (
-            len(self.constraint_indices),
-            len(self.constraint_values),
-        )
-        assert len(self.constraint_indices) == len(self.constraint_sigmas), (
-            len(self.constraint_indices),
-            len(self.constraint_sigmas),
+        relative_shape_uncertainties = np.divide(
+            shape_uncertainties,
+            self.template_bin_counts,
+            out=np.zeros_like(shape_uncertainties),
+            where=self.template_bin_counts != 0.0,
         )
 
-        self._constraints_checked = True
+        return relative_shape_uncertainties
+
+    @immutable_cached_property
+    def _nuisance_matrix_shape(self) -> Tuple[int, ...]:
+        return self.number_of_channels, max(self.number_of_templates), self.max_number_of_bins_flattened
+
+    @immutable_cached_property
+    def template_bin_errors_sq_per_ch_and_temp(self) -> List[List[np.ndarray]]:
+
+        b_errs2_per_ch_and_temp = [[tmp.bin_errors_sq.flatten() for tmp in ch.templates] for ch in self._channels]
+
+        # Resetting statistical error for empty bins to small value != 0:
+        for stat_bin_errors_per_ch in b_errs2_per_ch_and_temp:
+            for stat_bin_errors_per_temp in stat_bin_errors_per_ch:
+                stat_bin_errors_per_temp[stat_bin_errors_per_temp == 0.0] = 1e-14
+
+        b_errs2_per_channel = [np.stack(temps_in_ch) for temps_in_ch in b_errs2_per_ch_and_temp]
+        self._check_template_bin_errors_shapes(bin_errors_per_ch=b_errs2_per_channel)
+
+        return b_errs2_per_ch_and_temp
+
+    @immutable_cached_property
+    def template_stat_error_sq_matrix_per_channel(self) -> List[np.ndarray]:
+
+        bin_errors_sq_per_ch_and_temp = self.template_bin_errors_sq_per_ch_and_temp
+        bin_errors_sq_per_ch = [np.stack(temps_in_ch) for temps_in_ch in bin_errors_sq_per_ch_and_temp]
+        stat_err_sq_matrix_per_ch = [
+            np.apply_along_axis(func1d=np.diag, axis=1, arr=stat_err_array) for stat_err_array in bin_errors_sq_per_ch
+        ]
+
+        # Checking shape of matrices:
+        assert len(stat_err_sq_matrix_per_ch) == self.number_of_channels, (
+            len(stat_err_sq_matrix_per_ch),
+            self.number_of_channels,
+        )
+        assert all(len(matrix.shape) == 3 for matrix in stat_err_sq_matrix_per_ch), (
+            [m.shape for m in stat_err_sq_matrix_per_ch],
+            [len(m.shape) for m in stat_err_sq_matrix_per_ch],
+        )
+        assert all(m.shape[:-1] == a.shape for m, a in zip(stat_err_sq_matrix_per_ch, bin_errors_sq_per_ch)), [
+            (m.shape, a.shape) for m, a in zip(stat_err_sq_matrix_per_ch, bin_errors_sq_per_ch)
+        ]
+        assert all(m.shape[1] == m.shape[2] for m in stat_err_sq_matrix_per_ch), [
+            m.shape for m in stat_err_sq_matrix_per_ch
+        ]
+
+        return stat_err_sq_matrix_per_ch
+
+    @immutable_cached_property
+    def template_stat_error_sq_matrix_per_ch_and_temp(self) -> List[List[np.ndarray]]:
+
+        bin_errors_sq_per_ch_and_temp = self.template_bin_errors_sq_per_ch_and_temp
+        stat_err_sq_matrix_per_ch_and_temp = [
+            [np.diag(temp_array) for temp_array in stat_err_arrays_per_temp]
+            for stat_err_arrays_per_temp in bin_errors_sq_per_ch_and_temp
+        ]
+
+        # Checking shape of matrices:
+        assert len(stat_err_sq_matrix_per_ch_and_temp) == self.number_of_channels, (
+            len(stat_err_sq_matrix_per_ch_and_temp),
+            self.number_of_channels,
+        )
+        assert all(
+            len(temps_per_ch) == ch.total_number_of_templates
+            for temps_per_ch, ch in zip(stat_err_sq_matrix_per_ch_and_temp, self._channels)
+        ), [(len(a), c.total_number_of_templates) for a, c in zip(stat_err_sq_matrix_per_ch_and_temp, self._channels)]
+        assert all(isinstance(m, np.ndarray) for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps), [
+            type(m) for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps
+        ]
+        assert all(len(m.shape) == 2 for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps), [
+            (m.shape, len(m.shape)) for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps
+        ]
+        assert all(
+            all(m.shape[:-1] == a.shape for m, a in zip(ms, arrs))
+            for ms, arrs in zip(stat_err_sq_matrix_per_ch_and_temp, bin_errors_sq_per_ch_and_temp)
+        ), [
+            (m.shape, a.shape)
+            for ms, arrs in zip(stat_err_sq_matrix_per_ch_and_temp, bin_errors_sq_per_ch_and_temp)
+            for m, a in zip(ms, arrs)
+        ]
+        assert all(m.shape[0] == m.shape[1] for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps), [
+            m.shape for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps
+        ]
+
+        return stat_err_sq_matrix_per_ch_and_temp
 
     def _initialize_template_uncertainties(self) -> None:
         """
@@ -958,9 +945,9 @@ class FitModel:
 
         # Getting template_statistics_sys and sum over template axis to get right shape:
         # TODO: Whether the sum is needed depends on option 1a, 1b or 2)! -> Currently it is Option 1b!
-        template_statistics_sys_per_ch = self.get_template_stat_error_sq_matrix_per_ch_and_temp()
+        template_statistics_sys_per_ch = self.template_stat_error_sq_matrix_per_ch_and_temp
         # Option 1a:
-        # template_statistics_sys_per_ch = [m.sum(axis=0) for m in self.get_template_stat_error_sq_matrix_per_channel()]
+        # template_statistics_sys_per_ch = [m.sum(axis=0) for m in self.template_stat_error_sq_matrix_per_channel
 
         # TODO: The following combination is only valid for Option 1b!
         other_sys_cov_matrix_per_ch_and_temp = [
@@ -1018,49 +1005,6 @@ class FitModel:
         # Option 1a:
         # inv_corr_matrices = [np.linalg.inv(cov2corr(cov_matrix)) for cov_matrix in cov_matrices_per_ch]
         # self._inverse_template_bin_correlation_matrix = block_diag(*inv_corr_matrices)
-
-    def get_relative_shape_uncertainties(self) -> np.ndarray:
-        if self._relative_shape_uncertainties is not None:
-            return self._relative_shape_uncertainties
-
-        cov_matrices_per_ch_and_temp = self.systematics_covariance_matrices_per_channel
-        # TODO: Maybe add some more checks...
-        assert cov_matrices_per_ch_and_temp is not None
-
-        template_bin_counts = self.get_template_bin_counts()
-        assert template_bin_counts is not None
-
-        # TODO: The following combination is only valid for Option 1b!
-
-        padded_shape_uncertainties_per_ch = [
-            np.stack(
-                pad_sequences(
-                    [np.sqrt(np.diag(cov_for_temp)) for cov_for_temp in temps_in_ch],
-                    padding="post",
-                    maxlen=self.max_number_of_bins_flattened,
-                    value=0.0,
-                    dtype="float64",
-                )
-            )
-            for temps_in_ch in cov_matrices_per_ch_and_temp
-        ]
-
-        shape_uncertainties = np.stack(padded_shape_uncertainties_per_ch)
-
-        assert template_bin_counts.shape == shape_uncertainties.shape, (
-            template_bin_counts.shape,
-            shape_uncertainties.shape,
-        )
-
-        relative_shape_uncertainties = np.divide(
-            shape_uncertainties,
-            template_bin_counts,
-            out=np.zeros_like(shape_uncertainties),
-            where=template_bin_counts != 0.0,
-        )
-
-        self._relative_shape_uncertainties = relative_shape_uncertainties
-        return relative_shape_uncertainties
 
     def _check_systematics_uncertainty_matrices(self) -> None:
         assert len(self.systematics_covariance_matrices_per_channel) == self.number_of_channels, (
@@ -1122,30 +1066,165 @@ class FitModel:
         # Checking if matrix is symmetric.
         assert np.allclose(inv_corr_mat, inv_corr_mat.T, rtol=1e-05, atol=1e-08), (inv_corr_mat, "Matrix not symmetric")
 
-    def get_yields_vector(
+    def _check_template_bin_errors_shapes(self, bin_errors_per_ch: List[np.ndarray]) -> None:
+        assert len(bin_errors_per_ch) == self.number_of_channels, (len(bin_errors_per_ch), self.number_of_channels)
+        assert all(isinstance(a, np.ndarray) for a in bin_errors_per_ch), [type(a) for a in bin_errors_per_ch]
+        assert all(len(a.shape) == 2 for a in bin_errors_per_ch), [a.shape for a in bin_errors_per_ch]
+        assert all(a.shape[0] == ch.total_number_of_templates for a, ch in zip(bin_errors_per_ch, self._channels)), [
+            (a.shape[0], ch.total_number_of_templates) for a, ch in zip(bin_errors_per_ch, self._channels)
+        ]
+        assert all(a.shape[1] == ch_b.num_bins_total for a, ch_b in zip(bin_errors_per_ch, self.binning)), [
+            (a.shape[1], ch_b.num_bins_total) for a, ch_b in zip(bin_errors_per_ch, self.binning)
+        ]
+        assert all(not np.any(matrix == 0) for matrix in bin_errors_per_ch), [np.any(m == 0) for m in bin_errors_per_ch]
+
+    def _create_bin_nuisance_parameters(
         self,
-        parameter_vector: np.ndarray,
-    ) -> np.ndarray:
-        if self._yield_indices is not None:
-            return self._params.get_combined_parameters_by_index(
-                parameter_vector=parameter_vector,
-                indices=self._yield_indices,
+        template: Template,
+    ) -> List[TemplateParameter]:
+        bin_nuisance_model_params = []  # type: List[Union[ModelParameter, str]]
+        bin_nuisance_model_param_indices = []  # type: List[int]
+
+        # TODO now: Implement creation of nuisance parameters as required for option 1a!
+        #           -> Think about how nuisance parameter must be handled in general to make all options possible!!!
+        # TODO: General implementation of creation of nuisance parameters for different options of uncertainty handling!
+
+        nuisance_sigma = 1.0  # type: float
+        initial_nuisance_value = 0.0  # type: float
+
+        for counter in range(template.num_bins_total):
+            model_param_index, model_parameter = self.add_model_parameter(
+                name=f"bin_nuisance_param_{counter}_for_temp_{template.name}",
+                parameter_type=ParameterHandler.bin_nuisance_parameter_type,
+                floating=True,
+                initial_value=initial_nuisance_value,
+                constrain_to_value=initial_nuisance_value,
+                constraint_sigma=nuisance_sigma,
             )
-        self._check_is_initialized()
+            bin_nuisance_model_params.append(model_parameter)
+            bin_nuisance_model_param_indices.append(model_param_index)
 
-        indices_from_temps = self._get_yield_parameter_indices()
-
-        if not self._yields_checked:
-            self._check_yield_parameters(yield_parameter_indices=indices_from_temps)
-
-        self._yield_indices = indices_from_temps
-        return self._params.get_combined_parameters_by_index(
-            parameter_vector=parameter_vector,
-            indices=indices_from_temps,
+        bin_nuisance_template_paras = self._get_list_of_template_params(
+            input_params=bin_nuisance_model_params,
+            serial_numbers=template.serial_number,
+            container_name=template.name,
+            parameter_type=ParameterHandler.bin_nuisance_parameter_type,
+            input_parameter_list_name="bin_nuisance_parameters",
         )
 
+        logging.info(
+            f"Created {len(bin_nuisance_model_params)} bin nuisance ModelParameters "
+            f"for template '{template.name}' (serial no: {template.serial_number}) with "
+            f"{template.num_bins_total} bins and shape {template.shape}.\n"
+            f"Bin nuisance parameter indices = {bin_nuisance_model_param_indices}"
+        )
+
+        return bin_nuisance_template_paras
+
+    # endregion
+
+    # region Constraint-related methods and properties
+
+    @property
+    def constraint_indices(self) -> List[int]:
+        return [c.constraint_index for c in self._constraint_container]
+
+    @property
+    def constraint_values(self) -> List[float]:
+        return [c.central_value for c in self._constraint_container]
+
+    @property
+    def constraint_sigmas(self) -> List[float]:
+        return [c.uncertainty for c in self._constraint_container]
+
+    def _collect_parameter_constraints(self) -> None:
+        indices, cvs, css = self._params.get_constraint_information()
+        self._constraint_container.extend(Constraint(idx, cv, cs) for idx, cv, cs in zip(indices, cvs, css))
+
+    # endregion
+
+    # region Parameter handling
+    @property
+    def names_of_floating_parameters(self) -> Tuple[str, ...]:
+        return self._params.get_floating_parameter_names()
+
+    @property
+    def types_of_floating_parameters(self) -> Tuple[str, ...]:
+        return self._params.get_floating_parameter_types()
+
+    def get_yield_parameter_names(self) -> Tuple[str, ...]:
+        return self._params.get_yield_parameter_names()
+
+    def get_parameter_index(
+        self,
+        parameter_name: str,
+    ) -> int:
+        return self._params.get_index(name=parameter_name)
+
+    def get_model_parameter(self, name_or_index: Union[str, int]) -> ModelParameter:
+        if isinstance(name_or_index, int):
+            assert name_or_index < len(self._model_parameters), (name_or_index, len(self._model_parameters))
+            return self._model_parameters[name_or_index]
+        elif isinstance(name_or_index, str):
+            assert name_or_index in self._model_parameters_mapping, (
+                name_or_index,
+                self._model_parameters_mapping.keys(),
+            )
+            return self._model_parameters[self._model_parameters_mapping[name_or_index]]
+        else:
+            raise ValueError(
+                f"Expected string or integer for argument 'name_or_index'\n"
+                f"However, {name_or_index} of type {type(name_or_index)} was provided!"
+            )
+
+    def get_yield_parameter_name_from_process(
+        self,
+        process_name: str,
+    ) -> str:
+        templates = self.get_templates_by_process_name(process_name=process_name)
+        _first_yield_param = templates[0].yield_parameter  # type: Optional[TemplateParameter]
+        p_name = _first_yield_param.name if _first_yield_param is not None else None  # type: Optional[str]
+        p_id = _first_yield_param.param_id if _first_yield_param is not None else None  # type: Optional[int]
+        assert p_name is not None
+        assert all(t.yield_parameter is not None and t.yield_parameter.name == p_name for t in templates), (
+            process_name,
+            [t.yield_parameter.name if t.yield_parameter is not None else None for t in templates],
+        )
+        assert all(t.yield_parameter is not None and t.yield_parameter.param_id == p_id for t in templates), (
+            process_name,
+            [t.yield_parameter.param_id if t.yield_parameter is not None else None for t in templates],
+        )
+        return p_name
+
+    def get_yield(
+        self,
+        process_name: str,
+    ) -> float:
+        parameter_name = self.get_yield_parameter_name_from_process(process_name=process_name)
+        return self._params.get_parameters_by_name(parameter_names=parameter_name)
+
+    def set_initial_parameter_value(
+        self,
+        parameter_name: str,
+        new_initial_value: float,
+    ) -> None:
+        self._params.set_parameter_initial_value(parameter_name=parameter_name, new_initial_value=new_initial_value)
+
+    def set_yield(self, process_name: str, new_initial_value: float) -> None:
+        parameter_name = self.get_yield_parameter_name_from_process(process_name=process_name)
+        self.set_initial_parameter_value(parameter_name=parameter_name, new_initial_value=new_initial_value)
+
+    def reset_initial_parameter_value(
+        self,
+        parameter_name: str,
+    ) -> None:
+        self._params.reset_parameter_initial_value(parameter_name=parameter_name)
+
+    def reset_parameters_to_initial_values(self) -> None:
+        self._params.reset_parameters_to_initial_values()
+
     def _get_yield_parameter_indices(self) -> List[int]:
-        channel_with_max, max_number_of_templates = self._get_channel_with_max_number_of_templates()
+        channel_with_max, max_number_of_templates = self._channel_with_max_number_of_templates
         _channel_with_max = self._channels[channel_with_max]  # type: Optional[Channel]
         assert _channel_with_max is not None
         _yield_params = [
@@ -1155,6 +1234,81 @@ class FitModel:
         _yield_param_ids = [yp.param_id for yp in _yield_params if yp.param_id is not None]  # type: List[int]
         assert len(_yield_param_ids) == len(_channel_with_max.templates), "Undefined yield parameter ids encountered!"
         return _yield_param_ids
+
+    def _get_list_of_template_params(
+        self,
+        input_params: List[Union[ModelParameter, str]],
+        serial_numbers: Union[Tuple[int, ...], List[int], int],
+        container_name: str,
+        parameter_type: str,
+        input_parameter_list_name: str,
+    ) -> List[TemplateParameter]:
+        assert (
+            parameter_type in ParameterHandler.parameter_types
+        ), f"parameter_type must be one of {ParameterHandler.parameter_types}, you provided {parameter_type}!"
+
+        if isinstance(serial_numbers, int):
+            if not parameter_type == ParameterHandler.bin_nuisance_parameter_type:
+                raise ValueError(
+                    f"For model parameters of a different type than "
+                    f"parameter_type '{ParameterHandler.bin_nuisance_parameter_type}', a list or tuple of"
+                    f"serial numbers must be provided via the argument 'serial_numbers'!"
+                )
+            serial_numbers = [serial_numbers] * len(input_params)
+        else:
+            if len(serial_numbers) != len(input_params):
+                raise ValueError(
+                    f"Length of 'serial_numbers' (={len(serial_numbers)}) must be the same as length"
+                    f"of 'input_params' (={len(input_params)})!"
+                )
+
+        template_params = []
+        for i, (input_parameter, temp_serial_number) in enumerate(zip(input_params, serial_numbers)):
+            if isinstance(input_parameter, str):
+                model_parameter = self.get_model_parameter(name_or_index=input_parameter)
+            elif isinstance(input_parameter, ModelParameter):
+                self._check_model_parameter_registration(model_parameter=input_parameter)
+                model_parameter = input_parameter
+            else:
+                raise ValueError(
+                    f"Encountered unexpected type {type(input_parameter)} " f"in the provided {input_parameter_list_name}"
+                )
+
+            if model_parameter.parameter_type != parameter_type:
+                raise RuntimeError(
+                    f"The ModelParameters provided via {input_parameter_list_name} must be of "
+                    f"parameter_type '{parameter_type}', however, the {i + 1}th ModelParameter you "
+                    f"provided is of parameter_type '{model_parameter.parameter_type}'..."
+                )
+
+            template_param = TemplateParameter(
+                name=f"{container_name}_{model_parameter.name}",
+                parameter_handler=self._params,
+                model_parameter=model_parameter,
+            )
+
+            template_params.append(template_param)
+            model_parameter.used_by(
+                template_parameter=template_param,
+                template_serial_number=temp_serial_number,
+            )
+
+        return template_params
+
+    def _check_model_parameter_registration(self, model_parameter: ModelParameter) -> None:
+        if model_parameter.parameter_handler is not self._params:
+            raise ValueError(
+                f"The model parameter you are trying to register uses a different ParameterHandler "
+                f"than the model you are trying to register it to!\n"
+                f"\tModel's ParameterHandler: {self._params}\n"
+                f"\tModelParameters's ParameterHandler: {model_parameter.parameter_handler}\n"
+            )
+        if model_parameter.name not in self._model_parameters_mapping:
+            raise RuntimeError(
+                f"The model parameter you provided is not registered to the model you are "
+                f"trying to use it in.\nYour model parameter has the following properties:\n"
+                f"{model_parameter.as_string()}\n"
+            )
 
     def _check_yield_parameters(self, yield_parameter_indices: Optional[List[int]]) -> None:
         indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.yield_parameter_type)
@@ -1188,7 +1342,7 @@ class FitModel:
                 + "\n\n".join([i.as_string() for i in self._params.get_parameter_infos_by_index(indices=indices)])
             )
 
-        channel_with_max, max_number_of_templates = self._get_channel_with_max_number_of_templates()
+        channel_with_max, max_number_of_templates = self._channel_with_max_number_of_templates
         assert len(yield_parameter_indices) == max_number_of_templates, (
             len(yield_parameter_indices),
             max_number_of_templates,
@@ -1250,94 +1404,263 @@ class FitModel:
 
         self._yields_checked = True
 
-    def get_fractions_vector(self, parameter_vector: np.ndarray) -> np.ndarray:
-        if self._fraction_indices is not None:
-            return self._params.get_combined_parameters_by_index(
-                parameter_vector=parameter_vector,
-                indices=self._fraction_indices,
-            )
+    def _check_efficiency_parameters(self) -> None:
+        eff_i = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.efficiency_parameter_type)
 
-        self._check_is_initialized()
-        indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.fraction_parameter_type)
+        # Check the number of efficiency parameters, should be the same as the number of templates.
+        assert len(eff_i) == self.total_number_of_templates, (len(eff_i), self.total_number_of_templates)
 
-        if not self._fractions_checked:
-            self._check_fraction_parameters()
+        efficiency_parameter_infos = self._params.get_parameter_infos_by_index(indices=eff_i)
+        efficiency_model_parameters = [self._model_parameters[epi.model_index] for epi in efficiency_parameter_infos]
 
-        self._fraction_indices = indices
-        return self._params.get_combined_parameters_by_index(parameter_vector=parameter_vector, indices=indices)
+        # Check that the efficiency parameters are only used for one template each:
+        templates_list = []
+        for eff_param in efficiency_model_parameters:
+            assert len(eff_param.usage_serial_number_list) == 1, eff_param.as_string()
+            templates_list.append(eff_param.usage_serial_number_list[0])
+        assert len(set(templates_list)) == len(
+            templates_list
+        ), f"{len(set(templates_list))}, {len(templates_list)}\n\n {templates_list}"
 
+        # Check order of efficiency parameters:
+        template_serial_numbers = [t for ch in self._channels for t in ch.template_serial_numbers]
+        assert templates_list == template_serial_numbers, (templates_list, template_serial_numbers)
+
+        self._efficiencies_checked = True
+
+    # endregion
+
+    # region Templates and Components
+    @property
+    def _channel_with_max_number_of_templates(self) -> Tuple[int, int]:
+        channel_with_max, max_number_of_templates = max(enumerate(self.number_of_templates), key=operator.itemgetter(1))
+        return channel_with_max, max_number_of_templates
+
+    def get_template(
+        self,
+        name_or_index: Union[str, int],
+    ) -> Template:
+
+        return self._template_manager[name_or_index]
+
+    def get_templates_by_process_name(
+        self,
+        process_name: str,
+    ) -> List[Template]:
+
+        return self._template_manager.get_fit_objects_by_process_name(process_name)
+
+    def get_component(
+        self,
+        name_or_index: Union[str, int],
+    ) -> Component:
+
+        return self._component_manager[name_or_index]
+
+    # endregion
+
+    # region General checks
     def _check_fraction_parameters(self) -> None:
-        # Check number of fraction parameters
-        assert self.number_of_dependent_templates == self.number_of_fraction_parameters, (
-            self.number_of_dependent_templates,
-            self.number_of_fraction_parameters,
+        self._fractions_checked = self._fraction_manager.check_fraction_parameters(self._model_parameters)
+
+    def _check_matrix_shapes(
+        self,
+        yield_params: np.ndarray,
+        fraction_params: np.ndarray,
+        efficiency_params: np.ndarray,
+        templates: np.ndarray,
+    ) -> None:
+        if self._is_checked:
+            return
+
+        assert len(yield_params.shape) == 1, (len(yield_params.shape), yield_params.shape)
+        assert len(efficiency_params.shape) == 2, (len(efficiency_params.shape), efficiency_params.shape)
+        assert len(templates.shape) == 3, (len(templates.shape), templates.shape)
+
+        assert yield_params.shape[0] == efficiency_params.shape[1], (yield_params.shape[0], efficiency_params.shape[1])
+
+        assert efficiency_params.shape[0] == templates.shape[0], (efficiency_params.shape[0], templates.shape[0])
+        assert efficiency_params.shape[1] == templates.shape[1], (efficiency_params.shape[1], templates.shape[1])
+
+        if self.fraction_conversion.needed:
+            assert self._fraction_manager.check_matrix_shapes(yield_params, fraction_params)
+
+    def _check_bin_nuisance_parameters(self) -> None:
+        # TODO now: adapt nuisance parameter check to option 1a!
+        # TODO: adapt nuisance parameter check to different options!
+
+        nu_is = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.bin_nuisance_parameter_type)
+        number_bins_with_nuisance = sum(
+            [
+                ch.binning.num_bins_total
+                for ch in self._channels
+                for t in ch.sub_templates
+                if t.bin_nuisance_parameters is not None
+            ]
         )
-        frac_i = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.fraction_parameter_type)
-        assert max(self.number_of_dependent_templates) == len(frac_i), (
-            f"Required fraction_parameters = "
-            f"{max(self.number_of_dependent_templates)}\n"
-            f"Registered fraction model parameters = "
-            f"{len(frac_i)}"
+        assert len(nu_is) == number_bins_with_nuisance, (len(nu_is), number_bins_with_nuisance)
+
+        nuisance_model_parameter_infos = self._params.get_parameter_infos_by_index(indices=nu_is)
+        assert all(param_info.name.startswith("bin_nuisance_param_") for param_info in nuisance_model_parameter_infos), (
+            f"Parameter names of parameters registered under type {ParameterHandler.bin_nuisance_parameter_type}:\n"
+            + "\n\t".join([pi.name for pi in nuisance_model_parameter_infos])
         )
 
-        # Check that fraction parameters are the same for each channel
-        assert all(
-            nf == self.number_of_fraction_parameters[0] for nf in self.number_of_fraction_parameters
-        ), self.number_of_fraction_parameters
-
-        fraction_parameter_infos = self._params.get_parameter_infos_by_index(indices=frac_i)
-        fraction_model_parameters = [self._model_parameters[fpi.model_index] for fpi in fraction_parameter_infos]
-
-        # Check order and consistency of fraction parameters
+        index_counter = 0
         for channel in self._channels:
-            par_i = 0
-            comps_and_temps = [(c, t) for c in channel.components for t in c.sub_templates]
+            for component in channel.components:
+                for template in component.sub_templates:
+                    if template.bin_nuisance_parameters is None:
+                        assert not any(
+                            pi.name.endswith(f"_for_temp_{template.name}") for pi in nuisance_model_parameter_infos
+                        ), (
+                            template.name,
+                            [
+                                pi.name
+                                for pi in nuisance_model_parameter_infos
+                                if pi.name.endswith(f"_for_temp_{template.name}")
+                            ],
+                        )
+                    else:
+                        n_bins = template.num_bins_total
+                        current_bin_nu_pars = nuisance_model_parameter_infos[index_counter : index_counter + n_bins]
+                        assert all(pi.name.endswith(f"_for_temp_{template.name}") for pi in current_bin_nu_pars), (
+                            template.name,
+                            n_bins,
+                            [pi.name for pi in current_bin_nu_pars],
+                        )
+                        assert all(
+                            pi.param_id == template.bin_nuisance_parameters[i].param_id
+                            for i, pi in enumerate(current_bin_nu_pars)
+                        ), (
+                            template.name,
+                            [
+                                (
+                                    pi.param_id,
+                                    template.bin_nuisance_parameters[i].param_id,
+                                    template.bin_nuisance_parameters[i].name,
+                                )
+                                for i, pi in enumerate(current_bin_nu_pars)
+                            ],
+                        )
+                        index_counter += n_bins
 
-            assert len(comps_and_temps) == channel.total_number_of_templates, (
-                len(comps_and_temps),
-                channel.total_number_of_templates,
+        self._bin_nuisance_params_checked = True
+
+    def _check_model_setup(self) -> None:
+        info_text = (
+            f"For consistency,\n"
+            f"\t- the order of the templates/processes has to be the same in each channel, and\n"
+            f"\t- Composition of all components has to be the same in each channel.\n"
+            f"{self._model_setup_as_string()}"
+        )
+
+        _first_channel = self._channels[0]
+        assert isinstance(_first_channel, Channel), type(_first_channel).__name__
+        if not all(ch.process_names == _first_channel.process_names for ch in self._channels):
+            raise RuntimeError(
+                "The order of processes per channel, which make up the model is inconsistent!\n" + info_text
             )
-            assert len(channel.fractions_mask) == channel.total_number_of_templates, (
-                len(channel.fractions_mask),
-                channel.total_number_of_templates,
+
+        if not all(ch.process_names_per_component == _first_channel.process_names_per_component for ch in self._channels):
+            raise RuntimeError("The order of channel components, which make up the model is inconsistent!\n" + info_text)
+
+    def _check_has_data(
+        self,
+        adding: str,
+    ) -> None:
+        if self._has_data is True:
+            raise RuntimeError(
+                f"Trying to add new {adding} after adding the data to the model!\n"
+                f"All {adding}s have to be added before 'add_data' is called!"
             )
 
-            last_mask_value = False
-            for counter, ((component, template), mask_value) in enumerate(zip(comps_and_temps, channel.fractions_mask)):
-                if mask_value:
-                    assert component.has_fractions
-                    assert fraction_parameter_infos[par_i].parameter_type == ParameterHandler.fraction_parameter_type, (
-                        par_i,
-                        fraction_parameter_infos[par_i].as_string(),
-                    )
-                    temp_serial_num = fraction_model_parameters[par_i].usage_serial_number_list[channel.channel_index]
-                    assert temp_serial_num == template.serial_number, (temp_serial_num, template.serial_number)
-                    temp_param = fraction_model_parameters[par_i].usage_template_parameter_list[channel.channel_index]
-                    assert template.fraction_parameter == temp_param, (
-                        template.fraction_parameter.as_string(),
-                        temp_param.as_string(),
-                    )
+    def _check_is_initialized(self) -> None:
+        if not self._is_initialized:
+            raise RuntimeError(
+                "The model is not finalized, yet!\nPlease use the 'finalize_model' method to finalize the model setup!"
+            )
 
-                elif (not mask_value) and last_mask_value:
-                    assert component.has_fractions
-                    assert component.template_serial_numbers[-1] == template.serial_number, (
-                        component.template_serial_numbers[-1],
-                        template.serial_number,
-                    )
-                    assert template.fraction_parameter is None
-                    par_i += 1
-                    assert par_i <= len(fraction_parameter_infos), (par_i, len(fraction_parameter_infos))
-                else:
-                    assert (not mask_value) and (not last_mask_value), (mask_value, last_mask_value)
-                    assert not component.has_fractions
-                    assert template.fraction_parameter is None
+    def _check_is_not_finalized(self) -> None:
+        if self._is_initialized:
+            raise RuntimeError("The Model has already been finalized and cannot be altered anymore!")
 
-                if counter == len(comps_and_temps) - 1:
-                    assert par_i == len(fraction_parameter_infos), (counter, par_i, len(fraction_parameter_infos))
+    # endregion
 
-                last_mask_value = mask_value
+    # region Functions updated by the minimizer (speed sensitive, uses parameter_vector ndarray)
 
-        self._fractions_checked = True
+    def get_templates(
+        self,
+        nuisance_parameters: Optional[np.ndarray],
+    ) -> np.ndarray:
+        if nuisance_parameters is None and self._template_shape is not None:
+            return self._template_shape
+
+        if nuisance_parameters is not None:
+            # Apply shape uncertainties:
+            templates_with_shape_uncertainties = self.template_bin_counts * (
+                1.0 + nuisance_parameters * self.relative_shape_uncertainties
+            )
+        else:
+            templates_with_shape_uncertainties = self.template_bin_counts
+
+        # Normalization of template bin counts with shape uncertainties to obtain the template shapes:
+        norm_denominator = templates_with_shape_uncertainties.sum(axis=2)[:, :, np.newaxis]
+        if len(np.argwhere(norm_denominator == 0)) > 0:
+            # Handling cases where empty templates would cause division by 0, resulting in a template shape with NaNs.
+            for row, col, _ in np.argwhere(norm_denominator == 0):
+                assert all(templates_with_shape_uncertainties[row, col, :] == 0), templates_with_shape_uncertainties[
+                    row, col, :
+                ]
+                norm_denominator[row, col, 0] = 1.0
+
+        templates_with_shape_uncertainties /= norm_denominator
+
+        if nuisance_parameters is None:
+            self._template_shape = templates_with_shape_uncertainties
+
+        return templates_with_shape_uncertainties
+
+    def get_nuisance_parameters(
+        self,
+        parameter_vector: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        nuisance_parameter_vector = self._params.get_combined_parameters_by_index(
+            parameter_vector=parameter_vector, indices=self.bin_nuisance_parameter_indices
+        )
+
+        new_nuisance_matrix_shape = self._nuisance_matrix_shape
+        complex_reshaping_required = not all(
+            n_bins == self.number_of_bins_flattened_per_channel[0] for n_bins in self.number_of_bins_flattened_per_channel
+        )
+
+        if complex_reshaping_required:
+            num_bins_times_templates = np.array(self.number_of_bins_flattened_per_channel) * np.array(
+                self.number_of_templates
+            )
+
+            cum_sum_of_bins = np.cumsum(num_bins_times_templates)
+            split_indices, check_sum = np.split(cum_sum_of_bins, [len(cum_sum_of_bins) - 1])
+            assert check_sum[0] == sum(num_bins_times_templates), (
+                check_sum,
+                sum(num_bins_times_templates),
+                num_bins_times_templates,
+            )
+
+            assert len(nuisance_parameter_vector) == check_sum[0], (len(nuisance_parameter_vector), check_sum[0])
+
+            nuisance_param_vectors_per_ch = np.split(nuisance_parameter_vector, split_indices)
+            assert all(
+                len(nus_v) == n_bins for nus_v, n_bins in zip(nuisance_param_vectors_per_ch, num_bins_times_templates)
+            ), [(len(nv), nb) for nv, nb in zip(nuisance_param_vectors_per_ch, num_bins_times_templates)]
+
+            padded_nuisance_param_vectors = pad_sequences(nuisance_param_vectors_per_ch, padding="post", dtype="int32")
+
+            nuisance_parameter_matrix = np.reshape(padded_nuisance_param_vectors, newshape=new_nuisance_matrix_shape)
+        else:
+            nuisance_parameter_matrix = np.reshape(nuisance_parameter_vector, newshape=new_nuisance_matrix_shape)
+
+        return nuisance_parameter_vector, nuisance_parameter_matrix
 
     def get_efficiencies_matrix(
         self,
@@ -1407,365 +1730,43 @@ class FitModel:
 
         return shaped_effs_matrix
 
-    def _check_efficiency_parameters(self) -> None:
-        eff_i = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.efficiency_parameter_type)
+    def get_fractions_vector(self, parameter_vector: np.ndarray) -> np.ndarray:
+        if self._fraction_indices is not None:
+            return self._params.get_combined_parameters_by_index(
+                parameter_vector=parameter_vector,
+                indices=self._fraction_indices,
+            )
 
-        # Check the number of efficiency parameters, should be the same as the number of templates.
-        assert len(eff_i) == self.total_number_of_templates, (len(eff_i), self.total_number_of_templates)
+        self._check_is_initialized()
+        indices = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.fraction_parameter_type)
 
-        efficiency_parameter_infos = self._params.get_parameter_infos_by_index(indices=eff_i)
-        efficiency_model_parameters = [self._model_parameters[epi.model_index] for epi in efficiency_parameter_infos]
+        if not self._fractions_checked:
+            self._check_fraction_parameters()
 
-        # Check that the efficiency parameters are only used for one template each:
-        templates_list = []
-        for eff_param in efficiency_model_parameters:
-            assert len(eff_param.usage_serial_number_list) == 1, eff_param.as_string()
-            templates_list.append(eff_param.usage_serial_number_list[0])
-        assert len(set(templates_list)) == len(
-            templates_list
-        ), f"{len(set(templates_list))}, {len(templates_list)}\n\n {templates_list}"
+        self._fraction_indices = indices
+        return self._params.get_combined_parameters_by_index(parameter_vector=parameter_vector, indices=indices)
 
-        # Check order of efficiency parameters:
-        template_serial_numbers = [t for ch in self._channels for t in ch.template_serial_numbers]
-        assert templates_list == template_serial_numbers, (templates_list, template_serial_numbers)
-
-        self._efficiencies_checked = True
-
-    def get_nuisance_parameters(
+    def get_yields_vector(
         self,
         parameter_vector: np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        nuisance_parameter_vector = self._params.get_combined_parameters_by_index(
-            parameter_vector=parameter_vector, indices=self.get_bin_nuisance_parameter_indices()
-        )
-
-        new_nuisance_matrix_shape = self._get_nuisance_matrix_shape()
-        complex_reshaping_required = not all(
-            n_bins == self.number_of_bins_flattened_per_channel[0] for n_bins in self.number_of_bins_flattened_per_channel
-        )
-
-        if complex_reshaping_required:
-            num_bins_times_templates = np.array(self.number_of_bins_flattened_per_channel) * np.array(
-                self.number_of_templates
-            )
-
-            cum_sum_of_bins = np.cumsum(num_bins_times_templates)
-            split_indices, check_sum = np.split(cum_sum_of_bins, [len(cum_sum_of_bins) - 1])
-            assert check_sum[0] == sum(num_bins_times_templates), (
-                check_sum,
-                sum(num_bins_times_templates),
-                num_bins_times_templates,
-            )
-
-            assert len(nuisance_parameter_vector) == check_sum[0], (len(nuisance_parameter_vector), check_sum[0])
-
-            nuisance_param_vectors_per_ch = np.split(nuisance_parameter_vector, split_indices)
-            assert all(
-                len(nus_v) == n_bins for nus_v, n_bins in zip(nuisance_param_vectors_per_ch, num_bins_times_templates)
-            ), [(len(nv), nb) for nv, nb in zip(nuisance_param_vectors_per_ch, num_bins_times_templates)]
-
-            padded_nuisance_param_vectors = pad_sequences(nuisance_param_vectors_per_ch, padding="post", dtype="int32")
-
-            nuisance_parameter_matrix = np.reshape(padded_nuisance_param_vectors, newshape=new_nuisance_matrix_shape)
-        else:
-            nuisance_parameter_matrix = np.reshape(nuisance_parameter_vector, newshape=new_nuisance_matrix_shape)
-
-        return nuisance_parameter_vector, nuisance_parameter_matrix
-
-    def get_bin_nuisance_parameter_indices(self) -> List[int]:
-        if self._bin_nuisance_param_indices is not None:
-            return self._bin_nuisance_param_indices
-
-        bin_nuisance_param_indices = self._params.get_parameter_indices_for_type(
-            parameter_type=ParameterHandler.bin_nuisance_parameter_type,
-        )
-
-        if not self._bin_nuisance_params_checked:
-            self._check_bin_nuisance_parameters()
-
-        self._bin_nuisance_param_indices = bin_nuisance_param_indices
-        return bin_nuisance_param_indices
-
-    def _get_nuisance_matrix_shape(self) -> Tuple[int, ...]:
-        if self._nuisance_matrix_shape is not None:
-            return self._nuisance_matrix_shape
-
-        nuisance_matrix_shape = (
-            self.number_of_channels,
-            max(self.number_of_templates),
-            self.max_number_of_bins_flattened,
-        )
-
-        self._nuisance_matrix_shape = nuisance_matrix_shape
-        return nuisance_matrix_shape
-
-    def _check_bin_nuisance_parameters(self) -> None:
-        # TODO now: adapt nuisance parameter check to option 1a!
-        # TODO: adapt nuisance parameter check to different options!
-
-        nu_is = self._params.get_parameter_indices_for_type(parameter_type=ParameterHandler.bin_nuisance_parameter_type)
-        number_bins_with_nuisance = sum(
-            [
-                ch.binning.num_bins_total
-                for ch in self._channels
-                for t in ch.sub_templates
-                if t.bin_nuisance_parameters is not None
-            ]
-        )
-        assert len(nu_is) == number_bins_with_nuisance, (len(nu_is), number_bins_with_nuisance)
-
-        nuisance_model_parameter_infos = self._params.get_parameter_infos_by_index(indices=nu_is)
-        assert all(param_info.name.startswith("bin_nuisance_param_") for param_info in nuisance_model_parameter_infos), (
-            f"Parameter names of parameters registered under type {ParameterHandler.bin_nuisance_parameter_type}:\n"
-            + "\n\t".join([pi.name for pi in nuisance_model_parameter_infos])
-        )
-
-        index_counter = 0
-        for channel in self._channels:
-            for component in channel.components:
-                for template in component.sub_templates:
-                    if template.bin_nuisance_parameters is None:
-                        assert not any(
-                            pi.name.endswith(f"_for_temp_{template.name}") for pi in nuisance_model_parameter_infos
-                        ), (
-                            template.name,
-                            [
-                                pi.name
-                                for pi in nuisance_model_parameter_infos
-                                if pi.name.endswith(f"_for_temp_{template.name}")
-                            ],
-                        )
-                    else:
-                        n_bins = template.num_bins_total
-                        current_bin_nu_pars = nuisance_model_parameter_infos[index_counter : index_counter + n_bins]
-                        assert all(pi.name.endswith(f"_for_temp_{template.name}") for pi in current_bin_nu_pars), (
-                            template.name,
-                            n_bins,
-                            [pi.name for pi in current_bin_nu_pars],
-                        )
-                        assert all(
-                            pi.param_id == template.bin_nuisance_parameters[i].param_id
-                            for i, pi in enumerate(current_bin_nu_pars)
-                        ), (
-                            template.name,
-                            [
-                                (
-                                    pi.param_id,
-                                    template.bin_nuisance_parameters[i].param_id,
-                                    template.bin_nuisance_parameters[i].name,
-                                )
-                                for i, pi in enumerate(current_bin_nu_pars)
-                            ],
-                        )
-                        index_counter += n_bins
-
-        self._bin_nuisance_params_checked = True
-
-    def get_template_bin_counts(self) -> np.ndarray:
-        if self._template_bin_counts is not None:
-            return self._template_bin_counts
-
-        bin_counts_per_channel = [np.stack([tmp.bin_counts.flatten() for tmp in ch.templates]) for ch in self._channels]
-        padded_bin_counts_per_channel = self._apply_padding_to_templates(bin_counts_per_channel=bin_counts_per_channel)
-        template_bin_counts = np.stack(padded_bin_counts_per_channel)
-
-        if not self._template_shapes_checked:
-            self._check_template_shapes(template_bin_counts=template_bin_counts)
-
-        self._template_bin_counts = template_bin_counts
-        return self._template_bin_counts
-
-    def get_template_bin_errors_sq_per_ch_and_temp(self) -> List[List[np.ndarray]]:
-        if self._template_bin_errors_sq_per_ch_and_temp is not None:
-            return self._template_bin_errors_sq_per_ch_and_temp
-
-        b_errs2_per_ch_and_temp = [[tmp.bin_errors_sq.flatten() for tmp in ch.templates] for ch in self._channels]
-
-        # Resetting statistical error for empty bins to small value != 0:
-        for stat_bin_errors_per_ch in b_errs2_per_ch_and_temp:
-            for stat_bin_errors_per_temp in stat_bin_errors_per_ch:
-                stat_bin_errors_per_temp[stat_bin_errors_per_temp == 0.0] = 1e-14
-
-        b_errs2_per_channel = [np.stack(temps_in_ch) for temps_in_ch in b_errs2_per_ch_and_temp]
-        self._check_template_bin_errors_shapes(bin_errors_per_ch=b_errs2_per_channel)
-
-        self._template_bin_errors_sq_per_ch_and_temp = b_errs2_per_ch_and_temp
-        return self._template_bin_errors_sq_per_ch_and_temp
-
-    def get_template_stat_error_sq_matrix_per_channel(self) -> List[np.ndarray]:
-        if self._template_stat_error_sq_matrix_per_channel is not None:
-            return self._template_stat_error_sq_matrix_per_channel
-
-        bin_errors_sq_per_ch_and_temp = self.get_template_bin_errors_sq_per_ch_and_temp()
-        bin_errors_sq_per_ch = [np.stack(temps_in_ch) for temps_in_ch in bin_errors_sq_per_ch_and_temp]
-        stat_err_sq_matrix_per_ch = [
-            np.apply_along_axis(func1d=np.diag, axis=1, arr=stat_err_array) for stat_err_array in bin_errors_sq_per_ch
-        ]
-
-        # Checking shape of matrices:
-        assert len(stat_err_sq_matrix_per_ch) == self.number_of_channels, (
-            len(stat_err_sq_matrix_per_ch),
-            self.number_of_channels,
-        )
-        assert all(len(matrix.shape) == 3 for matrix in stat_err_sq_matrix_per_ch), (
-            [m.shape for m in stat_err_sq_matrix_per_ch],
-            [len(m.shape) for m in stat_err_sq_matrix_per_ch],
-        )
-        assert all(m.shape[:-1] == a.shape for m, a in zip(stat_err_sq_matrix_per_ch, bin_errors_sq_per_ch)), [
-            (m.shape, a.shape) for m, a in zip(stat_err_sq_matrix_per_ch, bin_errors_sq_per_ch)
-        ]
-        assert all(m.shape[1] == m.shape[2] for m in stat_err_sq_matrix_per_ch), [
-            m.shape for m in stat_err_sq_matrix_per_ch
-        ]
-
-        self._template_stat_error_sq_matrix_per_channel = stat_err_sq_matrix_per_ch
-        return self._template_stat_error_sq_matrix_per_channel
-
-    def get_template_stat_error_sq_matrix_per_ch_and_temp(self) -> List[List[np.ndarray]]:
-        if self._template_stat_error_sq_matrix_per_ch_and_temp is not None:
-            return self._template_stat_error_sq_matrix_per_ch_and_temp
-
-        bin_errors_sq_per_ch_and_temp = self.get_template_bin_errors_sq_per_ch_and_temp()
-        stat_err_sq_matrix_per_ch_and_temp = [
-            [np.diag(temp_array) for temp_array in stat_err_arrays_per_temp]
-            for stat_err_arrays_per_temp in bin_errors_sq_per_ch_and_temp
-        ]
-
-        # Checking shape of matrices:
-        assert len(stat_err_sq_matrix_per_ch_and_temp) == self.number_of_channels, (
-            len(stat_err_sq_matrix_per_ch_and_temp),
-            self.number_of_channels,
-        )
-        assert all(
-            len(temps_per_ch) == ch.total_number_of_templates
-            for temps_per_ch, ch in zip(stat_err_sq_matrix_per_ch_and_temp, self._channels)
-        ), [(len(a), c.total_number_of_templates) for a, c in zip(stat_err_sq_matrix_per_ch_and_temp, self._channels)]
-        assert all(isinstance(m, np.ndarray) for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps), [
-            type(m) for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps
-        ]
-        assert all(len(m.shape) == 2 for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps), [
-            (m.shape, len(m.shape)) for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps
-        ]
-        assert all(
-            all(m.shape[:-1] == a.shape for m, a in zip(ms, arrs))
-            for ms, arrs in zip(stat_err_sq_matrix_per_ch_and_temp, bin_errors_sq_per_ch_and_temp)
-        ), [
-            (m.shape, a.shape)
-            for ms, arrs in zip(stat_err_sq_matrix_per_ch_and_temp, bin_errors_sq_per_ch_and_temp)
-            for m, a in zip(ms, arrs)
-        ]
-        assert all(m.shape[0] == m.shape[1] for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps), [
-            m.shape for temps in stat_err_sq_matrix_per_ch_and_temp for m in temps
-        ]
-
-        self._template_stat_error_sq_matrix_per_ch_and_temp = stat_err_sq_matrix_per_ch_and_temp
-        return self._template_stat_error_sq_matrix_per_ch_and_temp
-
-    def _apply_padding_to_templates(
-        self,
-        bin_counts_per_channel: List[np.ndarray],
-    ) -> List[np.ndarray]:
-        if not self._template_shapes_checked:
-            assert all(
-                [bc.shape[1] == ch.binning.num_bins_total for bc, ch in zip(bin_counts_per_channel, self._channels)]
-            ), "\t" + "\n\t".join(
-                [f"{bc.shape[1]} : {ch.binning.num_bins_total}" for bc, ch in zip(bin_counts_per_channel, self._channels)]
-            )
-
-        max_n_bins = max([bc.shape[1] for bc in bin_counts_per_channel])
-
-        if all(bc.shape[1] == max_n_bins for bc in bin_counts_per_channel):
-            return bin_counts_per_channel
-        else:
-            pad_widths = self._pad_widths_per_channel()
-            return [
-                np.pad(bc, pad_width=pad_width, mode="constant", constant_values=0)
-                for bc, pad_width in zip(bin_counts_per_channel, pad_widths)
-            ]
-
-    def _pad_widths_per_channel(self) -> List[List[Tuple[int, int]]]:
-        max_n_bins = max([ch.binning.num_bins_total for ch in self._channels])
-        if not self._is_checked:
-            assert max_n_bins == self.max_number_of_bins_flattened, (max_n_bins, self.max_number_of_bins_flattened)
-        return [[(0, 0), (0, max_n_bins - ch.binning.num_bins_total)] for ch in self._channels]
-
-    def _check_template_shapes(
-        self,
-        template_bin_counts: np.ndarray,
-    ) -> None:
-        # Check order of processes in channels:
-        _first_channel = self._channels[0]
-        assert isinstance(_first_channel, Channel), type(_first_channel).__name__
-        assert all(ch.process_names == _first_channel.process_names for ch in self._channels), [
-            ch.process_names for ch in self._channels
-        ]
-
-        # Check shape of template_bin_counts
-        assert len(template_bin_counts.shape) == 3, (len(template_bin_counts.shape), template_bin_counts.shape)
-        assert template_bin_counts.shape[0] == self.number_of_channels, (
-            template_bin_counts.shape,
-            template_bin_counts.shape[0],
-            self.number_of_channels,
-        )
-        assert all(template_bin_counts.shape[1] == ts_in_ch for ts_in_ch in self.number_of_templates), (
-            template_bin_counts.shape,
-            template_bin_counts.shape[1],
-            [t_ch for t_ch in self.number_of_templates],
-        )
-        assert template_bin_counts.shape[2] == self.max_number_of_bins_flattened, (
-            template_bin_counts.shape,
-            template_bin_counts.shape[2],
-            self.max_number_of_bins_flattened,
-        )
-
-        self._template_shapes_checked = True
-
-    def _check_template_bin_errors_shapes(self, bin_errors_per_ch: List[np.ndarray]) -> None:
-        assert len(bin_errors_per_ch) == self.number_of_channels, (len(bin_errors_per_ch), self.number_of_channels)
-        assert all(isinstance(a, np.ndarray) for a in bin_errors_per_ch), [type(a) for a in bin_errors_per_ch]
-        assert all(len(a.shape) == 2 for a in bin_errors_per_ch), [a.shape for a in bin_errors_per_ch]
-        assert all(a.shape[0] == ch.total_number_of_templates for a, ch in zip(bin_errors_per_ch, self._channels)), [
-            (a.shape[0], ch.total_number_of_templates) for a, ch in zip(bin_errors_per_ch, self._channels)
-        ]
-        assert all(a.shape[1] == ch_b.num_bins_total for a, ch_b in zip(bin_errors_per_ch, self.binning)), [
-            (a.shape[1], ch_b.num_bins_total) for a, ch_b in zip(bin_errors_per_ch, self.binning)
-        ]
-        assert all(not np.any(matrix == 0) for matrix in bin_errors_per_ch), [np.any(m == 0) for m in bin_errors_per_ch]
-
-    def get_templates(
-        self,
-        nuisance_parameters: Optional[np.ndarray],
     ) -> np.ndarray:
-        if nuisance_parameters is None and self._template_shape is not None:
-            return self._template_shape
-
-        template_bin_counts = self.get_template_bin_counts()
-
-        if nuisance_parameters is not None:
-            # Apply shape uncertainties:
-            relative_shape_uncertainties = self.get_relative_shape_uncertainties()
-            templates_with_shape_uncertainties = template_bin_counts * (
-                1.0 + nuisance_parameters * relative_shape_uncertainties
+        if self._yield_indices is not None:
+            return self._params.get_combined_parameters_by_index(
+                parameter_vector=parameter_vector,
+                indices=self._yield_indices,
             )
-        else:
-            templates_with_shape_uncertainties = template_bin_counts
+        self._check_is_initialized()
 
-        # Normalization of template bin counts with shape uncertainties to obtain the template shapes:
-        norm_denominator = templates_with_shape_uncertainties.sum(axis=2)[:, :, np.newaxis]
-        if len(np.argwhere(norm_denominator == 0)) > 0:
-            # Handling cases where empty templates would cause division by 0, resulting in a template shape with NaNs.
-            for row, col, _ in np.argwhere(norm_denominator == 0):
-                assert all(templates_with_shape_uncertainties[row, col, :] == 0), templates_with_shape_uncertainties[
-                    row, col, :
-                ]
-                norm_denominator[row, col, 0] = 1.0
+        indices_from_temps = self._get_yield_parameter_indices()
 
-        templates_with_shape_uncertainties /= norm_denominator
+        if not self._yields_checked:
+            self._check_yield_parameters(yield_parameter_indices=indices_from_temps)
 
-        if nuisance_parameters is None:
-            self._template_shape = templates_with_shape_uncertainties
-
-        return templates_with_shape_uncertainties
+        self._yield_indices = indices_from_temps
+        return self._params.get_combined_parameters_by_index(
+            parameter_vector=parameter_vector,
+            indices=indices_from_temps,
+        )
 
     def calculate_expected_bin_count(
         self,
@@ -1811,369 +1812,15 @@ class FitModel:
             bin_count = np.einsum("ij, ijk -> ik", (yield_parameters * normed_efficiency_parameters), normed_templates)
 
         if not self._is_checked:
-            self._check_bin_count_shape(bin_count=bin_count, where="calculate_expected_bin_count")
+            check_bin_count_shape(
+                bin_count=bin_count,
+                number_of_channels=self.number_of_channels,
+                max_number_of_bins=self.max_number_of_bins_flattened,
+                where="calculate_expected_bin_count",
+            )
             self._is_checked = True
 
         return bin_count
-
-    def _check_bin_count_shape(self, bin_count: np.ndarray, where: str) -> None:
-        assert bin_count is not None, where
-        assert len(bin_count.shape) == 2, (where, bin_count.shape, len(bin_count.shape))
-        assert bin_count.shape[0] == self.number_of_channels, (
-            where,
-            bin_count.shape,
-            bin_count.shape[0],
-            self.number_of_channels,
-        )
-        assert bin_count.shape[1] == self.max_number_of_bins_flattened, (
-            where,
-            bin_count.shape,
-            bin_count.shape[1],
-            self.max_number_of_bins_flattened,
-        )
-
-    def _check_matrix_shapes(
-        self,
-        yield_params: np.ndarray,
-        fraction_params: np.ndarray,
-        efficiency_params: np.ndarray,
-        templates: np.ndarray,
-    ) -> None:
-        if self._is_checked:
-            return
-
-        assert len(yield_params.shape) == 1, (len(yield_params.shape), yield_params.shape)
-        assert len(efficiency_params.shape) == 2, (len(efficiency_params.shape), efficiency_params.shape)
-        assert len(templates.shape) == 3, (len(templates.shape), templates.shape)
-
-        assert yield_params.shape[0] == efficiency_params.shape[1], (yield_params.shape[0], efficiency_params.shape[1])
-
-        assert efficiency_params.shape[0] == templates.shape[0], (efficiency_params.shape[0], templates.shape[0])
-        assert efficiency_params.shape[1] == templates.shape[1], (efficiency_params.shape[1], templates.shape[1])
-
-        if self.fraction_conversion.needed:
-            assert len(fraction_params.shape) == 1, (len(fraction_params.shape), fraction_params.shape)
-            assert (
-                len(self.fraction_conversion.conversion_vector.shape) == 1
-            ), self.fraction_conversion.conversion_vector.shape
-            assert (
-                len(self.fraction_conversion.conversion_matrix.shape) == 2
-            ), self.fraction_conversion.conversion_matrix.shape
-            assert yield_params.shape[0] == len(self.fraction_conversion.conversion_vector), (
-                yield_params.shape[0],
-                len(self.fraction_conversion.conversion_vector),
-            )
-            assert self.fraction_conversion.conversion_matrix.shape[0] == yield_params.shape[0], (
-                self.fraction_conversion.conversion_matrix.shape[0],
-                yield_params.shape[0],
-            )
-            assert self.fraction_conversion.conversion_matrix.shape[1] == fraction_params.shape[0], (
-                self.fraction_conversion.conversion_matrix.shape[1],
-                fraction_params.shape[0],
-            )
-
-    def get_flattened_data_bin_counts(self) -> np.array:
-        if self._data_bin_counts is not None:
-            return self._data_bin_counts
-
-        flat_data_bin_counts = [data_channel.bin_counts.flatten() for data_channel in self._data_channels]
-        padded_flat_data_bin_counts = self._apply_padding_to_data_bin_count(bin_counts_per_channel=flat_data_bin_counts)
-        data_bin_count_matrix = np.stack(padded_flat_data_bin_counts)
-
-        if not self._data_bin_count_checked:
-            self._check_bin_count_shape(bin_count=data_bin_count_matrix, where="get_flattened_data_bin_counts")
-            self._data_bin_count_checked = True
-
-        self._data_bin_counts = data_bin_count_matrix
-        return data_bin_count_matrix
-
-    def get_squared_data_stat_errors(self) -> np.ndarray:
-        if self._data_stat_errors_sq is not None:
-            return self._data_stat_errors_sq
-
-        flat_data_stat_errors_sq = [data_channel.bin_errors_sq.flatten() for data_channel in self._data_channels]
-        padded_flat_data_stat_errors_sq = self._apply_padding_to_data_bin_count(
-            bin_counts_per_channel=flat_data_stat_errors_sq,
-        )
-        data_stat_errors_sq = np.stack(padded_flat_data_stat_errors_sq)
-
-        if not self._data_stat_errors_checked:
-            assert data_stat_errors_sq.shape == self.get_flattened_data_bin_counts().shape, (
-                data_stat_errors_sq.shape,
-                self.get_flattened_data_bin_counts().shape,
-            )
-            self._data_stat_errors_checked = True
-
-        self._data_stat_errors_sq = data_stat_errors_sq
-        return data_stat_errors_sq
-
-    def _apply_padding_to_data_bin_count(self, bin_counts_per_channel: List[np.ndarray]) -> List[np.ndarray]:
-        if not self._data_bin_count_checked:
-            assert all(len(bc.shape) == 1 for bc in bin_counts_per_channel), [bc.shape for bc in bin_counts_per_channel]
-            assert all(len(bc) == b.num_bins_total for bc, b in zip(bin_counts_per_channel, self.binning)), "\n".join(
-                [
-                    f"{ch.name}: data_bins = {len(bc)} --- template_bins = {b.num_bins_total}"
-                    for ch, bc, b in zip(self._channels, bin_counts_per_channel, self.binning)
-                ]
-            )
-
-        max_n_bins = max([len(bc) for bc in bin_counts_per_channel])
-
-        if not self._data_bin_count_checked:
-            assert max_n_bins == self.max_number_of_bins_flattened, (max_n_bins, self.max_number_of_bins_flattened)
-
-        if all(len(bc) == max_n_bins for bc in bin_counts_per_channel):
-            return bin_counts_per_channel
-        else:
-            pad_widths = [(0, max_n_bins - ch.binning.num_bins_total) for ch in self._channels]
-            return [
-                np.pad(bc, pad_width=pad_width, mode="constant", constant_values=0)
-                for bc, pad_width in zip(bin_counts_per_channel, pad_widths)
-            ]
-
-    @property
-    def number_of_channels(self) -> int:
-        return len(self._channels)
-
-    @property
-    def binning(self) -> Tuple[Binning, ...]:
-        return tuple(channel.binning for channel in self._channels)
-
-    @property
-    def max_number_of_bins_flattened(self) -> int:
-        return max(ch_binning.num_bins_total for ch_binning in self.binning)
-
-    @property
-    def number_of_bins_flattened_per_channel(self) -> List[int]:
-        return [ch_binning.num_bins_total for ch_binning in self.binning]
-
-    @property
-    def number_of_components(self) -> Tuple[int, ...]:
-        return tuple(len(channel) for channel in self._channels)
-
-    @property
-    def total_number_of_templates(self) -> int:
-        return sum([c.total_number_of_templates for c in self._channels])
-
-    @property
-    # Number of templates per channel
-    def number_of_templates(self) -> Tuple[int, ...]:
-        return tuple(sum([comp.number_of_subcomponents for comp in ch.components]) for ch in self._channels)
-
-    @property
-    def number_of_independent_templates(self) -> Tuple[int, ...]:
-        return tuple(
-            sum([1 if comp.shared_yield else comp.number_of_subcomponents for comp in ch.components])
-            for ch in self._channels
-        )
-
-    @property
-    def number_of_dependent_templates(self) -> Tuple[int, ...]:
-        return tuple([t - it for t, it in zip(self.number_of_templates, self.number_of_independent_templates)])
-
-    @property
-    def number_of_expected_independent_yields(self) -> int:
-        return max(self.number_of_independent_templates)
-
-    @property
-    def min_number_of_independent_yields(self) -> int:
-        return min(self.number_of_independent_templates)
-
-    @property
-    def number_of_fraction_parameters(self) -> Tuple[int, ...]:
-        return tuple(sum([comp.required_fraction_parameters for comp in ch.components]) for ch in self._channels)
-
-    @property
-    def fraction_conversion(self) -> FractionConversionInfo:
-        assert self._fraction_conversion is not None
-        return self._fraction_conversion
-
-    @property
-    def constraint_indices(self) -> List[int]:
-        assert self._constraint_indices is not None
-        return self._constraint_indices
-
-    @property
-    def constraint_values(self) -> List[float]:
-        assert self._constraint_values is not None
-        return self._constraint_values
-
-    @property
-    def constraint_sigmas(self) -> List[float]:
-        assert self._constraint_sigmas is not None
-        return self._constraint_sigmas
-
-    @property
-    def systematics_covariance_matrices_per_channel(self) -> List[np.ndarray]:
-        assert self._systematics_covariance_matrices_per_channel is not None
-        return self._systematics_covariance_matrices_per_channel
-
-    @property
-    def inverse_template_bin_correlation_matrix(self) -> np.ndarray:
-        assert self._inverse_template_bin_correlation_matrix is not None
-        return self._inverse_template_bin_correlation_matrix
-
-    @property
-    def is_finalized(self) -> bool:
-        return self._is_initialized
-
-    def _get_channel_with_max_number_of_templates(self) -> Tuple[int, int]:
-        channel_with_max, max_number_of_templates = max(enumerate(self.number_of_templates), key=operator.itemgetter(1))
-        return channel_with_max, max_number_of_templates
-
-    def get_model_parameter(self, name_or_index: Union[str, int]) -> ModelParameter:
-        if isinstance(name_or_index, int):
-            assert name_or_index < len(self._model_parameters), (name_or_index, len(self._model_parameters))
-            return self._model_parameters[name_or_index]
-        elif isinstance(name_or_index, str):
-            assert name_or_index in self._model_parameters_mapping.keys(), (
-                name_or_index,
-                self._model_parameters_mapping.keys(),
-            )
-            return self._model_parameters[self._model_parameters_mapping[name_or_index]]
-        else:
-            raise ValueError(
-                f"Expected string or integer for argument 'name_or_index'\n"
-                f"However, {name_or_index} of type {type(name_or_index)} was provided!"
-            )
-
-    def get_template(
-        self,
-        name_or_index: Union[str, int],
-    ) -> Template:
-        if isinstance(name_or_index, int):
-            assert name_or_index < len(self._templates), (name_or_index, len(self._templates))
-            return self._templates[name_or_index]
-        elif isinstance(name_or_index, str):
-            assert name_or_index in self._templates_mapping.keys(), (name_or_index, self._templates_mapping.keys())
-            return self._templates[self._templates_mapping[name_or_index]]
-        else:
-            raise ValueError(
-                f"Expected string or integer for argument 'name_or_index'\n"
-                f"However, {name_or_index} of type {type(name_or_index)} was provided!"
-            )
-
-    def get_templates_by_process_name(
-        self,
-        process_name: str,
-    ) -> List[Template]:
-        temp_list = []
-        for template in self._templates:
-            if template.process_name == process_name:
-                temp_list.append(template)
-
-        if len(temp_list) == 0:
-            available_processes = list(set([t.process_name for t in self._templates]))
-            raise RuntimeError(
-                f"No templates with process name '{process_name}' could be found.\n"
-                f"The following process names are registered:\n\t" + "\n\t- ".join(available_processes)
-            )
-        return temp_list
-
-    def get_component(
-        self,
-        name_or_index: Union[str, int],
-    ) -> Component:
-        if isinstance(name_or_index, int):
-            assert name_or_index < len(self._components), (name_or_index, len(self._components))
-            return self._components[name_or_index]
-        elif isinstance(name_or_index, str):
-            assert name_or_index in self._components_mapping.keys(), (name_or_index, self._components_mapping.keys())
-            return self._components[self._components_mapping[name_or_index]]
-        else:
-            raise ValueError(
-                f"Expected string or integer for argument 'name_or_index'\n"
-                f"However, {name_or_index} of type {type(name_or_index)} was provided!"
-            )
-
-    def _get_list_of_template_params(
-        self,
-        input_params: List[Union[ModelParameter, str]],
-        serial_numbers: Union[Tuple[int, ...], List[int], int],
-        container_name: str,
-        parameter_type: str,
-        input_parameter_list_name: str,
-    ) -> List[TemplateParameter]:
-        assert (
-            parameter_type in ParameterHandler.parameter_types
-        ), f"parameter_type must be one of {ParameterHandler.parameter_types}, you provided {parameter_type}!"
-
-        if isinstance(serial_numbers, int):
-            if not parameter_type == ParameterHandler.bin_nuisance_parameter_type:
-                raise ValueError(
-                    f"For model parameters of a different type than "
-                    f"parameter_type '{ParameterHandler.bin_nuisance_parameter_type}', a list or tuple of"
-                    f"serial numbers must be provided via the argument 'serial_numbers'!"
-                )
-            serial_numbers = [serial_numbers] * len(input_params)
-        else:
-            if len(serial_numbers) != len(input_params):
-                raise ValueError(
-                    f"Length of 'serial_numbers' (={len(serial_numbers)}) must be the same as length"
-                    f"of 'input_params' (={len(input_params)})!"
-                )
-
-        template_params = []
-        for i, (input_parameter, temp_serial_number) in enumerate(zip(input_params, serial_numbers)):
-            if isinstance(input_parameter, str):
-                model_parameter = self.get_model_parameter(name_or_index=input_parameter)
-            elif isinstance(input_parameter, ModelParameter):
-                self._check_model_parameter_registration(model_parameter=input_parameter)
-                model_parameter = input_parameter
-            else:
-                raise ValueError(
-                    f"Encountered unexpected type {type(input_parameter)} " f"in the provided {input_parameter_list_name}"
-                )
-
-            if model_parameter.parameter_type != parameter_type:
-                raise RuntimeError(
-                    f"The ModelParameters provided via {input_parameter_list_name} must be of "
-                    f"parameter_type '{parameter_type}', however, the {i + 1}th ModelParameter you "
-                    f"provided is of parameter_type '{model_parameter.parameter_type}'..."
-                )
-
-            template_param = TemplateParameter(
-                name=f"{container_name}_{model_parameter.name}",
-                parameter_handler=self._params,
-                parameter_type=model_parameter.parameter_type,
-                floating=model_parameter.floating,
-                initial_value=model_parameter.initial_value,
-                param_id=model_parameter.param_id,
-            )
-
-            template_params.append(template_param)
-            model_parameter.used_by(
-                template_parameter=template_param,
-                template_serial_number=temp_serial_number,
-            )
-
-        return template_params
-
-    def _check_has_data(
-        self,
-        adding: str,
-    ) -> None:
-        if self._has_data is True:
-            raise RuntimeError(
-                f"Trying to add new {adding} after adding the data to the model!\n"
-                f"All {adding}s have to be added before 'add_data' is called!"
-            )
-
-    def _check_is_initialized(self) -> None:
-        if not self._is_initialized:
-            raise RuntimeError(
-                "The model is not finalized, yet!\nPlease use the 'finalize_model' method to finalize the model setup!"
-            )
-
-    def _check_is_not_finalized(self) -> None:
-        if self._is_initialized:
-            raise RuntimeError("The Model has already been finalized and cannot be altered anymore!")
-
-    def _check_if_fractions_are_needed(self) -> bool:
-        assert all(
-            [n_it <= n_t for n_it, n_t in zip(self.number_of_independent_templates, self.number_of_templates)]
-        ), "\n".join([f"{i}] <= {t}" for i, t in zip(self.number_of_independent_templates, self.number_of_templates)])
-        return not (self.number_of_independent_templates == self.number_of_templates)
 
     @jit(forceobj=True)
     def _gauss_term(
@@ -2206,7 +1853,7 @@ class FitModel:
         self,
         parameter_vector: np.ndarray,
     ) -> float:
-        if not self._has_constrained_parameters:
+        if not self._constraint_container:
             return 0.0
 
         constraint_pars = self._params.get_combined_parameters_by_index(
@@ -2224,11 +1871,17 @@ class FitModel:
 
     def get_masked_data_bin_count(self, mc_bin_count: np.ndarray) -> np.ndarray:
         if not self._ignore_empty_mc_bins:
-            return self.get_flattened_data_bin_counts()
+            return self._data_channels.get_flattened_data_bin_counts(
+                number_of_channels=self.number_of_channels, max_number_of_model_bins=self.max_number_of_bins_flattened
+            )
 
         # We assume that the yields are always > 0 and, hence, the masking will never change!
         if self._masked_data_bin_counts is None:
-            data_bin_count = np.copy(self.get_flattened_data_bin_counts())  # type: np.ndarray
+            data_bin_count = np.copy(
+                self._data_channels.get_flattened_data_bin_counts(
+                    number_of_channels=self.number_of_channels, max_number_of_model_bins=self.max_number_of_bins_flattened
+                )
+            )  # type: np.ndarray
 
             assert data_bin_count.shape == mc_bin_count.shape, (data_bin_count.shape, mc_bin_count.shape)
             data_bin_count[mc_bin_count == 0.0] = 0.0
@@ -2255,7 +1908,7 @@ class FitModel:
 
         chi2_data_term = np.sum(
             (expected_bin_count - self.get_masked_data_bin_count(mc_bin_count=expected_bin_count)) ** 2
-            / (2 * self.get_squared_data_stat_errors()),
+            / (2 * self._data_channels.get_squared_data_stat_errors()),
             axis=None,
         )
 
@@ -2300,6 +1953,16 @@ class FitModel:
             + self._constraint_term(parameter_vector=parameter_vector)
         )
 
+    def update_parameters(
+        self,
+        parameter_vector: np.ndarray,
+    ) -> None:
+        self._params.update_parameters(parameter_vector=parameter_vector)
+
+    # endregion
+
+    # region Cost function factories
+
     # Using AbstractCostFunction class name as type hint, before AbstractCostFunction is defined.
     def create_nll(
         self,
@@ -2314,124 +1977,70 @@ class FitModel:
     ) -> "AbstractCostFunction":
         return Chi2CostFunction(self, parameter_handler=self._params, fix_nuisance_parameters=fix_nuisance_parameters)
 
-    def update_parameters(
-        self,
-        parameter_vector: np.ndarray,
-    ) -> None:
-        self._params.update_parameters(parameter_vector=parameter_vector)
+    # endregion
+
+    # region Plotting
 
     @property
-    def floating_nuisance_parameter_indices(self) -> List[int]:
-        if self._floating_nuisance_parameter_indices is not None:
-            return self._floating_nuisance_parameter_indices
-        all_bin_nuisance_parameter_indices = self.get_bin_nuisance_parameter_indices()
-        floating_nuisance_parameter_indices = []
-        for all_index in all_bin_nuisance_parameter_indices:
-            if self._params.floating_parameter_mask[all_index]:
-                param_id = sum(self._params.floating_parameter_mask[: all_index + 1]) - 1  # type: int
-                floating_nuisance_parameter_indices.append(param_id)
-
-        self._floating_nuisance_parameter_indices = floating_nuisance_parameter_indices
-        return floating_nuisance_parameter_indices
-
-    @property
-    def names_of_floating_parameters(self) -> Tuple[str, ...]:
-        return self._params.get_floating_parameter_names()
-
-    @property
-    def types_of_floating_parameters(self) -> Tuple[str, ...]:
-        return self._params.get_floating_parameter_types()
-
-    def get_parameter_index(
-        self,
-        parameter_name: str,
-    ) -> int:
-        return self._params.get_index(name=parameter_name)
-
-    def set_initial_parameter_value(
-        self,
-        parameter_name: str,
-        new_initial_value: float,
-    ) -> None:
-        self._params.set_parameter_initial_value(parameter_name=parameter_name, new_initial_value=new_initial_value)
-
-    def get_yield_parameter_name_from_process(
-        self,
-        process_name: str,
-    ) -> str:
-        templates = self.get_templates_by_process_name(process_name=process_name)
-        _first_yield_param = templates[0].yield_parameter  # type: Optional[TemplateParameter]
-        p_name = _first_yield_param.name if _first_yield_param is not None else None  # type: Optional[str]
-        p_id = _first_yield_param.param_id if _first_yield_param is not None else None  # type: Optional[int]
-        assert p_name is not None
-        assert all(t.yield_parameter is not None and t.yield_parameter.name == p_name for t in templates), (
-            process_name,
-            [t.yield_parameter.name if t.yield_parameter is not None else None for t in templates],
-        )
-        assert all(t.yield_parameter is not None and t.yield_parameter.param_id == p_id for t in templates), (
-            process_name,
-            [t.yield_parameter.param_id if t.yield_parameter is not None else None for t in templates],
-        )
-        return p_name
-
-    def get_yield_parameter_names(self) -> Tuple[str, ...]:
-        return self._params.get_yield_parameter_names()
-
-    def get_yield(
-        self,
-        process_name: str,
-    ) -> float:
-        parameter_name = self.get_yield_parameter_name_from_process(process_name=process_name)
-        return self._params.get_parameters_by_name(parameter_names=parameter_name)
-
-    def set_yield(self, process_name: str, new_initial_value: float) -> None:
-        parameter_name = self.get_yield_parameter_name_from_process(process_name=process_name)
-        self._params.set_parameter_initial_value(parameter_name=parameter_name, new_initial_value=new_initial_value)
-
-    def reset_initial_parameter_value(
-        self,
-        parameter_name: str,
-    ) -> None:
-        self._params.reset_parameter_initial_value(parameter_name=parameter_name)
-
-    def reset_parameters_to_initial_values(self) -> None:
-        self._params.reset_parameters_to_initial_values()
-
-    @property
-    def mc_channels_to_plot(self) -> ChannelContainer:
+    def mc_channels_to_plot(self) -> ModelChannels:
         if not self._is_initialized:
             raise RuntimeError("The FitModel is not fully initialized, yet!")
         return self._channels
 
     @property
-    def data_channels_to_plot(self) -> DataChannelContainer:
+    def data_channels_to_plot(self) -> ModelDataChannels:
         if not self._is_initialized:
             raise RuntimeError("The FitModel is not fully initialized, yet!")
         return self._data_channels
 
-    # TODO: Remaining functions that have to be looked through if every old functionality is covered:
-    # def relative_error_matrix(self):
-    #     errors_per_template = [template.errors() for template
-    #                            in self.templates.values()]
-    #
-    #     self.template_errors = np.stack(errors_per_template)
-    #
-    # @jit
-    # def expected_events_per_bin(self, bin_pars: np.ndarray, yields: np.ndarray, sub_pars: np.ndarray) -> np.ndarray:
-    #     sys_pars = self._params.get_parameters_by_index(self.sys_pars)
-    #     # compute the up and down errors for single par variations
-    #     up_corr = np.prod(1 + sys_pars * (sys_pars > 0) * self.up_errors, 0)
-    #     down_corr = np.prod(1 + sys_pars * (sys_pars < 0) * self.down_errors, 0)
-    #     corrections = (1 + self.template_errors * bin_pars) * (up_corr + down_corr)
-    #     sub_fractions = np.matmul(self.converter_matrix, sub_pars) + self.converter_vector
-    #     fractions = self.template_fractions * corrections
-    #     norm_fractions = fractions / np.sum(fractions, 1)[:, np.newaxis]
-    #     expected_per_bin = np.sum(norm_fractions * yields * sub_fractions, axis=0)
-    #     return expected_per_bin
-    #     # compute overall correction terms
-    #     # get sub template fractions into the correct form with the converter and additive part
-    #     # normalised expected corrected fractions
-    #     # determine expected amount of events in each bin
+    # endregion
+
+    # region Misc
+
+    def finalize_model(self) -> None:
+        if not self._has_data:
+            raise RuntimeError(
+                "You have not added data, yet, so the model can not be finalized, yet!\n"
+                "Please use the 'add_data' method to add data for all defined channels:\n\t"
+                + "\n\t".join(f"{i}. {c.name}" for i, c in enumerate(self._channels))
+            )
+
+        self._check_model_setup()
+        self._fraction_manager.convert_fractions()
+        self._collect_parameter_constraints()
+
+        self._initialize_template_uncertainties()
+        self._check_systematics_uncertainty_matrices()
+        self._check_bin_correlation_matrix()
+
+        self._check_yield_parameters(yield_parameter_indices=None)
+        self._check_fraction_parameters()
+        self._check_efficiency_parameters()
+
+        self._params.finalize()
+
+        self._is_initialized = True
+
+        logging.info(self._model_setup_as_string())
+
+    def _model_setup_as_string(self) -> str:
+        output_string = ""
+        for channel in self._channels:
+            output_string += f"Channel {channel.channel_index}: '{channel.name}'\n"
+            for component in channel:
+                output_string += f"\tComponent {component.component_index}: '{component.name}'\n"
+                for template in component.sub_templates:
+                    output_string += (
+                        f"\t\tTemplate {template.template_index}: '{template.name}' "
+                        f"(Process: '{template.process_name})'\n"
+                    )
+
+        return output_string
+
+    def __repr__(self) -> str:
+        return self._model_setup_as_string()
+
+    # endregion
 
 
 class AbstractCostFunction(ABC):
