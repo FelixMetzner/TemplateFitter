@@ -122,6 +122,8 @@ class FitModel:
 
         # endregion
 
+        self.ncall = 0
+
         # Setting a random seed for the toy data set generation with SciPy
         self._random_state = np.random.RandomState(seed=7694747)  # type: np.random.RandomState
 
@@ -1131,15 +1133,15 @@ class FitModel:
 
     # region Constraint-related methods and properties
 
-    @property
+    @immutable_cached_property
     def constraint_indices(self) -> List[int]:
         return [c.constraint_index for c in self._constraint_container]
 
-    @property
+    @immutable_cached_property
     def constraint_values(self) -> List[float]:
         return [c.central_value for c in self._constraint_container]
 
-    @property
+    @immutable_cached_property
     def constraint_sigmas(self) -> List[float]:
         return [c.uncertainty for c in self._constraint_container]
 
@@ -1632,7 +1634,7 @@ class FitModel:
         parameter_vector: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
         nuisance_parameter_vector = self._params.get_combined_parameters_by_index(
-            parameter_vector=parameter_vector, indices=self.bin_nuisance_parameter_indices
+            parameter_vector=parameter_vector, indices=self.bin_nuisance_parameter_indices, ncall=self.ncall
         )
 
         new_nuisance_matrix_shape = self._nuisance_matrix_shape
@@ -1700,6 +1702,7 @@ class FitModel:
         eff_params_array = self._params.get_combined_parameters_by_index(
             parameter_vector=parameter_vector,
             indices=indices,
+            ncall=self.ncall,
         )
 
         if self._efficiency_reshaping_indices is None:
@@ -1741,6 +1744,7 @@ class FitModel:
             return self._params.get_combined_parameters_by_index(
                 parameter_vector=parameter_vector,
                 indices=self._fraction_indices,
+                ncall=self.ncall,
             )
 
         self._check_is_initialized()
@@ -1750,7 +1754,11 @@ class FitModel:
             self._check_fraction_parameters()
 
         self._fraction_indices = indices
-        return self._params.get_combined_parameters_by_index(parameter_vector=parameter_vector, indices=indices)
+        return self._params.get_combined_parameters_by_index(
+            parameter_vector=parameter_vector,
+            indices=indices,
+            ncall=self.ncall,
+        )
 
     def get_yields_vector(
         self,
@@ -1760,6 +1768,7 @@ class FitModel:
             return self._params.get_combined_parameters_by_index(
                 parameter_vector=parameter_vector,
                 indices=self._yield_indices,
+                ncall=self.ncall,
             )
         self._check_is_initialized()
 
@@ -1772,6 +1781,7 @@ class FitModel:
         return self._params.get_combined_parameters_by_index(
             parameter_vector=parameter_vector,
             indices=indices_from_temps,
+            ncall=self.ncall,
         )
 
     def calculate_expected_bin_count(
@@ -1864,6 +1874,7 @@ class FitModel:
         constraint_pars = self._params.get_combined_parameters_by_index(
             parameter_vector=parameter_vector,
             indices=self.constraint_indices,
+            ncall=self.ncall,
         )
 
         constraint_term = np.sum(((self.constraint_values - constraint_pars) / self.constraint_sigmas) ** 2)
@@ -1931,6 +1942,9 @@ class FitModel:
         parameter_vector: np.ndarray,
         fix_nuisance_parameters: bool = False,
     ) -> float:
+
+        self.ncall += 1
+
         if fix_nuisance_parameters:
             nuisance_parameter_vector, nuisance_parameter_matrix = (np.array([]), None)
         else:
