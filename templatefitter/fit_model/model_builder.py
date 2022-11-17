@@ -8,7 +8,6 @@ import operator
 import numpy as np
 import scipy.stats as scipy_stats
 
-from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
 from typing import Optional, Union, List, Tuple, Dict, Sequence
@@ -127,47 +126,54 @@ class FitModel:
         self._random_state = np.random.RandomState(seed=7694747)  # type: np.random.RandomState
 
     # region Basic Properties
-    # Attributes forwarded to self._channels via __getattr__()
-    _channel_attrs = [
-        "binning",
-        "max_number_of_bins_flattened",
-        "min_number_of_independent_yields",
-        "number_of_bins_flattened_per_channel",
-        "number_of_components",
-        "number_of_dependent_templates",
-        "number_of_expected_independent_yields",
-        "number_of_fraction_parameters",
-        "number_of_independent_templates",
-        "number_of_templates",
-        "template_bin_counts",
-        "total_number_of_templates",
-    ]
+    # Attributes forwarded to self._channels
+    @immutable_cached_property
+    def binning(self):
+        return self._channels.binning
 
-    def __getattribute__(self, attr):
-        """
-        Forwarding some attributes to self._channels for backwards compatibility.
-        :param attr: The attribute name
-        :return: A forwarded attribute of ModelChannels
-        """
+    @immutable_cached_property
+    def max_number_of_bins_flattened(self):
+        return self._channels.max_number_of_bins_flattened
 
-        try:
-            return super().__getattribute__(attr)
-        except AttributeError:
-            if attr in self._channel_attrs:
-                try:
-                    return getattr(self._channels, attr)
-                except AttributeError:
-                    raise AttributeError(
-                        f"Forwarded attribute access from {self.__class__.__name__} to"
-                        f" {self._channels.__class__.__name__} which also has no attribute {attr}."
-                    )
-            elif attr in dir(self._channels):
-                raise AttributeError(
-                    f"Attribute {attr} exists for {self._channels.__class__.__name__} but is not forwarded "
-                    f"to {self.__class__.__name__}."
-                )
-            else:
-                raise
+    @immutable_cached_property
+    def min_number_of_independent_yields(self):
+        return self._channels.min_number_of_independent_yields
+
+    @immutable_cached_property
+    def number_of_bins_flattened_per_channel(self):
+        return self._channels.number_of_bins_flattened_per_channel
+
+    @immutable_cached_property
+    def number_of_components(self):
+        return self._channels.number_of_components
+
+    @immutable_cached_property
+    def number_of_dependent_templates(self):
+        return self._channels.number_of_dependent_templates
+
+    @immutable_cached_property
+    def number_of_expected_independent_yields(self):
+        return self._channels.number_of_expected_independent_yields
+
+    @immutable_cached_property
+    def number_of_fraction_parameters(self):
+        return self._channels.number_of_fraction_parameters
+
+    @immutable_cached_property
+    def number_of_independent_templates(self):
+        return self._channels.number_of_independent_templates
+
+    @immutable_cached_property
+    def number_of_templates(self):
+        return self._channels.number_of_templates
+
+    @immutable_cached_property
+    def template_bin_counts(self):
+        return self._channels.template_bin_counts
+
+    @immutable_cached_property
+    def total_number_of_templates(self):
+        return self._channels.total_number_of_templates
 
     @property
     def number_of_channels(self) -> int:
@@ -1822,7 +1828,6 @@ class FitModel:
 
         return bin_count
 
-    @jit(forceobj=True)
     def _gauss_term(
         self,
         bin_nuisance_parameter_vector: np.ndarray,
@@ -1890,7 +1895,6 @@ class FitModel:
 
         return self._masked_data_bin_counts
 
-    @jit(forceobj=True)
     def chi2(
         self,
         parameter_vector: np.ndarray,
