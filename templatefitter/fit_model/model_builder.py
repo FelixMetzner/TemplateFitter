@@ -16,7 +16,7 @@ from typing import Optional, Union, List, Tuple, Dict, Sequence
 from templatefitter.utility import xlogyx, cov2corr
 
 from templatefitter.binned_distributions.weights import WeightsInputType
-from templatefitter.binned_distributions.binned_distribution import DataInputType
+from templatefitter.binned_distributions.binned_distribution import DataInputType, Binning
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
@@ -129,57 +129,58 @@ class FitModel:
 
     # region Basic Properties
     # Attributes forwarded to self._channels
+
     @immutable_cached_property
-    def binning(self):
+    def binning(self) -> Tuple[Binning, ...]:
         return self._channels.binning
 
     @immutable_cached_property
-    def max_number_of_bins_flattened(self):
-        return self._channels.max_number_of_bins_flattened
-
-    @immutable_cached_property
-    def min_number_of_independent_yields(self):
-        return self._channels.min_number_of_independent_yields
-
-    @immutable_cached_property
-    def number_of_bins_flattened_per_channel(self):
-        return self._channels.number_of_bins_flattened_per_channel
-
-    @immutable_cached_property
-    def number_of_components(self):
-        return self._channels.number_of_components
-
-    @immutable_cached_property
-    def number_of_dependent_templates(self):
-        return self._channels.number_of_dependent_templates
-
-    @immutable_cached_property
-    def number_of_expected_independent_yields(self):
-        return self._channels.number_of_expected_independent_yields
-
-    @immutable_cached_property
-    def number_of_fraction_parameters(self):
-        return self._channels.number_of_fraction_parameters
-
-    @immutable_cached_property
-    def number_of_independent_templates(self):
-        return self._channels.number_of_independent_templates
-
-    @immutable_cached_property
-    def number_of_templates(self):
-        return self._channels.number_of_templates
-
-    @immutable_cached_property
-    def template_bin_counts(self):
+    def template_bin_counts(self) -> np.ndarray:
         return self._channels.template_bin_counts
 
     @immutable_cached_property
-    def total_number_of_templates(self):
-        return self._channels.total_number_of_templates
+    def max_number_of_bins_flattened(self) -> int:
+        return self._channels.max_number_of_bins_flattened
+
+    @immutable_cached_property
+    def number_of_bins_flattened_per_channel(self) -> List[int]:
+        return self._channels.number_of_bins_flattened_per_channel
 
     @property
     def number_of_channels(self) -> int:
         return len(self._channels)
+
+    @immutable_cached_property
+    def number_of_components(self) -> Tuple[int, ...]:
+        return self._channels.number_of_components
+
+    @immutable_cached_property
+    def min_number_of_independent_yields(self) -> int:
+        return self._channels.min_number_of_independent_yields
+
+    @immutable_cached_property
+    def number_of_expected_independent_yields(self) -> int:
+        return self._channels.number_of_expected_independent_yields
+
+    @immutable_cached_property
+    def total_number_of_templates(self) -> int:
+        return self._channels.total_number_of_templates
+
+    @immutable_cached_property
+    def number_of_templates(self) -> Tuple[int, ...]:
+        return self._channels.number_of_templates
+
+    @immutable_cached_property
+    def number_of_dependent_templates(self) -> Tuple[int, ...]:
+        return self._channels.number_of_dependent_templates
+
+    @immutable_cached_property
+    def number_of_independent_templates(self) -> Tuple[int, ...]:
+        return self._channels.number_of_independent_templates
+
+    @immutable_cached_property
+    def number_of_fraction_parameters(self) -> Tuple[int, ...]:
+        return self._channels.number_of_fraction_parameters
 
     @property
     def fraction_conversion(self) -> FractionConversionInfo:
