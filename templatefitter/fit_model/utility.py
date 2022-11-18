@@ -4,7 +4,7 @@ Utility functions
 
 import numpy as np
 
-from typing import Tuple, Callable
+from typing import Tuple, Callable, Sequence, Union
 
 
 __all__ = [
@@ -129,3 +129,14 @@ class immutable_cached_property:
         value = self._function(obj)
         setattr(obj, self._function.__name__, value)
         return value
+
+
+def create_slice_if_contiguous(indices: Sequence[int]) -> Union[slice, np.ndarray]:
+
+    contiguous_equivalent = list(range(min(indices), max(indices) + 1))
+
+    if (len(indices) == len(contiguous_equivalent)) and all((a == b for a, b in zip(indices, contiguous_equivalent))):
+        return slice(min(indices), max(indices))
+
+    else:
+        return np.ndarray(indices)

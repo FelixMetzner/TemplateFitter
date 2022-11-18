@@ -92,7 +92,7 @@ class ParameterHandler:
 
         self._is_finalized = False  # type: bool
 
-        self.combined_parameters_cache = (0, None)
+        self.combined_parameters_cache = (0, None)  # type: Tuple[float, Optional[np.ndarray]]
 
     def add_parameter(
         self,
@@ -355,7 +355,7 @@ class ParameterHandler:
     def get_combined_parameters(
         self,
         parameter_vector: np.ndarray,
-        ncall=None,
+        ncall: Optional[int] = None,
     ) -> np.ndarray:
 
         if ncall == self.combined_parameters_cache[0]:
@@ -371,8 +371,8 @@ class ParameterHandler:
     def get_combined_parameters_by_index(
         self,
         parameter_vector: np.ndarray,
-        indices: Union[int, List[int]],
-        ncall=None,
+        indices: Union[int, List[int], slice],
+        ncall: Optional[int] = None,
     ) -> np.ndarray:
         # This getter combines floating parameters provided via the argument 'parameter_vector' and fixed parameters
         # and then yields the parameters with the indices provided via the 'indices' argument.
