@@ -24,7 +24,12 @@ from templatefitter.fit_model.data_channel import ModelDataChannels
 from templatefitter.fit_model.channel import ModelChannels, Channel
 from templatefitter.fit_model.constraint import Constraint, ConstraintContainer
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
-from templatefitter.fit_model.utility import pad_sequences, check_bin_count_shape, immutable_cached_property
+from templatefitter.fit_model.utility import (
+    pad_sequences,
+    check_bin_count_shape,
+    immutable_cached_property,
+    create_slice_if_contiguous,
+)
 from templatefitter.fit_model.fit_object_managers import (
     FractionConversionInfo,
     FractionManager,
@@ -757,7 +762,7 @@ class FitModel:
         return self._inverse_template_bin_correlation_matrix
 
     @immutable_cached_property
-    def floating_nuisance_parameter_indices(self) -> List[int]:
+    def floating_nuisance_parameter_indices(self) -> Union[np.ndarray, slice, List[int]]:
         all_bin_nuisance_parameter_indices = self.bin_nuisance_parameter_indices
         floating_nuisance_parameter_indices = []
         for all_index in all_bin_nuisance_parameter_indices:
@@ -765,10 +770,10 @@ class FitModel:
                 param_id = sum(self._params.floating_parameter_mask[: all_index + 1]) - 1  # type: int
                 floating_nuisance_parameter_indices.append(param_id)
 
-        return floating_nuisance_parameter_indices
+        return create_slice_if_contiguous(floating_nuisance_parameter_indices)
 
     @immutable_cached_property
-    def bin_nuisance_parameter_indices(self) -> List[int]:
+    def bin_nuisance_parameter_indices(self) -> Union[np.ndarray, slice, List[int]]:
         bin_nuisance_param_indices = self._params.get_parameter_indices_for_type(
             parameter_type=ParameterHandler.bin_nuisance_parameter_type,
         )
@@ -776,7 +781,7 @@ class FitModel:
         if not self._bin_nuisance_params_checked:
             self._check_bin_nuisance_parameters()
 
-        return bin_nuisance_param_indices
+        return create_slice_if_contiguous(bin_nuisance_param_indices)
 
     @immutable_cached_property
     def relative_shape_uncertainties(self) -> np.ndarray:
@@ -1135,8 +1140,8 @@ class FitModel:
     # region Constraint-related methods and properties
 
     @immutable_cached_property
-    def constraint_indices(self) -> List[int]:
-        return [c.constraint_index for c in self._constraint_container]
+    def constraint_indices(self) -> Union[np.ndarray, slice, List[int]]:
+        return create_slice_if_contiguous([c.constraint_index for c in self._constraint_container])
 
     @immutable_cached_property
     def constraint_values(self) -> List[float]:
