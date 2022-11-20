@@ -115,6 +115,9 @@ class FitModel:
 
         self._bin_nuisance_params_checked = False  # type: bool
 
+        self.bin_nuisance_parameter_slice = None  # type: Optional[Tuple[int, int]]
+        self.constraint_slice = None  # type: Optional[Tuple[int, int]]
+
         self._constraint_container = ConstraintContainer()  # type: ConstraintContainer
 
         self._template_shapes_checked = False  # type: bool
@@ -762,7 +765,7 @@ class FitModel:
         return self._inverse_template_bin_correlation_matrix
 
     @immutable_cached_property
-    def floating_nuisance_parameter_indices(self) -> Union[np.ndarray, slice, List[int]]:
+    def floating_nuisance_parameter_indices(self) -> Union[np.ndarray, List[int]]:
         all_bin_nuisance_parameter_indices = self.bin_nuisance_parameter_indices
         floating_nuisance_parameter_indices = []
         for all_index in all_bin_nuisance_parameter_indices:
@@ -770,10 +773,10 @@ class FitModel:
                 param_id = sum(self._params.floating_parameter_mask[: all_index + 1]) - 1  # type: int
                 floating_nuisance_parameter_indices.append(param_id)
 
-        return create_slice_if_contiguous(floating_nuisance_parameter_indices)
+        return np.array(floating_nuisance_parameter_indices)
 
     @immutable_cached_property
-    def bin_nuisance_parameter_indices(self) -> Union[np.ndarray, slice, List[int]]:
+    def bin_nuisance_parameter_indices(self) -> Union[np.ndarray, List[int]]:
         bin_nuisance_param_indices = self._params.get_parameter_indices_for_type(
             parameter_type=ParameterHandler.bin_nuisance_parameter_type,
         )
@@ -781,7 +784,9 @@ class FitModel:
         if not self._bin_nuisance_params_checked:
             self._check_bin_nuisance_parameters()
 
-        return create_slice_if_contiguous(bin_nuisance_param_indices)
+        self.bin_nuisance_parameter_slice = create_slice_if_contiguous(bin_nuisance_param_indices)
+
+        return np.array(bin_nuisance_param_indices)
 
     @immutable_cached_property
     def relative_shape_uncertainties(self) -> np.ndarray:
@@ -1140,8 +1145,12 @@ class FitModel:
     # region Constraint-related methods and properties
 
     @immutable_cached_property
-    def constraint_indices(self) -> Union[np.ndarray, slice, List[int]]:
-        return create_slice_if_contiguous([c.constraint_index for c in self._constraint_container])
+    def constraint_indices(self) -> Union[np.ndarray, List[int]]:
+
+        constraint_indices = [c.constraint_index for c in self._constraint_container]
+        self.constraint_slice = create_slice_if_contiguous(constraint_indices)
+
+        return np.array(constraint_indices)
 
     @immutable_cached_property
     def constraint_values(self) -> List[float]:
@@ -1639,9 +1648,15 @@ class FitModel:
         self,
         parameter_vector: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        nuisance_parameter_vector = self._params.get_combined_parameters_by_index(
-            parameter_vector=parameter_vector, indices=self.bin_nuisance_parameter_indices, ncall=self.ncall
-        )
+
+        if self.bin_nuisance_parameter_slice is not None:
+            nuisance_parameter_vector = self._params.get_combined_parameters_by_slice(
+                parameter_vector=parameter_vector, slicing=self.bin_nuisance_parameter_slice, ncall=self.ncall
+            )
+        else:
+            nuisance_parameter_vector = self._params.get_combined_parameters_by_index(
+                parameter_vector=parameter_vector, indices=self.bin_nuisance_parameter_indices, ncall=self.ncall
+            )
 
         new_nuisance_matrix_shape = self._nuisance_matrix_shape
         complex_reshaping_required = not all(
@@ -1877,11 +1892,18 @@ class FitModel:
         if not self._constraint_container:
             return 0.0
 
-        constraint_pars = self._params.get_combined_parameters_by_index(
-            parameter_vector=parameter_vector,
-            indices=self.constraint_indices,
-            ncall=self.ncall,
-        )
+        if self.constraint_slice is not None:
+            constraint_pars = self._params.get_combined_parameters_by_slice(
+                parameter_vector=parameter_vector,
+                slicing=self.constraint_slice,
+                ncall=self.ncall,
+            )
+        else:
+            constraint_pars = self._params.get_combined_parameters_by_index(
+                parameter_vector=parameter_vector,
+                indices=self.constraint_indices,
+                ncall=self.ncall,
+            )
 
         constraint_term = np.sum(((self.constraint_values - constraint_pars) / self.constraint_sigmas) ** 2)
 
