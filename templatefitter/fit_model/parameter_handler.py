@@ -371,7 +371,7 @@ class ParameterHandler:
     def get_combined_parameters_by_index(
         self,
         parameter_vector: np.ndarray,
-        indices: Union[int, List[int], slice],
+        indices: Union[int, List[int]],
         ncall: Optional[int] = None,
     ) -> np.ndarray:
         # This getter combines floating parameters provided via the argument 'parameter_vector' and fixed parameters
@@ -382,10 +382,11 @@ class ParameterHandler:
         self,
         parameter_vector: np.ndarray,
         slicing: Tuple[Optional[int], Optional[int]],
+        ncall: Optional[int] = None,
     ) -> np.ndarray:
         # This getter combines floating parameters provided via the argument 'parameter_vector' and fixed parameters
         # and then yields the parameters for the slicing provided via the 'slicing' argument.
-        return self.get_combined_parameters(parameter_vector=parameter_vector)[slicing[0] : slicing[1]]
+        return self.get_combined_parameters(parameter_vector=parameter_vector, ncall=ncall)[slicing[0] : slicing[1]]
 
     def _check_parameter_conversion(self) -> None:
         assert self._floating_mask is not None
