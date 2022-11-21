@@ -75,7 +75,7 @@ class MinimizerParameters:
         }  # type: Dict[str, Any]
         return tabulate.tabulate(data, headers="keys")
 
-    def get_param_value(self, param_id: Union[int, str]) -> float:
+    def get_param_value(self, param_id: Union[int, str, np.integer]) -> float:
         """
         Returns value of parameter specified by `param_id`.
 
@@ -91,7 +91,7 @@ class MinimizerParameters:
         param_index = self.param_id_to_index(param_id=param_id)
         return self.values[param_index]
 
-    def get_param_error(self, param_id: Union[int, str]) -> float:
+    def get_param_error(self, param_id: Union[int, str, np.integer]) -> float:
         """
         Returns error of parameter specified by `param_id`.
 
@@ -109,7 +109,7 @@ class MinimizerParameters:
 
     def __getitem__(
         self,
-        param_id: Union[int, str],
+        param_id: Union[int, str, np.integer],
     ) -> Tuple[float, float]:
         """
         Gets the value and error of the specified parameter.
@@ -129,7 +129,7 @@ class MinimizerParameters:
         param_index = self.param_id_to_index(param_id=param_id)
         return self.values[param_index], self.errors[param_index]
 
-    def param_id_to_index(self, param_id: Union[int, str]) -> int:
+    def param_id_to_index(self, param_id: Union[int, str, np.integer]) -> int:
         """
         Returns the index of the parameter specified by `param_id`.
 
@@ -142,7 +142,7 @@ class MinimizerParameters:
         -------
         int
         """
-        if isinstance(param_id, int) and (param_id in range(len(self.names))):
+        if isinstance(param_id, (int, np.integer)) and (param_id in range(len(self.names))):
             return param_id
         elif isinstance(param_id, str) and (param_id in self.names):
             return self.names.index(param_id)
@@ -154,7 +154,7 @@ class MinimizerParameters:
 
     def set_param_fixed(
         self,
-        param_id: Union[int, str],
+        param_id: Union[int, str, np.integer],
     ) -> None:
         param_index = self.param_id_to_index(param_id=param_id)
         self._fixed_params[param_index] = True
