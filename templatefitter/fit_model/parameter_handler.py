@@ -391,6 +391,9 @@ class ParameterHandler:
     def _check_parameter_conversion(self) -> None:
         assert self._floating_mask is not None
         assert self._floating_conversion_vector is not None
+        assert not np.any(np.isnan(self.conversion_vector)), [
+            self.get_name(index) for index in np.isnan(self.conversion_vector).nonzero()[0]
+        ]
 
         assert len(self._floating_conversion_vector.shape) == 1, self._floating_conversion_vector.shape
         assert len(self._floating_mask) == len(self._floating_conversion_vector), (
