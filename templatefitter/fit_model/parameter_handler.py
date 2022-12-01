@@ -6,7 +6,7 @@ import logging
 import numpy as np
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Callable
+from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Callable, Iterable
 from templatefitter.fit_model.constraint import ComplexConstraint, ComplexConstraintContainer
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -445,12 +445,12 @@ class ParameterHandler:
 
     def get_parameters_by_name(
         self,
-        parameter_names: Union[str, List[str]],
+        parameter_names: Union[str, Iterable[str]],
     ) -> Union[np.ndarray, float]:
-        if isinstance(parameter_names, list):
-            indices = [self.get_index(name=name) for name in parameter_names]  # type: Union[int, List[int]]
-        elif isinstance(parameter_names, str):
-            indices = self.get_index(name=parameter_names)
+        if isinstance(parameter_names, str):
+            indices = self.get_index(name=parameter_names)  # type: Union[int, List[int]]
+        elif isinstance(parameter_names, Iterable):
+            indices = [self.get_index(name=name) for name in parameter_names]
         else:
             raise ValueError(
                 f"Expecting string or list of strings for argument 'parameter_names'!\n" f"You provided {parameter_names}"

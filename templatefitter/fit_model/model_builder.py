@@ -12,7 +12,6 @@ from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
 from typing import Optional, Union, List, Tuple, Dict, Callable, Iterable, Sequence
 
-
 from templatefitter.utility import xlogyx, cov2corr
 
 from templatefitter.binned_distributions.weights import WeightsInputType
@@ -556,6 +555,19 @@ class FitModel:
                         f"in the 'names' argument (names = {list(names)}) of the add_constraint() method."
                     ) from e
 
+                yield_values = self._params.get_parameters_by_name(parameter_names=names)
+
+                assert isinstance(yield_values, Iterable)  # Make MyPy happy, this is guaranteed by above already
+
+                initial_yield_dict = dict(zip(names, yield_values))
+
+                initial_constraint_value = func(initial_yield_dict)
+
+                assert (value - sigma) < initial_constraint_value < (value + sigma), (
+                    f"The value of the constraint ({initial_constraint_value}) with initial parameters "
+                    f"{initial_yield_dict} is more than one sigma away from the value to constrain to {value}."
+                )
+
         elif isinstance(names, str):
             names = [names]
         else:
@@ -608,6 +620,7 @@ class FitModel:
         else:
             param_ids = [self._model_parameters[self._model_parameters_mapping[name]].param_id for name in names]
             assert func is not None  # Make MyPy happy
+
             self._params.add_complex_constraint_to_parameters(
                 func=func, parameter_indices=param_ids, constraint_value=value, constraint_sigma=sigma
             )
