@@ -1160,7 +1160,6 @@ class FitModel:
         #           -> Think about how nuisance parameter must be handled in general to make all options possible!!!
         # TODO: General implementation of creation of nuisance parameters for different options of uncertainty handling!
 
-        nuisance_sigma = 1.0  # type: float
         initial_nuisance_value = 0.0  # type: float
 
         for counter in range(template.num_bins_total):
@@ -1169,8 +1168,6 @@ class FitModel:
                 parameter_type=ParameterHandler.bin_nuisance_parameter_type,
                 floating=True,
                 initial_value=initial_nuisance_value,
-                constrain_to_value=initial_nuisance_value,
-                constraint_sigma=nuisance_sigma,
             )
             bin_nuisance_model_params.append(model_parameter)
             bin_nuisance_model_param_indices.append(model_param_index)
