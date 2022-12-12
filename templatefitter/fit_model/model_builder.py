@@ -15,8 +15,9 @@ from typing import Optional, Union, List, Tuple, Dict, Sequence
 
 from templatefitter.utility import xlogyx, cov2corr
 
+from templatefitter.binned_distributions import Binning
 from templatefitter.binned_distributions.weights import WeightsInputType
-from templatefitter.binned_distributions.binned_distribution import DataInputType, Binning
+from templatefitter.binned_distributions.binned_distribution import DataInputType
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
