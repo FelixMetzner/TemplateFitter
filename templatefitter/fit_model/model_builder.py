@@ -14,8 +14,9 @@ from typing import Optional, Union, List, Tuple, Dict, Callable, Iterable, Seque
 
 from templatefitter.utility import xlogyx, cov2corr
 
+from templatefitter.binned_distributions import Binning
 from templatefitter.binned_distributions.weights import WeightsInputType
-from templatefitter.binned_distributions.binned_distribution import DataInputType, Binning
+from templatefitter.binned_distributions.binned_distribution import DataInputType
 
 from templatefitter.fit_model.template import Template
 from templatefitter.fit_model.component import Component
@@ -833,11 +834,10 @@ class FitModel:
         bin_nuisance_param_indices = self._params.get_parameter_indices_for_type(
             parameter_type=ParameterHandler.bin_nuisance_parameter_type,
         )
+        self.bin_nuisance_parameter_slice = create_slice_if_contiguous(bin_nuisance_param_indices)
 
         if not self._bin_nuisance_params_checked:
             self._check_bin_nuisance_parameters()
-
-        self.bin_nuisance_parameter_slice = create_slice_if_contiguous(bin_nuisance_param_indices)
 
         return np.array(bin_nuisance_param_indices)
 
@@ -1161,7 +1161,6 @@ class FitModel:
         #           -> Think about how nuisance parameter must be handled in general to make all options possible!!!
         # TODO: General implementation of creation of nuisance parameters for different options of uncertainty handling!
 
-        nuisance_sigma = 1.0  # type: float
         initial_nuisance_value = 0.0  # type: float
 
         for counter in range(template.num_bins_total):
@@ -1170,8 +1169,6 @@ class FitModel:
                 parameter_type=ParameterHandler.bin_nuisance_parameter_type,
                 floating=True,
                 initial_value=initial_nuisance_value,
-                constrain_to_value=initial_nuisance_value,
-                constraint_sigma=nuisance_sigma,
             )
             bin_nuisance_model_params.append(model_parameter)
             bin_nuisance_model_param_indices.append(model_param_index)
@@ -1202,6 +1199,18 @@ class FitModel:
 
         constraint_indices = [c.constraint_index for c in self._simple_constraint_container]
         self.constraint_slice = create_slice_if_contiguous(constraint_indices)
+        if self.constraint_slice is not None:
+
+            constr_param_values = self._params.get_parameters_by_index(constraint_indices)
+            if isinstance(constr_param_values, float):
+                assert len(self._params.get_parameters_by_slice(self.constraint_slice)) == 1
+                assert all([constr_param_values] == self._params.get_parameters_by_slice(self.constraint_slice))
+            else:
+                assert len(self._params.get_parameters_by_slice(self.constraint_slice)) == len(constr_param_values)
+                assert all(
+                    self._params.get_parameters_by_index(constraint_indices)
+                    == self._params.get_parameters_by_slice(self.constraint_slice)
+                )
 
         return np.array(constraint_indices)
 
@@ -1622,6 +1631,19 @@ class FitModel:
                             ],
                         )
                         index_counter += n_bins
+
+        if self.bin_nuisance_parameter_slice is not None:
+
+            nui_param_values = self._params.get_parameters_by_index(nu_is)
+            if isinstance(nui_param_values, float):
+                assert len(self._params.get_parameters_by_slice(self.bin_nuisance_parameter_slice)) == 1
+                assert all([nui_param_values] == self._params.get_parameters_by_slice(self.bin_nuisance_parameter_slice))
+
+            else:
+                assert len(self._params.get_parameters_by_slice(self.bin_nuisance_parameter_slice)) == len(
+                    nui_param_values
+                )
+                assert all(nui_param_values == self._params.get_parameters_by_slice(self.bin_nuisance_parameter_slice))
 
         self._bin_nuisance_params_checked = True
 
