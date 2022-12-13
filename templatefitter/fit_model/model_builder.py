@@ -8,7 +8,6 @@ import operator
 import numpy as np
 import scipy.stats as scipy_stats
 
-from numba import jit
 from scipy.linalg import block_diag
 from abc import ABC, abstractmethod
 from typing import Optional, Union, List, Tuple, Dict, Sequence
@@ -16,6 +15,7 @@ from typing import Optional, Union, List, Tuple, Dict, Sequence
 
 from templatefitter.utility import xlogyx, cov2corr
 
+from templatefitter.binned_distributions import Binning
 from templatefitter.binned_distributions.weights import WeightsInputType
 from templatefitter.binned_distributions.binned_distribution import DataInputType
 
@@ -25,7 +25,12 @@ from templatefitter.fit_model.data_channel import ModelDataChannels
 from templatefitter.fit_model.channel import ModelChannels, Channel
 from templatefitter.fit_model.constraint import Constraint, ConstraintContainer
 from templatefitter.fit_model.parameter_handler import ParameterHandler, ModelParameter, TemplateParameter
-from templatefitter.fit_model.utility import pad_sequences, check_bin_count_shape, immutable_cached_property
+from templatefitter.fit_model.utility import (
+    pad_sequences,
+    check_bin_count_shape,
+    immutable_cached_property,
+    create_slice_if_contiguous,
+)
 from templatefitter.fit_model.fit_object_managers import (
     FractionConversionInfo,
     FractionManager,
@@ -111,6 +116,9 @@ class FitModel:
 
         self._bin_nuisance_params_checked = False  # type: bool
 
+        self.bin_nuisance_parameter_slice = None  # type: Optional[Tuple[int, int]]
+        self.constraint_slice = None  # type: Optional[Tuple[int, int]]
+
         self._constraint_container = ConstraintContainer()  # type: ConstraintContainer
 
         self._template_shapes_checked = False  # type: bool
@@ -123,55 +131,65 @@ class FitModel:
 
         # endregion
 
+        self.ncall = 0
+
         # Setting a random seed for the toy data set generation with SciPy
         self._random_state = np.random.RandomState(seed=7694747)  # type: np.random.RandomState
 
     # region Basic Properties
-    # Attributes forwarded to self._channels via __getattr__()
-    _channel_attrs = [
-        "binning",
-        "max_number_of_bins_flattened",
-        "min_number_of_independent_yields",
-        "number_of_bins_flattened_per_channel",
-        "number_of_components",
-        "number_of_dependent_templates",
-        "number_of_expected_independent_yields",
-        "number_of_fraction_parameters",
-        "number_of_independent_templates",
-        "number_of_templates",
-        "template_bin_counts",
-        "total_number_of_templates",
-    ]
+    # Attributes forwarded to self._channels
 
-    def __getattribute__(self, attr):
-        """
-        Forwarding some attributes to self._channels for backwards compatibility.
-        :param attr: The attribute name
-        :return: A forwarded attribute of ModelChannels
-        """
+    @immutable_cached_property
+    def binning(self) -> Tuple[Binning, ...]:
+        return self._channels.binning
 
-        try:
-            return super().__getattribute__(attr)
-        except AttributeError:
-            if attr in self._channel_attrs:
-                try:
-                    return getattr(self._channels, attr)
-                except AttributeError:
-                    raise AttributeError(
-                        f"Forwarded attribute access from {self.__class__.__name__} to"
-                        f" {self._channels.__class__.__name__} which also has no attribute {attr}."
-                    )
-            elif attr in dir(self._channels):
-                raise AttributeError(
-                    f"Attribute {attr} exists for {self._channels.__class__.__name__} but is not forwarded "
-                    f"to {self.__class__.__name__}."
-                )
-            else:
-                raise
+    @immutable_cached_property
+    def template_bin_counts(self) -> np.ndarray:
+        return self._channels.template_bin_counts
+
+    @immutable_cached_property
+    def max_number_of_bins_flattened(self) -> int:
+        return self._channels.max_number_of_bins_flattened
+
+    @immutable_cached_property
+    def number_of_bins_flattened_per_channel(self) -> List[int]:
+        return self._channels.number_of_bins_flattened_per_channel
 
     @property
     def number_of_channels(self) -> int:
         return len(self._channels)
+
+    @immutable_cached_property
+    def number_of_components(self) -> Tuple[int, ...]:
+        return self._channels.number_of_components
+
+    @immutable_cached_property
+    def min_number_of_independent_yields(self) -> int:
+        return self._channels.min_number_of_independent_yields
+
+    @immutable_cached_property
+    def number_of_expected_independent_yields(self) -> int:
+        return self._channels.number_of_expected_independent_yields
+
+    @immutable_cached_property
+    def total_number_of_templates(self) -> int:
+        return self._channels.total_number_of_templates
+
+    @immutable_cached_property
+    def number_of_templates(self) -> Tuple[int, ...]:
+        return self._channels.number_of_templates
+
+    @immutable_cached_property
+    def number_of_dependent_templates(self) -> Tuple[int, ...]:
+        return self._channels.number_of_dependent_templates
+
+    @immutable_cached_property
+    def number_of_independent_templates(self) -> Tuple[int, ...]:
+        return self._channels.number_of_independent_templates
+
+    @immutable_cached_property
+    def number_of_fraction_parameters(self) -> Tuple[int, ...]:
+        return self._channels.number_of_fraction_parameters
 
     @property
     def fraction_conversion(self) -> FractionConversionInfo:
@@ -748,7 +766,7 @@ class FitModel:
         return self._inverse_template_bin_correlation_matrix
 
     @immutable_cached_property
-    def floating_nuisance_parameter_indices(self) -> List[int]:
+    def floating_nuisance_parameter_indices(self) -> Union[np.ndarray, List[int]]:
         all_bin_nuisance_parameter_indices = self.bin_nuisance_parameter_indices
         floating_nuisance_parameter_indices = []
         for all_index in all_bin_nuisance_parameter_indices:
@@ -756,18 +774,19 @@ class FitModel:
                 param_id = sum(self._params.floating_parameter_mask[: all_index + 1]) - 1  # type: int
                 floating_nuisance_parameter_indices.append(param_id)
 
-        return floating_nuisance_parameter_indices
+        return np.array(floating_nuisance_parameter_indices)
 
     @immutable_cached_property
-    def bin_nuisance_parameter_indices(self) -> List[int]:
+    def bin_nuisance_parameter_indices(self) -> Union[np.ndarray, List[int]]:
         bin_nuisance_param_indices = self._params.get_parameter_indices_for_type(
             parameter_type=ParameterHandler.bin_nuisance_parameter_type,
         )
+        self.bin_nuisance_parameter_slice = create_slice_if_contiguous(bin_nuisance_param_indices)
 
         if not self._bin_nuisance_params_checked:
             self._check_bin_nuisance_parameters()
 
-        return bin_nuisance_param_indices
+        return np.array(bin_nuisance_param_indices)
 
     @immutable_cached_property
     def relative_shape_uncertainties(self) -> np.ndarray:
@@ -1089,7 +1108,6 @@ class FitModel:
         #           -> Think about how nuisance parameter must be handled in general to make all options possible!!!
         # TODO: General implementation of creation of nuisance parameters for different options of uncertainty handling!
 
-        nuisance_sigma = 1.0  # type: float
         initial_nuisance_value = 0.0  # type: float
 
         for counter in range(template.num_bins_total):
@@ -1098,8 +1116,6 @@ class FitModel:
                 parameter_type=ParameterHandler.bin_nuisance_parameter_type,
                 floating=True,
                 initial_value=initial_nuisance_value,
-                constrain_to_value=initial_nuisance_value,
-                constraint_sigma=nuisance_sigma,
             )
             bin_nuisance_model_params.append(model_parameter)
             bin_nuisance_model_param_indices.append(model_param_index)
@@ -1125,15 +1141,31 @@ class FitModel:
 
     # region Constraint-related methods and properties
 
-    @property
-    def constraint_indices(self) -> List[int]:
-        return [c.constraint_index for c in self._constraint_container]
+    @immutable_cached_property
+    def constraint_indices(self) -> Union[np.ndarray, List[int]]:
 
-    @property
+        constraint_indices = [c.constraint_index for c in self._constraint_container]
+        self.constraint_slice = create_slice_if_contiguous(constraint_indices)
+        if self.constraint_slice is not None:
+
+            constr_param_values = self._params.get_parameters_by_index(constraint_indices)
+            if isinstance(constr_param_values, float):
+                assert len(self._params.get_parameters_by_slice(self.constraint_slice)) == 1
+                assert all([constr_param_values] == self._params.get_parameters_by_slice(self.constraint_slice))
+            else:
+                assert len(self._params.get_parameters_by_slice(self.constraint_slice)) == len(constr_param_values)
+                assert all(
+                    self._params.get_parameters_by_index(constraint_indices)
+                    == self._params.get_parameters_by_slice(self.constraint_slice)
+                )
+
+        return np.array(constraint_indices)
+
+    @immutable_cached_property
     def constraint_values(self) -> List[float]:
         return [c.central_value for c in self._constraint_container]
 
-    @property
+    @immutable_cached_property
     def constraint_sigmas(self) -> List[float]:
         return [c.uncertainty for c in self._constraint_container]
 
@@ -1545,6 +1577,19 @@ class FitModel:
                         )
                         index_counter += n_bins
 
+        if self.bin_nuisance_parameter_slice is not None:
+
+            nui_param_values = self._params.get_parameters_by_index(nu_is)
+            if isinstance(nui_param_values, float):
+                assert len(self._params.get_parameters_by_slice(self.bin_nuisance_parameter_slice)) == 1
+                assert all([nui_param_values] == self._params.get_parameters_by_slice(self.bin_nuisance_parameter_slice))
+
+            else:
+                assert len(self._params.get_parameters_by_slice(self.bin_nuisance_parameter_slice)) == len(
+                    nui_param_values
+                )
+                assert all(nui_param_values == self._params.get_parameters_by_slice(self.bin_nuisance_parameter_slice))
+
         self._bin_nuisance_params_checked = True
 
     def _check_model_setup(self) -> None:
@@ -1625,9 +1670,15 @@ class FitModel:
         self,
         parameter_vector: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        nuisance_parameter_vector = self._params.get_combined_parameters_by_index(
-            parameter_vector=parameter_vector, indices=self.bin_nuisance_parameter_indices
-        )
+
+        if self.bin_nuisance_parameter_slice is not None:
+            nuisance_parameter_vector = self._params.get_combined_parameters_by_slice(
+                parameter_vector=parameter_vector, slicing=self.bin_nuisance_parameter_slice, ncall=self.ncall
+            )
+        else:
+            nuisance_parameter_vector = self._params.get_combined_parameters_by_index(
+                parameter_vector=parameter_vector, indices=self.bin_nuisance_parameter_indices, ncall=self.ncall
+            )
 
         new_nuisance_matrix_shape = self._nuisance_matrix_shape
         complex_reshaping_required = not all(
@@ -1694,6 +1745,7 @@ class FitModel:
         eff_params_array = self._params.get_combined_parameters_by_index(
             parameter_vector=parameter_vector,
             indices=indices,
+            ncall=self.ncall,
         )
 
         if self._efficiency_reshaping_indices is None:
@@ -1735,6 +1787,7 @@ class FitModel:
             return self._params.get_combined_parameters_by_index(
                 parameter_vector=parameter_vector,
                 indices=self._fraction_indices,
+                ncall=self.ncall,
             )
 
         self._check_is_initialized()
@@ -1744,7 +1797,11 @@ class FitModel:
             self._check_fraction_parameters()
 
         self._fraction_indices = indices
-        return self._params.get_combined_parameters_by_index(parameter_vector=parameter_vector, indices=indices)
+        return self._params.get_combined_parameters_by_index(
+            parameter_vector=parameter_vector,
+            indices=indices,
+            ncall=self.ncall,
+        )
 
     def get_yields_vector(
         self,
@@ -1754,6 +1811,7 @@ class FitModel:
             return self._params.get_combined_parameters_by_index(
                 parameter_vector=parameter_vector,
                 indices=self._yield_indices,
+                ncall=self.ncall,
             )
         self._check_is_initialized()
 
@@ -1766,6 +1824,7 @@ class FitModel:
         return self._params.get_combined_parameters_by_index(
             parameter_vector=parameter_vector,
             indices=indices_from_temps,
+            ncall=self.ncall,
         )
 
     def calculate_expected_bin_count(
@@ -1822,7 +1881,6 @@ class FitModel:
 
         return bin_count
 
-    @jit(forceobj=True)
     def _gauss_term(
         self,
         bin_nuisance_parameter_vector: np.ndarray,
@@ -1856,10 +1914,18 @@ class FitModel:
         if not self._constraint_container:
             return 0.0
 
-        constraint_pars = self._params.get_combined_parameters_by_index(
-            parameter_vector=parameter_vector,
-            indices=self.constraint_indices,
-        )
+        if self.constraint_slice is not None:
+            constraint_pars = self._params.get_combined_parameters_by_slice(
+                parameter_vector=parameter_vector,
+                slicing=self.constraint_slice,
+                ncall=self.ncall,
+            )
+        else:
+            constraint_pars = self._params.get_combined_parameters_by_index(
+                parameter_vector=parameter_vector,
+                indices=self.constraint_indices,
+                ncall=self.ncall,
+            )
 
         constraint_term = np.sum(((self.constraint_values - constraint_pars) / self.constraint_sigmas) ** 2)
 
@@ -1890,7 +1956,6 @@ class FitModel:
 
         return self._masked_data_bin_counts
 
-    @jit(forceobj=True)
     def chi2(
         self,
         parameter_vector: np.ndarray,
@@ -1927,6 +1992,9 @@ class FitModel:
         parameter_vector: np.ndarray,
         fix_nuisance_parameters: bool = False,
     ) -> float:
+
+        self.ncall += 1
+
         if fix_nuisance_parameters:
             nuisance_parameter_vector, nuisance_parameter_matrix = (np.array([]), None)
         else:

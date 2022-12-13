@@ -82,13 +82,14 @@ class ParameterHandler:
         self._parameters_by_type = {k: [] for k in ParameterHandler.parameter_types}  # type: Dict[str, List[int]]
         self._redefined_params_dict = {}  # type: Dict[str, ParameterResetInfo]
 
-        self._floating_mask = None  # type: Optional[Tuple[bool, ...]]
+        self._floating_mask = None  # type: Optional[np.ndarray]
         self._floating_conversion_vector = None  # type: Optional[np.ndarray]
-        self._floating_conversion_matrix = None  # type: Optional[np.ndarray]
         self._floating_parameter_indices = None  # type: Optional[np.ndarray]
         self._initial_values_of_floating_parameters = None  # type: Optional[np.ndarray]
 
         self._is_finalized = False  # type: bool
+
+        self.combined_parameters_cache = (0, None)  # type: Tuple[float, Optional[np.ndarray]]
 
     def add_parameter(
         self,
@@ -223,11 +224,9 @@ class ParameterHandler:
         assert not self._is_finalized
         assert self._floating_mask is None
         assert self._floating_conversion_vector is None
-        assert self._floating_conversion_matrix is None
 
         self._floating_mask = self._create_floating_parameter_mask()
         self._floating_conversion_vector = self._create_conversion_vector()
-        self._floating_conversion_matrix = self._create_conversion_matrix()
 
         self._check_parameter_conversion()
 
@@ -236,27 +235,14 @@ class ParameterHandler:
 
         self._is_finalized = True
 
-    def _create_floating_parameter_mask(self) -> Tuple[bool, ...]:
-        return tuple([p_info.floating for p_info in self._parameter_infos])
+    def _create_floating_parameter_mask(self) -> np.ndarray:
+        return np.array([p_info.floating for p_info in self._parameter_infos])
 
     def _create_conversion_vector(self) -> np.ndarray:
         # Is the inverse of the floating_parameter_mask converted to integers times the parameters
         # and thus yields the fixed parameters.
         conversion_vector = np.array([0 if m else 1 for m in self.floating_parameter_mask])
         return conversion_vector * self._np_pars
-
-    def _create_conversion_matrix(self) -> np.ndarray:
-        n_floating = sum(self.floating_parameter_mask)
-        assert isinstance(n_floating, int), n_floating
-        conversion_matrix = np.zeros((n_floating, len(self.floating_parameter_mask)))
-
-        i_index = 0
-        for j_index, mask_bool in enumerate(self.floating_parameter_mask):
-            if mask_bool:
-                conversion_matrix[i_index, j_index] = 1
-                i_index += 1
-
-        return conversion_matrix
 
     def _create_floating_parameter_indices_info(self) -> None:
         self._floating_parameter_indices = np.array(
@@ -299,7 +285,7 @@ class ParameterHandler:
         )
 
     @property
-    def floating_parameter_mask(self) -> Tuple[bool, ...]:
+    def floating_parameter_mask(self) -> np.ndarray:
         assert self._floating_mask is not None
         return self._floating_mask
 
@@ -308,57 +294,50 @@ class ParameterHandler:
         assert self._floating_conversion_vector is not None
         return self._floating_conversion_vector
 
-    @property
-    def conversion_matrix(self) -> np.ndarray:
-        assert self._floating_conversion_matrix is not None
-        return self._floating_conversion_matrix
-
     def get_combined_parameters(
         self,
         parameter_vector: np.ndarray,
+        ncall: Optional[int] = None,
     ) -> np.ndarray:
-        return parameter_vector @ self.conversion_matrix + self.conversion_vector
+
+        if ncall == self.combined_parameters_cache[0]:
+            return self.combined_parameters_cache[1]
+        else:
+            zero_array = np.zeros(len(self.floating_parameter_mask))
+            zero_array[self.floating_parameter_mask] = parameter_vector
+            result = zero_array + self.conversion_vector
+            if ncall is not None:
+                self.combined_parameters_cache = (ncall, result)
+            return result
 
     def get_combined_parameters_by_index(
         self,
         parameter_vector: np.ndarray,
         indices: Union[int, List[int]],
+        ncall: Optional[int] = None,
     ) -> np.ndarray:
         # This getter combines floating parameters provided via the argument 'parameter_vector' and fixed parameters
         # and then yields the parameters with the indices provided via the 'indices' argument.
-        return self.get_combined_parameters(parameter_vector=parameter_vector)[indices]
+        return self.get_combined_parameters(parameter_vector=parameter_vector, ncall=ncall)[indices]
 
     def get_combined_parameters_by_slice(
         self,
         parameter_vector: np.ndarray,
         slicing: Tuple[Optional[int], Optional[int]],
+        ncall: Optional[int] = None,
     ) -> np.ndarray:
         # This getter combines floating parameters provided via the argument 'parameter_vector' and fixed parameters
         # and then yields the parameters for the slicing provided via the 'slicing' argument.
-        return self.get_combined_parameters(parameter_vector=parameter_vector)[slicing[0] : slicing[1]]
+        return self.get_combined_parameters(parameter_vector=parameter_vector, ncall=ncall)[slicing[0] : slicing[1]]
 
     def _check_parameter_conversion(self) -> None:
         assert self._floating_mask is not None
         assert self._floating_conversion_vector is not None
-        assert self._floating_conversion_matrix is not None
 
         assert len(self._floating_conversion_vector.shape) == 1, self._floating_conversion_vector.shape
-        assert len(self._floating_conversion_matrix.shape) == 2, self._floating_conversion_matrix.shape
         assert len(self._floating_mask) == len(self._floating_conversion_vector), (
             len(self._floating_mask),
             len(self._floating_conversion_vector),
-        )
-
-        assert len(self._floating_conversion_vector) == self._floating_conversion_matrix.shape[1], (
-            len(self._floating_conversion_vector),
-            self._floating_conversion_matrix.shape[1],
-            self._floating_conversion_matrix.shape,
-        )
-
-        n_floating = sum(self.floating_parameter_mask)
-        assert n_floating == self._floating_conversion_matrix.shape[0], (
-            n_floating,
-            self._floating_conversion_matrix.shape[0],
         )
 
         assert all(
@@ -370,7 +349,7 @@ class ParameterHandler:
         self,
         parameter_vector: np.ndarray,
     ) -> None:
-        self._np_pars = parameter_vector @ self.conversion_matrix + self.conversion_vector
+        self._np_pars = self.get_combined_parameters(parameter_vector)
 
     def get_index(
         self,
