@@ -117,6 +117,7 @@ class FitModel:
 
         self._simple_constraint_container = SimpleConstraintContainer()
         self._complex_constraint_container = ComplexConstraintContainer()
+        self._using_numba = True
 
         self.bin_nuisance_parameter_slice = None  # type: Optional[Tuple[int, int]]
         self.constraint_slice = None  # type: Optional[Tuple[int, int]]
@@ -2150,6 +2151,20 @@ class FitModel:
         self._is_initialized = True
 
         logging.info(self._model_setup_as_string())
+
+    def disable_numba_after_finalizing(self):
+        if not self._using_numba:
+            raise ValueError("Numba is not enabled.")
+
+        self._using_numba = False
+        self._params.disable_numba_after_finalizing()
+
+    def enable_numba_after_finalizing(self):
+        if self._using_numba:
+            raise ValueError("Numba is already enabled.")
+
+        self._using_numba = True
+        self._params.enable_numba_after_finalizing()
 
     def _model_setup_as_string(self) -> str:
         output_string = ""
