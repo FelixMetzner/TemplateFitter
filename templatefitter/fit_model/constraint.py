@@ -92,6 +92,9 @@ class ConstraintCallableCreator:
     This class translates callables using parameter names to indices of the parameter mapper
     """
 
+    # We save this to allow resetting the class in case of dynamically added attributes (which numba doesn't like)
+    _allowed_attributes = list(ParameterTranslator.__dict__.keys())
+
     def __init__(self, func: Callable, name_index_mapping: Dict[str, int], use_numba: bool = True):
 
         self.use_numba = use_numba
@@ -110,9 +113,16 @@ class ConstraintCallableCreator:
 
         self._translator = self._create_translator()
 
+    def _cleanup_parameter_translator(self):
+        for attribute in list(ParameterTranslator.__dict__):
+            if attribute not in self._allowed_attributes:
+                delattr(ParameterTranslator, attribute)
+
     def _create_translator(self) -> ParameterTranslator:
 
         if self.use_numba:
+            self._cleanup_parameter_translator()
+
             jitspec = [
                 ("mapping", nb.types.DictType(types.unicode_type, types.int32)),
                 ("parameter_vector", types.float32[:]),
