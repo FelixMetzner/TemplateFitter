@@ -4,7 +4,7 @@ This package provides
     - A ConstraintContainer class, which holds all (one or multiple) Constraints to be used in the fit model.
 """
 
-from typing import Dict, MutableSequence, Union, Iterable, overload, Callable, TypeVar, List, Iterator, Optional
+from typing import Dict, MutableSequence, Union, Iterable, overload, Callable, TypeVar, List, Iterator, Optional, Sequence
 from abc import abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
@@ -25,7 +25,7 @@ class Constraint:
 class ComplexConstraint(Constraint):
     def __init__(
         self,
-        constraint_indices: Iterable[int],
+        constraint_indices: Sequence[int],
         central_value: float,
         uncertainty: float,
         function: Callable,
@@ -59,7 +59,7 @@ class ComplexConstraint(Constraint):
         self._constraint_func = ConstraintCallableCreator(self._func, model_parameter_mapping, use_numba=use_numba)
 
     def reset_function_after_finalizing(self, model_parameter_mapping: Dict[str, int], use_numba: bool):
-        "Useful to switch off Numba for pickling."
+        """Useful to switch off Numba for pickling."""
         assert self._is_finalized, "No need to reset this constraint, it has not been finalized yet."
         assert self._func is not None
         self._constraint_func = ConstraintCallableCreator(self._func, model_parameter_mapping, use_numba=use_numba)
