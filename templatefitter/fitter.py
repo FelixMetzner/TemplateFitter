@@ -192,7 +192,7 @@ class TemplateFitter:
 
     def profile(
         self,
-        param_id: Union[int, str],
+        profiled_param_id: Union[int, str],
         num_cpu: int = 4,
         num_points: int = 100,
         sigma: float = 2.0,
@@ -204,7 +204,7 @@ class TemplateFitter:
 
         Parameters
         ----------
-        param_id : int or string
+        profiled_param_id : int or string
             Parameter index or name.
         num_cpu : int
             Maximal number of processes to uses.
@@ -227,7 +227,7 @@ class TemplateFitter:
         np.ndarray
             Hesse approximation. Shape is (num_points,).
         """
-        logging.info(f"\nCalculating profile likelihood for parameter: '{param_id}'")
+        logging.info(f"\nCalculating profile likelihood for parameter: '{profiled_param_id}'")
 
         minimizer = minimizer_factory(
             minimizer_id=self._minimizer_id,
@@ -237,8 +237,8 @@ class TemplateFitter:
         )
 
         if fix_nui_params:
-            for param_id in self._fit_model.floating_nuisance_parameter_indices:
-                minimizer.set_param_fixed(param_id=param_id)
+            for nui_param_id in self._fit_model.floating_nuisance_parameter_indices:
+                minimizer.set_param_fixed(param_id=nui_param_id)
 
         for fix_param_id in self._fixed_parameters:
             minimizer.set_param_fixed(fix_param_id)
@@ -247,14 +247,16 @@ class TemplateFitter:
         result = minimizer.minimize(initial_param_values=self._nll.x0, get_hesse=True, verbose=True)
 
         minimum = result.fcn_min_val
-        param_val, param_unc = minimizer.params[param_id]
+        param_val, param_unc = minimizer.params[profiled_param_id]
 
         profile_points = np.linspace(param_val - sigma * param_unc, param_val + sigma * param_unc, num_points)
 
-        hesse_approx = self._get_hesse_approx(param_id=param_id, fit_result=result, profile_points=profile_points)
+        hesse_approx = self._get_hesse_approx(
+            param_id=profiled_param_id, fit_result=result, profile_points=profile_points
+        )
 
         logging.info(f"Start profiling the likelihood using {num_cpu} processes...")
-        args = [(minimizer, point, result.params.values, param_id, fix_nui_params) for point in profile_points]
+        args = [(minimizer, point, result.params.values, profiled_param_id, fix_nui_params) for point in profile_points]
         with Pool(num_cpu) as pool:
             profile_values = np.array(
                 list(
@@ -297,19 +299,20 @@ class TemplateFitter:
         minimizer = args[0]
         point = args[1]
         initial_values = args[2]
-        param_id = args[3]
+        profiled_param_id = args[3]
         fix_nui_params = args[4]
 
         minimizer.release_params()
-        param_index = minimizer.params.param_id_to_index(param_id=param_id)
+        param_index = minimizer.params.param_id_to_index(param_id=profiled_param_id)
         initial_values[param_index] = point
-        if fix_nui_params:
-            for param_id in self._fit_model.floating_nuisance_parameter_indices:
-                minimizer.set_param_fixed(param_id=param_id)
+        minimizer.set_param_fixed(profiled_param_id)
 
-        minimizer.set_param_fixed(param_id)
-        for param_id in self._fixed_parameters:
-            minimizer.set_param_fixed(param_id=param_id)
+        if fix_nui_params:
+            for nui_param_id in self._fit_model.floating_nuisance_parameter_indices:
+                minimizer.set_param_fixed(param_id=nui_param_id)
+
+        for fix_param_id in self._fixed_parameters:
+            minimizer.set_param_fixed(param_id=fix_param_id)
 
         try:
             loop_result = minimizer.minimize(initial_param_values=initial_values, get_hesse=False)
