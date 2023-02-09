@@ -265,12 +265,9 @@ class ParameterHandler:
 
         self._complex_constraints.append(constraint)
 
-    def _finalize_or_reset_complex_constraints(self, use_numba: bool = True, reset: bool = False):
+    def _finalize_complex_constraints(self, use_numba: bool = True):
 
-        if reset:
-            logging.warning(f"Resetting complex constraints! Numba is {('on' if use_numba else 'off')}.")
-        else:
-            assert not self._is_finalized
+        assert not self._is_finalized
 
         if self._complex_constraints:
             for constr in self._complex_constraints:
@@ -278,10 +275,23 @@ class ParameterHandler:
                 constr_indices = list(np.flatnonzero(self.floating_parameter_mask))
                 mapper = dict(zip(constr_indices, float_indices))
                 model_parameter_mapping = {self.get_name(pi): mapper[pi] for pi in constr.constraint_indices}
-                if reset:
-                    constr.reset_function_after_finalizing(model_parameter_mapping, use_numba=use_numba)
-                else:
-                    constr.finalize(model_parameter_mapping, use_numba=use_numba)
+                constr.finalize(model_parameter_mapping, use_numba=use_numba)
+
+    def prepare_all_constraints_for_pickling(self):
+        assert self._is_finalized
+
+        if self._complex_constraints:
+            for constr in self._complex_constraints:
+                constr.prepare_for_pickling()
+        else:
+            logging.warning("Nothing to prepare for pickling, no complex constraints found.")
+
+    def restore_all_constraints_after_pickling(self):
+        if self._complex_constraints:
+            for constr in self._complex_constraints:
+                constr.restore_after_pickling()
+        else:
+            logging.warning("Nothing to prepare for pickling, no complex constraints found.")
 
     def finalize(self) -> None:
         assert not self._is_finalized
@@ -296,15 +306,9 @@ class ParameterHandler:
         self._create_floating_parameter_indices_info()
         self._create_floating_parameter_initial_value_info()
 
-        self._finalize_or_reset_complex_constraints()
+        self._finalize_complex_constraints()
 
         self._is_finalized = True
-
-    def disable_numba_after_finalizing(self):
-        self._finalize_or_reset_complex_constraints(use_numba=False, reset=True)
-
-    def enable_numba_after_finalizing(self):
-        self._finalize_or_reset_complex_constraints(use_numba=True, reset=True)
 
     def _create_floating_parameter_mask(self) -> np.ndarray:
         return np.array([p_info.floating for p_info in self._parameter_infos])

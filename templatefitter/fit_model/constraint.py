@@ -10,8 +10,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 import numba as nb
 import numpy as np
+import marshal
+from types import LambdaType
 
-from numba.core import types
+from numba.core import types as nb_types
 from numba.experimental import jitclass
 
 
@@ -34,9 +36,13 @@ class ComplexConstraint(Constraint):
         self.constraint_indices = constraint_indices
         self.central_value = central_value
         self.uncertainty = uncertainty
-        self._func = function
+        self._func = function  # type: Callable
         self._is_finalized = False
         self._constraint_func = None  # type: Optional[ConstraintCallableCreator]
+        self._funcstring = None  # Optional[str]
+
+        self._model_parameter_mapping = None  # type: Optional[Dict[str, int]]
+        self._use_numba = False
 
     @property
     def is_simple(self):
@@ -55,14 +61,31 @@ class ComplexConstraint(Constraint):
         self._is_finalized = True
         assert self._func is not None
         assert self._constraint_func is None
+        assert self._model_parameter_mapping is None
+
+        self._model_parameter_mapping = model_parameter_mapping
+        self._use_numba = use_numba
 
         self._constraint_func = ConstraintCallableCreator(self._func, model_parameter_mapping, use_numba=use_numba)
 
-    def reset_function_after_finalizing(self, model_parameter_mapping: Dict[str, int], use_numba: bool):
-        """Useful to switch off Numba for pickling."""
-        assert self._is_finalized, "No need to reset this constraint, it has not been finalized yet."
-        assert self._func is not None
-        self._constraint_func = ConstraintCallableCreator(self._func, model_parameter_mapping, use_numba=use_numba)
+    def prepare_for_pickling(self):
+
+        assert isinstance(self._func, LambdaType), "The constraint function can't be pickled, pass a lambda function."
+        self._funcstring = marshal.dumps(self._func.__code__)
+        del self._func
+        self._constraint_func = None
+
+    def restore_after_pickling(self):
+
+        if self._funcstring is None:
+            raise RuntimeError("Nothing to restore!")
+
+        assert self._model_parameter_mapping is not None
+
+        self._func = LambdaType(marshal.loads(self._funcstring), globals())
+        self._constraint_func = ConstraintCallableCreator(
+            self._func, self._model_parameter_mapping, use_numba=self._use_numba
+        )
 
     def __call__(self, parameter_vector):
         if self._is_finalized:
@@ -101,8 +124,8 @@ class ConstraintCallableCreator:
         if use_numba:
             self._func = nb.njit(func)
             self._mapping = nb.typed.Dict.empty(
-                key_type=types.unicode_type,
-                value_type=types.int32,
+                key_type=nb_types.unicode_type,
+                value_type=nb_types.int32,
             )
         else:
             self._func = func
@@ -124,8 +147,8 @@ class ConstraintCallableCreator:
             self._cleanup_parameter_translator()
 
             jitspec = [
-                ("mapping", nb.types.DictType(types.unicode_type, types.int32)),
-                ("parameter_vector", types.float32[:]),
+                ("mapping", nb_types.DictType(nb_types.unicode_type, nb_types.int32)),
+                ("parameter_vector", nb_types.float32[:]),
             ]
             return jitclass(jitspec)(ParameterTranslator)(self._mapping, np.zeros(1, dtype=np.float32))
         else:
