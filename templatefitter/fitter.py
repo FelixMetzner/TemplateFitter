@@ -55,7 +55,7 @@ class TemplateFitter:
         self._nll_creator = self._fit_model.create_nll
         self._minimizer_id = minimizer_id
 
-        self._fit_result = None
+        self._last_fit_result = None  # type: Optional[MinimizeResult]
         self._fixed_parameters = list()  # type: List[Union[str, int]]
         self._bound_parameters = dict()  # type: Dict[Union[str, int], BoundType]
 
@@ -123,6 +123,8 @@ class TemplateFitter:
 
         if update_templates:
             self._fit_model.update_parameters(parameter_vector=fit_result.params.values)
+
+        self._last_fit_result = fit_result
 
         return fit_result
 
@@ -198,6 +200,7 @@ class TemplateFitter:
         sigma: float = 2.0,
         subtract_min: bool = True,
         fix_nui_params: bool = False,
+        use_last_fit_result: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Performs a profile scan of the negative log likelihood function for the specified parameter.
@@ -217,6 +220,8 @@ class TemplateFitter:
             Whether to subtract the estimated minimum of the negative log likelihood function or not. Default is True.
         fix_nui_params : bool, optional
             Whether to fix nuisance parameters. Default is False.
+        use_last_fit_result: bool, optional
+            Re-use the results of the last fit for starting values and hesse approximation.
 
         Returns
         -------
@@ -239,15 +244,17 @@ class TemplateFitter:
         if fix_nui_params:
             for nui_param_id in self._fit_model.floating_nuisance_parameter_indices:
                 minimizer.set_param_fixed(param_id=nui_param_id)
-
         for fix_param_id in self._fixed_parameters:
             minimizer.set_param_fixed(fix_param_id)
 
-        logging.info("Start nominal minimization")
-        result = minimizer.minimize(initial_param_values=self._nll.x0, get_hesse=True, verbose=True)
+        if use_last_fit_result and self._last_fit_result is not None:
+            result = self._last_fit_result
+        else:
+            logging.info("Start nominal minimization")
+            result = minimizer.minimize(initial_param_values=self._nll.x0, get_hesse=True, verbose=True)
 
         minimum = result.fcn_min_val
-        param_val, param_unc = minimizer.params[profiled_param_id]
+        param_val, param_unc = result.params[profiled_param_id]
 
         profile_points = np.linspace(param_val - sigma * param_unc, param_val + sigma * param_unc, num_points)
 
