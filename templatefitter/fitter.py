@@ -200,7 +200,7 @@ class TemplateFitter:
         sigma: float = 2.0,
         subtract_min: bool = True,
         fix_nui_params: bool = False,
-        use_last_fit_result: bool = False,
+        reuse_last_fit_result: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Performs a profile scan of the negative log likelihood function for the specified parameter.
@@ -220,7 +220,7 @@ class TemplateFitter:
             Whether to subtract the estimated minimum of the negative log likelihood function or not. Default is True.
         fix_nui_params : bool, optional
             Whether to fix nuisance parameters. Default is False.
-        use_last_fit_result: bool, optional
+        reuse_last_fit_result: bool, optional
             Re-use the results of the last fit for starting values and hesse approximation.
 
         Returns
@@ -247,7 +247,7 @@ class TemplateFitter:
         for fix_param_id in self._fixed_parameters:
             minimizer.set_param_fixed(fix_param_id)
 
-        if use_last_fit_result and self._last_fit_result is not None:
+        if reuse_last_fit_result and self._last_fit_result is not None:
             result = self._last_fit_result
         else:
             logging.info("Start nominal minimization")
@@ -264,16 +264,19 @@ class TemplateFitter:
 
         logging.info(f"Start profiling the likelihood using {num_cpu} processes...")
         args = [(minimizer, point, result.params.values, profiled_param_id, fix_nui_params) for point in profile_points]
-        with Pool(num_cpu) as pool:
-            profile_values = np.array(
-                list(
-                    tqdm.tqdm(
-                        pool.imap(self._profile_helper, args),
-                        total=len(profile_points),
-                        desc="Profile Progress",
+        if num_cpu > 1:
+            with Pool(num_cpu) as pool:
+                profile_values = np.array(
+                    list(
+                        tqdm.tqdm(
+                            pool.imap(self._profile_helper, args),
+                            total=len(profile_points),
+                            desc="Profile Progress",
+                        )
                     )
                 )
-            )
+        else:
+            profile_values = np.array([self._profile_helper(argset) for argset in args])
 
         if subtract_min:
             profile_values -= minimum
