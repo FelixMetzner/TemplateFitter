@@ -400,7 +400,7 @@ class AbstractMinimizer(ABC):
         self,
         initial_param_values: np.ndarray,
         verbose: bool = False,
-        error_def: float = 0.5,
+        error_def: float = Minuit.LIKELIHOOD,
         additional_args: Optional[Tuple[Any, ...]] = None,
         get_hesse: bool = True,
         check_success: bool = True,
@@ -513,11 +513,18 @@ class IMinuitMinimizer(AbstractMinimizer):
         self,
         initial_param_values: np.ndarray,
         verbose: bool = False,
-        error_def: float = 0.5,
+        error_def: float = Minuit.LIKELIHOOD,
         additional_args: Optional[Tuple[Any, ...]] = None,
         get_hesse: bool = True,
         check_success: bool = True,
     ) -> MinimizeResult:
+
+        if error_def not in [Minuit.LIKELIHOOD, Minuit.LEAST_SQUARES]:
+            raise RuntimeWarning(
+                f"Parameter error_def, which is set to {error_def}, "
+                f"should be either 'Minuit.LIKELIHOOD' = {Minuit.LIKELIHOOD} "
+                f"or 'Minuit.LEAST_SQUARES' = {Minuit.LEAST_SQUARES}!"
+            )
 
         m = Minuit(
             self._fcn,
