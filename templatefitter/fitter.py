@@ -55,7 +55,7 @@ class TemplateFitter:
         self._nll_creator = self._fit_model.create_nll
         self._minimizer_id = minimizer_id
 
-        self._fit_result = None
+        self._last_fit_result = None  # type: Optional[MinimizeResult]
         self._fixed_parameters = list()  # type: List[Union[str, int]]
         self._bound_parameters = dict()  # type: Dict[Union[str, int], BoundType]
 
@@ -123,6 +123,8 @@ class TemplateFitter:
 
         if update_templates:
             self._fit_model.update_parameters(parameter_vector=fit_result.params.values)
+
+        self._last_fit_result = fit_result
 
         return fit_result
 
@@ -192,19 +194,20 @@ class TemplateFitter:
 
     def profile(
         self,
-        param_id: Union[int, str],
+        profiled_param_id: Union[int, str],
         num_cpu: int = 4,
         num_points: int = 100,
         sigma: float = 2.0,
         subtract_min: bool = True,
         fix_nui_params: bool = False,
+        reuse_last_fit_result: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Performs a profile scan of the negative log likelihood function for the specified parameter.
 
         Parameters
         ----------
-        param_id : int or string
+        profiled_param_id : int or string
             Parameter index or name.
         num_cpu : int
             Maximal number of processes to uses.
@@ -217,6 +220,8 @@ class TemplateFitter:
             Whether to subtract the estimated minimum of the negative log likelihood function or not. Default is True.
         fix_nui_params : bool, optional
             Whether to fix nuisance parameters. Default is False.
+        reuse_last_fit_result: bool, optional
+            Re-use the results of the last fit for starting values and hesse approximation.
 
         Returns
         -------
@@ -227,7 +232,7 @@ class TemplateFitter:
         np.ndarray
             Hesse approximation. Shape is (num_points,).
         """
-        logging.info(f"\nCalculating profile likelihood for parameter: '{param_id}'")
+        logging.info(f"\nCalculating profile likelihood for parameter: '{profiled_param_id}'")
 
         minimizer = minimizer_factory(
             minimizer_id=self._minimizer_id,
@@ -237,34 +242,41 @@ class TemplateFitter:
         )
 
         if fix_nui_params:
-            for param_id in self._fit_model.floating_nuisance_parameter_indices:
-                minimizer.set_param_fixed(param_id=param_id)
-
+            for nui_param_id in self._fit_model.floating_nuisance_parameter_indices:
+                minimizer.set_param_fixed(param_id=nui_param_id)
         for fix_param_id in self._fixed_parameters:
             minimizer.set_param_fixed(fix_param_id)
 
-        logging.info("Start nominal minimization")
-        result = minimizer.minimize(initial_param_values=self._nll.x0, get_hesse=True, verbose=True)
+        if reuse_last_fit_result and self._last_fit_result is not None:
+            result = self._last_fit_result
+        else:
+            logging.info("Start nominal minimization")
+            result = minimizer.minimize(initial_param_values=self._nll.x0, get_hesse=True, verbose=True)
 
         minimum = result.fcn_min_val
-        param_val, param_unc = minimizer.params[param_id]
+        param_val, param_unc = result.params[profiled_param_id]
 
         profile_points = np.linspace(param_val - sigma * param_unc, param_val + sigma * param_unc, num_points)
 
-        hesse_approx = self._get_hesse_approx(param_id=param_id, fit_result=result, profile_points=profile_points)
+        hesse_approx = self._get_hesse_approx(
+            param_id=profiled_param_id, fit_result=result, profile_points=profile_points
+        )
 
         logging.info(f"Start profiling the likelihood using {num_cpu} processes...")
-        args = [(minimizer, point, result.params.values, param_id, fix_nui_params) for point in profile_points]
-        with Pool(num_cpu) as pool:
-            profile_values = np.array(
-                list(
-                    tqdm.tqdm(
-                        pool.imap(self._profile_helper, args),
-                        total=len(profile_points),
-                        desc="Profile Progress",
+        args = [(minimizer, point, result.params.values, profiled_param_id, fix_nui_params) for point in profile_points]
+        if num_cpu > 1:
+            with Pool(num_cpu) as pool:
+                profile_values = np.array(
+                    list(
+                        tqdm.tqdm(
+                            pool.imap(self._profile_helper, args),
+                            total=len(profile_points),
+                            desc="Profile Progress",
+                        )
                     )
                 )
-            )
+        else:
+            profile_values = np.array([self._profile_helper(argset) for argset in args])
 
         if subtract_min:
             profile_values -= minimum
@@ -297,19 +309,20 @@ class TemplateFitter:
         minimizer = args[0]
         point = args[1]
         initial_values = args[2]
-        param_id = args[3]
+        profiled_param_id = args[3]
         fix_nui_params = args[4]
 
         minimizer.release_params()
-        param_index = minimizer.params.param_id_to_index(param_id=param_id)
+        param_index = minimizer.params.param_id_to_index(param_id=profiled_param_id)
         initial_values[param_index] = point
-        if fix_nui_params:
-            for param_id in self._fit_model.floating_nuisance_parameter_indices:
-                minimizer.set_param_fixed(param_id=param_id)
+        minimizer.set_param_fixed(profiled_param_id)
 
-        minimizer.set_param_fixed(param_id)
-        for param_id in self._fixed_parameters:
-            minimizer.set_param_fixed(param_id=param_id)
+        if fix_nui_params:
+            for nui_param_id in self._fit_model.floating_nuisance_parameter_indices:
+                minimizer.set_param_fixed(param_id=nui_param_id)
+
+        for fix_param_id in self._fixed_parameters:
+            minimizer.set_param_fixed(param_id=fix_param_id)
 
         try:
             loop_result = minimizer.minimize(initial_param_values=initial_values, get_hesse=False)
