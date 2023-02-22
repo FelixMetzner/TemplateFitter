@@ -218,6 +218,7 @@ class DataMCHistogramPlot(HistogramPlot):
         data: DataInputType,
         color: str = plot_style.KITColors.kit_black,
         special_binning: Union[None, BinsInputType, Binning] = None,
+        data_weight_column: Optional[str] = None,
     ) -> None:
         if self.data_key in self._histograms.histogram_keys:
             raise RuntimeError(f"A data component has already been added to {self.__class__.__name__} instance!")
@@ -232,7 +233,7 @@ class DataMCHistogramPlot(HistogramPlot):
             histogram_key=self.data_key,
             data=data,
             special_binning=special_binning,
-            weights=None,
+            weights=data_weight_column,
             systematics=None,
             hist_type="stepfilled",  # TODO: Define new own hist_type for data plots!
             color=color,
