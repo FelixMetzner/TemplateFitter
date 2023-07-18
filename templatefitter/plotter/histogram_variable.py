@@ -9,14 +9,11 @@ import pandas as pd
 
 from math import floor, log10
 from inspect import signature
-from typing import Union, Optional, Tuple, List, Sequence, Type, TypeVar
+from typing import Union, Optional, Tuple, List, Sequence
 
 __all__ = [
     "HistVariable",
 ]
-
-
-HistVariableType = TypeVar("HistVariableType", bound="HistVariable")
 
 
 class HistVariable:
@@ -188,17 +185,15 @@ class HistVariable:
         ]
         return string_list
 
-    @classmethod
     def get_modified_histogram_variable(
-            cls: Type[HistVariableType],
-            hist_variable: HistVariableType,
-            **kwargs,
-    ) -> HistVariableType:
-        hist_variable_signature = signature(cls)
-        hv_param_names: List[str] = list(hist_variable_signature.parameters.keys())
+        self,
+        **kwargs,
+    ) -> "HistVariable":
+        hist_variable_signature = signature(self.__class__)
+        hv_param_names: Tuple[str, ...] = tuple(hist_variable_signature.parameters.keys())
         assert all(k in hv_param_names for k in kwargs.keys()), [k for k in kwargs.keys() if k not in hv_param_names]
 
-        return cls(**{kw: copy.copy(kwargs.get(kw, getattr(hist_variable, kw))) for kw in hv_param_names})
+        return self.__class__(**{kw: copy.copy(kwargs.get(kw, getattr(self, kw))) for kw in hv_param_names})
 
     @staticmethod
     def get_scoped_histogram_variable(
