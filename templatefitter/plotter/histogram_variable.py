@@ -3,15 +3,20 @@ Provides container class holding the information about variables which shall
 be
 """
 
+import copy
 import numpy as np
 import pandas as pd
 
 from math import floor, log10
-from typing import Union, Optional, Tuple, List, Sequence
+from inspect import signature
+from typing import Union, Optional, Tuple, List, Sequence, Type, TypeVar
 
 __all__ = [
     "HistVariable",
 ]
+
+
+HistVariableType = TypeVar("HistVariableType", bound="HistVariable")
 
 
 class HistVariable:
@@ -40,15 +45,15 @@ class HistVariable:
         :param use_log_scale: If true, x axis will be plotted in log-space.
                               Default is False.
         """
-        self._df_label = df_label  # type: str
-        self._n_bins = n_bins  # type: int
-        self._scope = scope  # type: Optional[Tuple[float, float]]
+        self._df_label: str = df_label
+        self._n_bins: int = n_bins
+        self._scope: Optional[Tuple[float, float]] = scope
 
-        self._var_name = "" if var_name is None else var_name  # type: str
-        self._x_label = self._var_name if unit is None else self._var_name + f" in {unit}"  # type: str
+        self._var_name: str = "" if var_name is None else var_name
+        self._x_label: str = self._var_name if unit is None else self._var_name + f" in {unit}"
 
-        self._unit = unit  # type: Optional[str]
-        self._use_log_scale = use_log_scale  # type: bool
+        self._unit: Optional[str] = unit
+        self._use_log_scale: bool = use_log_scale
 
     @property
     def df_label(self) -> str:
@@ -99,7 +104,7 @@ class HistVariable:
                 f"{error_text} containing objects of the types "
                 f"{type(value[0]).__name__} and {type(value[1]).__name__}."
             )
-        _scope = (value[0], value[1])  # type: Tuple[float, float]
+        _scope: Tuple[float, float] = (value[0], value[1])
         self._scope = _scope
 
     @property
@@ -183,6 +188,18 @@ class HistVariable:
         ]
         return string_list
 
+    @classmethod
+    def get_modified_histogram_variable(
+            cls: Type[HistVariableType],
+            hist_variable: HistVariableType,
+            **kwargs,
+    ) -> HistVariableType:
+        hist_variable_signature = signature(cls)
+        hv_param_names: List[str] = list(hist_variable_signature.parameters.keys())
+        assert all(k in hv_param_names for k in kwargs.keys()), [k for k in kwargs.keys() if k not in hv_param_names]
+
+        return cls(**{kw: copy.copy(kwargs.get(kw, getattr(hist_variable, kw))) for kw in hv_param_names})
+
     @staticmethod
     def get_scoped_histogram_variable(
         base_hist_var: "HistVariable",
@@ -206,11 +223,11 @@ class HistVariable:
                 [df[base_hist_var.df_label].isnull().values.any() for df in dfs],
             )
 
-        new_scope = HistVariable.round_scope_to_significance(
+        new_scope: Tuple[Union[float, int], Union[float, int]] = HistVariable.round_scope_to_significance(
             lower=float(np.nanmin(np.concatenate([df[base_hist_var.df_label].values for df in dfs]))),
             upper=float(np.nanmax(np.concatenate([df[base_hist_var.df_label].values for df in dfs]))),
             improve_precision_by=round_scope_precision,
-        )  # type: Tuple[Union[float, int], Union[float, int]]
+        )
         assert all(not np.isnan(x) for x in new_scope), (new_scope, base_hist_var.df_label)
 
         return HistVariable(
