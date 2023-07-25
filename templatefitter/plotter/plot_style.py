@@ -13,6 +13,8 @@ __all__ = [
     "ylabel_pos",
     "KITColors",
     "kit_color_cycler",
+    "TangoColors",
+    "tango_color_cycler",
     "set_matplotlibrc_params",
 ]
 
