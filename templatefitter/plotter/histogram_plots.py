@@ -54,7 +54,7 @@ class DataMCComparisonOutput:
 
     @staticmethod
     def valid_test_methods() -> Tuple[str, ...]:
-        valid_test_method_names = ("pearson", "cowan", "toys", "toys_inverted")  # type: Tuple[str, ...]
+        valid_test_method_names: Tuple[str, ...] = ("pearson", "cowan", "toys", "toys_inverted")
         return valid_test_method_names
 
     @property
@@ -174,12 +174,14 @@ class StackedHistogramPlot(HistogramPlot):
             _, ax = plt.subplots()
         self._last_figure = ax.get_figure()
 
-        histogram = list(self._histograms.histograms)[0]  # type: Histogram
+        histogram: Histogram = list(self._histograms.histograms)[0]
+
+        bin_scaling: np.ndarray = self.binning.get_bin_scaling()
 
         ax.hist(
             x=[histogram.binning.bin_mids[0] for _ in histogram.get_bin_counts()],
             bins=self.bin_edges,
-            weights=histogram.get_bin_counts(),
+            weights=histogram.get_bin_counts(factor=bin_scaling),
             stacked=True,
             edgecolor="black",
             lw=0.3,
@@ -200,19 +202,19 @@ class StackedHistogramPlot(HistogramPlot):
 
 
 class DataMCHistogramPlot(HistogramPlot):
-    valid_styles = ["stacked", "summed"]  # type: List[str]
-    valid_ratio_types = ["normal", "vs_uncert"]  # type: List[str]
+    valid_styles: List[str] = ["stacked", "summed"]
+    valid_ratio_types: List[str] = ["normal", "vs_uncert"]
 
-    data_key = "data_histogram"  # type: str
-    mc_key = "mc_histogram"  # type: str
+    data_key: str = "data_histogram"
+    mc_key: str = "mc_histogram"
 
-    legend_cols_default = 2  # type: int
-    legend_loc_default = 0  # type: int
+    legend_cols_default: int = 2
+    legend_loc_default: int = 0
 
     def __init__(self, variable: HistVariable) -> None:
         super().__init__(variable=variable)
 
-        self._special_binning = None  # type: Union[None, BinsInputType, Binning]
+        self._special_binning: Union[None, BinsInputType, Binning] = None
 
     def add_data_component(
         self,
@@ -326,7 +328,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 minimal_number_of_bins=7,
             )
 
-        bin_scaling = self.binning.get_bin_scaling()  # type: np.ndarray
+        bin_scaling: np.ndarray = self.binning.get_bin_scaling()
 
         mc_bin_count, mc_uncert_sq, stat_mc_uncert_sq, norm_factor = self.get_bin_info_for_component(
             component_key=self.mc_key,
@@ -335,11 +337,11 @@ class DataMCHistogramPlot(HistogramPlot):
             include_sys=include_sys,
         )  # type: np.ndarray, np.ndarray, np.ndarray, float
 
-        data_bin_count = self._histograms[self.data_key].get_bin_count_of_component(index=0)  # type: np.ndarray
+        data_bin_count: np.ndarray = self._histograms[self.data_key].get_bin_count_of_component(index=0)
 
         if style.lower() == "stacked":
             if len(self._histograms[self.mc_key].labels) > 1:
-                stacked_component_labels = self._histograms[self.mc_key].labels  # type: Tuple[str, ...]
+                stacked_component_labels: Tuple[str, ...] = self._histograms[self.mc_key].labels
             else:
                 stacked_component_labels = tuple(
                     [h_label + r" $\times$ " + f"{norm_factor:.2f}" for h_label in self._histograms[self.mc_key].labels]
@@ -393,14 +395,14 @@ class DataMCHistogramPlot(HistogramPlot):
         )
 
         try:
-            comparison_output = self.do_goodness_of_fit_test(
+            comparison_output: DataMCComparisonOutputType = self.do_goodness_of_fit_test(
                 method=gof_check_method,
                 mc_bin_count=mc_bin_count,
                 data_bin_count=data_bin_count,
                 stat_mc_uncertainty_sq=stat_mc_uncert_sq,
                 mc_is_normalized_to_data=normalize_to_data,
                 mc_scale_factor=norm_factor,
-            )  # type: DataMCComparisonOutputType
+            )
         except IndexError:
             logging.warning(
                 f"Could not run goodness of fit check with {gof_check_method} method "
@@ -483,7 +485,7 @@ class DataMCHistogramPlot(HistogramPlot):
         component_bin_count = np.sum(np.array(self._histograms[component_key].get_bin_counts()), axis=0)
 
         if not normalize_to_data:
-            norm_factor = 1.0  # type: float
+            norm_factor: float = 1.0
         else:
             norm_factor = self._histograms[data_key].raw_data_size / self._histograms[component_key].raw_weight_sum
             component_bin_count *= norm_factor
@@ -542,7 +544,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 mc_scale_factor=mc_scale_factor if mc_is_normalized_to_data else None,
             )
         elif method.lower() == "toys":
-            data_err_sq = np.where(data_bin_count >= 1, data_bin_count, np.ones(data_bin_count.shape))  # type: np.ndarray
+            data_err_sq: np.ndarray = np.where(data_bin_count >= 1, data_bin_count, np.ones(data_bin_count.shape))
             chi2, p_val, toy_output = toy_chi2_test(
                 data=data_bin_count,
                 expectation=mc_bin_count,
@@ -622,7 +624,7 @@ class DataMCHistogramPlot(HistogramPlot):
 
             if ratio_type.lower() == "normal":
                 ratio[np.logical_xor((uh_data == 0.0), (uh_mc == 0.0))] = ufloat(-99, 0.0)
-                _max_val = 1.0  # type: Union[None, float, np.ndarray]
+                _max_val: Union[None, float, np.ndarray] = 1.0
                 assert isinstance(_max_val, float), (type(_max_val).__name__, _max_val)
                 axis.set_ylim(bottom=-1.0 * _max_val, top=1.0 * _max_val)
             elif ratio_type.lower() == "vs_uncert":
@@ -670,7 +672,7 @@ class DataMCHistogramPlot(HistogramPlot):
                 return
 
             assert isinstance(_max_val, float), (type(_max_val).__name__, _max_val)
-            max_val = _max_val  # type: float
+            max_val: float = _max_val
 
             for bin_mid, r_val, mc_val, data_val in zip(self.bin_mids, ratio, uh_mc, uh_data):
                 if mc_val == 0.0 and (
