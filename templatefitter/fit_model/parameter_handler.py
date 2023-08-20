@@ -6,7 +6,8 @@ import logging
 import numpy as np
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Tuple, Dict, NamedTuple
+from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Callable, Iterable
+from templatefitter.fit_model.constraint import ComplexConstraint, ComplexConstraintContainer
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -86,6 +87,8 @@ class ParameterHandler:
         self._floating_conversion_vector = None  # type: Optional[np.ndarray]
         self._floating_parameter_indices = None  # type: Optional[np.ndarray]
         self._initial_values_of_floating_parameters = None  # type: Optional[np.ndarray]
+
+        self._complex_constraints = ComplexConstraintContainer()
 
         self._is_finalized = False  # type: bool
 
@@ -206,6 +209,10 @@ class ParameterHandler:
         constraint_value: float,
         constraint_sigma: float,
     ) -> None:
+
+        if param_id not in self._pars_dict.values():
+            raise KeyError(f"Parameter with ID {param_id} doesn't exist yet so no constraint can be applied.")
+
         self._check_constraint_input(constraint_value=constraint_value, constraint_sigma=constraint_sigma)
         assert param_id not in self.get_constraint_information()[0]
         assert self._parameter_infos[param_id].constraint_value is None, self._parameter_infos[param_id].constraint_value
@@ -220,6 +227,72 @@ class ParameterHandler:
 
         assert param_id in self.get_constraint_information()[0]
 
+    def add_complex_constraint_to_parameters(
+        self, func: Callable, parameter_indices: List[int], constraint_value: float, constraint_sigma: float
+    ):
+
+        self._check_constraint_input(constraint_value=constraint_value, constraint_sigma=constraint_sigma)
+        existing_parameter_indices = set((pi.param_id for pi in self._parameter_infos))
+        if not set(parameter_indices) <= existing_parameter_indices:
+            raise KeyError(
+                f"Parameters with ID {set(parameter_indices) - existing_parameter_indices}"
+                f" don't exist yet so no constraint can be applied."
+            )
+
+        existing_constraints = self.get_constraint_information()[0]
+        if not set(parameter_indices).isdisjoint(existing_constraints):
+            raise RuntimeError(
+                f"There are already constraints defined for the parameters"
+                f" with ID {set(parameter_indices) & set(existing_constraints)}"
+            )
+        for param_id in parameter_indices:
+            assert self._parameter_infos[param_id].constraint_value is None, self._parameter_infos[
+                param_id
+            ].constraint_value
+            assert self._parameter_infos[param_id].constraint_sigma is None, self._parameter_infos[
+                param_id
+            ].constraint_sigma
+
+        assert constraint_value is not None
+        assert constraint_sigma is not None
+
+        constraint = ComplexConstraint(
+            constraint_indices=parameter_indices,
+            central_value=constraint_value,
+            uncertainty=constraint_sigma,
+            function=func,
+        )
+
+        self._complex_constraints.append(constraint)
+
+    def _finalize_complex_constraints(self, use_numba: bool = True):
+
+        assert not self._is_finalized
+
+        if self._complex_constraints:
+            for constr in self._complex_constraints:
+                float_indices = range(sum(self.floating_parameter_mask))
+                constr_indices = list(np.flatnonzero(self.floating_parameter_mask))
+                mapper = dict(zip(constr_indices, float_indices))
+                model_parameter_mapping = {self.get_name(pi): mapper[pi] for pi in constr.constraint_indices}
+                constr.finalize(model_parameter_mapping, use_numba=use_numba)
+
+    def prepare_all_constraints_for_pickling(self):
+        assert self._is_finalized
+
+        if self._complex_constraints:
+            for constr in self._complex_constraints:
+                constr.prepare_for_pickling()
+        else:
+            logging.warning("Nothing to prepare for pickling, no complex constraints found.")
+
+    def restore_all_constraints_after_pickling(self):
+        if self._complex_constraints:
+            for constr in self._complex_constraints:
+                constr.restore_after_pickling()
+        else:
+            logging.warning("Nothing to prepare for pickling, no complex constraints found.")
+
     def finalize(self) -> None:
         assert not self._is_finalized
         assert self._floating_mask is None
@@ -232,6 +305,8 @@ class ParameterHandler:
 
         self._create_floating_parameter_indices_info()
         self._create_floating_parameter_initial_value_info()
+
+        self._finalize_complex_constraints()
 
         self._is_finalized = True
 
@@ -333,6 +408,9 @@ class ParameterHandler:
     def _check_parameter_conversion(self) -> None:
         assert self._floating_mask is not None
         assert self._floating_conversion_vector is not None
+        assert not np.any(np.isnan(self.conversion_vector)), [
+            self.get_name(index) for index in np.isnan(self.conversion_vector).nonzero()[0]
+        ]
 
         assert len(self._floating_conversion_vector.shape) == 1, self._floating_conversion_vector.shape
         assert len(self._floating_mask) == len(self._floating_conversion_vector), (
@@ -384,12 +462,12 @@ class ParameterHandler:
 
     def get_parameters_by_name(
         self,
-        parameter_names: Union[str, List[str]],
+        parameter_names: Union[str, Iterable[str]],
     ) -> Union[np.ndarray, float]:
-        if isinstance(parameter_names, list):
-            indices = [self.get_index(name=name) for name in parameter_names]  # type: Union[int, List[int]]
-        elif isinstance(parameter_names, str):
-            indices = self.get_index(name=parameter_names)
+        if isinstance(parameter_names, str):
+            indices = self.get_index(name=parameter_names)  # type: Union[int, List[int]]
+        elif isinstance(parameter_names, Iterable):
+            indices = [self.get_index(name=name) for name in parameter_names]
         else:
             raise ValueError(
                 f"Expecting string or list of strings for argument 'parameter_names'!\n" f"You provided {parameter_names}"
@@ -578,6 +656,10 @@ class ParameterHandler:
         assert all(isinstance(cs, float) for cs in constraint_sigmas), [type(cs) for cs in constraint_sigmas]
 
         return constraint_param_indices, constraint_values, constraint_sigmas
+
+    @property
+    def complex_constraints(self):
+        return self._complex_constraints
 
     @staticmethod
     def _check_parameters_input(
@@ -933,7 +1015,7 @@ class ModelParameter(Parameter):
             constraint_value=self.constraint_value,
             constraint_sigma=self.constraint_sigma,
         )
-        self.param_id = param_id
+        self.param_id = param_id  # type: int
 
     def used_by(
         self,
